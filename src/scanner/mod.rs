@@ -1,4 +1,8 @@
-use crate::logger::{LOG, LOGGER};
+use crate::file::File;
+use crate::logger::{Log, Logger};
+use crate::lox::{CompilerError, Lox, LoxError};
+use std::collections::HashMap;
+use std::process;
 use std::{
   fs,
   io::{self, Read, Write},
@@ -7,35 +11,61 @@ use std::{
 pub struct Scanner;
 
 impl Scanner {
-  pub fn run_file(file: &str) -> () {
-    let file_content = read_file(file);
-    Scanner::execute(&file_content);
+  pub fn run_file(file: &str, lox: &mut Lox) -> () {
+    let file_content = File::read_file(file);
+    Scanner::execute(&file_content, lox);
   }
 
   // REPL mode
-  pub fn execute(_content: &str) -> () {
-    LOGGER::log(LOG::INFO, "Executing code");
+  pub fn execute(content: &str, lox: &mut Lox) -> () {
+    Logger::log(Log::INFO, &format!("Executing code: {:?}", content));
+    let tokens = Scanner::get_file_tokens(&content);
+
+    for token in tokens.iter() {
+      Lox::log_language(
+        Log::ERROR(LoxError::CompileError(CompilerError::SyntaxError)),
+        "you have to remove the prantheses",
+        "3:6",
+      );
+      lox.has_error = true;
+      // println!("{:?}", token);
+    }
+
+    if lox.has_error {
+      process::exit(65);
+    }
+
+    // Logger::log(Log::INFO, &format!("Tokenized code: {:?}", tokens));
   }
 
-  pub fn start_interactive_prompt() -> () {
+  pub fn start_interactive_prompt(lox: &mut Lox) -> () {
     loop {
       print!("> ");
+      // Flush stdout to clear the Terminal.
       io::stdout().flush().expect("Unable to flush stdout");
-      let mut buf = String::new();
-      let prompt = io::Stdin::read_line(&mut io::stdin(), &mut buf)
-        .expect("Unable to read stdin")
-        .to_string();
-      let prompt = prompt.trim().to_string();
 
-      if prompt.trim().len() == 0 {
+      // Read stdin and store it in a `String` buffer.
+      let mut buf = String::new();
+      io::stdin()
+        .read_line(&mut buf)
+        .expect("Unable to read stdin");
+      let prompt = buf.trim().to_string();
+
+      // Check if the prompt is empty.
+      if prompt.len() == 0 {
         break;
       }
-      Scanner::execute(&prompt);
-      break;
+
+      Logger::log(Log::INFO, &format!("Executing code: {:?}", prompt));
+
+      // Execute the code.
+      Scanner::execute(&prompt, lox);
     }
   }
-}
 
-fn read_file(file: &str) -> String {
-  dbg!(fs::read_to_string(file).expect("Unable to read file"))
+  pub fn get_file_tokens(file_content: &str) -> HashMap<String, String> {
+    let mut tokens: HashMap<String, String> = HashMap::new();
+    tokens.insert("a".to_string(), file_content.to_string());
+    tokens
+  }
 }

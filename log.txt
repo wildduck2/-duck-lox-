@@ -1,4 +1,96 @@
-[2025-06-07 00:07:31] [INFO] Starting Lox interpreter
-[2025-06-07 00:07:31] [INFO] Executing code
-[2025-06-07 00:09:00] [INFO] Starting Lox interpreter
-[2025-06-07 00:09:00] [INFO] Executing code
+[2025-06-07 01:57:27] [INFO] Starting Lox interpreter
+[2025-06-07 01:57:27] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 01:57:27] [RuntimeError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 01:59:25] [INFO] Starting Lox interpreter
+[2025-06-07 01:59:25] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 01:59:25] [CompileError(SyntaxError)] [line: 3:6] you have to remove the prantheses
+[2025-06-07 01:59:30] [INFO] Starting Lox interpreter
+[2025-06-07 01:59:30] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 01:59:30] [CompileError(SyntaxError)] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:02:17] [INFO] Starting Lox interpreter
+[2025-06-07 02:02:17] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:02:17] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:02:21] [INFO] Starting Lox interpreter
+[2025-06-07 02:02:21] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:02:21] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:02:50] [INFO] Starting Lox interpreter
+[2025-06-07 02:02:50] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:02:50] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:02:57] [INFO] Starting Lox interpreter
+[2025-06-07 02:02:57] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:02:57] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:03:30] [INFO] Starting Lox interpreter
+[2025-06-07 02:03:30] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:03:30] [Compile error: SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:03:57] [INFO] Starting Lox interpreter
+[2025-06-07 02:03:57] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:03:57] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:04:30] [INFO] Starting Lox interpreter
+[2025-06-07 02:04:30] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:04:30] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:04:32] [INFO] Starting Lox interpreter
+[2025-06-07 02:04:32] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:04:32] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:04:46] [INFO] Starting Lox interpreter
+[2025-06-07 02:04:46] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:04:46] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:04:47] [INFO] Starting Lox interpreter
+[2025-06-07 02:04:47] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:04:47] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:04:58] [INFO] Starting Lox interpreter
+[2025-06-07 02:04:58] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:04:58] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:05:04] [INFO] Starting Lox interpreter
+[2025-06-07 02:05:04] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:05:04] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:05:39] [INFO] Starting Lox interpreter
+[2025-06-07 02:05:39] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:05:39] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:05:45] [INFO] Starting Lox interpreter
+[2025-06-07 02:05:45] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:05:45] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:06:06] [INFO] Starting Lox interpreter
+[2025-06-07 02:06:06] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:06:06] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:06:32] [INFO] Starting Lox interpreter
+[2025-06-07 02:06:32] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:06:32] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:06:37] [INFO] Starting Lox interpreter
+[2025-06-07 02:06:37] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:06:37] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:06:43] [INFO] Starting Lox interpreter
+[2025-06-07 02:06:43] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:06:43] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:06:53] [INFO] Starting Lox interpreter
+[2025-06-07 02:06:53] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:06:53] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:07:22] [INFO] Starting Lox interpreter
+[2025-06-07 02:07:22] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:07:22] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:08:24] [] Starting Lox interpreter
+[2025-06-07 02:08:24] [] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:08:24] [Syntax Error] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:08:26] [] Starting Lox interpreter
+[2025-06-07 02:08:26] [] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:08:26] [Syntax Error] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:08:34] [] Starting Lox interpreter
+[2025-06-07 02:08:34] [] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:08:34] [Syntax Error] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:08:49] [INFO] Starting Lox interpreter
+[2025-06-07 02:08:49] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:08:49] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:09:21] [INFO] Starting Lox interpreter
+[2025-06-07 02:09:21] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:09:21] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:09:31] [INFO] Starting Lox interpreter
+[2025-06-07 02:09:31] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:09:31] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:09:48] [INFO] Starting Lox interpreter
+[2025-06-07 02:09:48] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:09:48] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:09:56] [INFO] Starting Lox interpreter
+[2025-06-07 02:09:56] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:09:56] [SyntaxError] [line: 3:6] you have to remove the prantheses
+[2025-06-07 02:09:59] [INFO] Starting Lox interpreter
+[2025-06-07 02:09:59] [INFO] Executing code: "print(\"this is the main program\")\n"
+[2025-06-07 02:09:59] [SyntaxError] [line: 3:6] you have to remove the prantheses

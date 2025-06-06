@@ -1,21 +1,25 @@
+mod file;
 mod logger;
+mod lox;
 mod scanner;
 
-use logger::{LOG, LOGGER};
+use logger::{Log, Logger};
+use lox::Lox;
 use scanner::Scanner;
 
 fn main() -> () {
+  Logger::log(Log::INFO, "Starting Lox interpreter");
   let args: Vec<String> = std::env::args().collect();
+  let mut lox = Lox { has_error: false };
 
-  LOGGER::log(LOG::INFO, "Starting Lox interpreter");
   match args.len() {
     1 => {
       // Start an Ineractive prompt.
-      Scanner::start_interactive_prompt();
+      Scanner::start_interactive_prompt(&mut lox);
     },
     2 => {
       // Run a file
-      Scanner::run_file(&args[1]);
+      Scanner::run_file(&args[1], &mut lox);
     },
     _ => {
       // Multiple files
