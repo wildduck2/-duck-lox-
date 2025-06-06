@@ -1,3 +1,4 @@
+use crate::logger::{LOG, LOGGER};
 use std::{
   fs,
   io::{self, Read, Write},
@@ -11,8 +12,9 @@ impl Scanner {
     Scanner::execute(&file_content);
   }
 
-  pub fn execute(content: &str) -> () {
-    println!("\n this is the code will be executed {}", content);
+  // REPL mode
+  pub fn execute(_content: &str) -> () {
+    LOGGER::log(LOG::INFO, "Executing code");
   }
 
   pub fn start_interactive_prompt() -> () {
@@ -20,7 +22,16 @@ impl Scanner {
       print!("> ");
       io::stdout().flush().expect("Unable to flush stdout");
       let mut buf = String::new();
-      let _ = io::Stdin::read_to_string(&mut io::stdin(), &mut buf);
+      let prompt = io::Stdin::read_line(&mut io::stdin(), &mut buf)
+        .expect("Unable to read stdin")
+        .to_string();
+      let prompt = prompt.trim().to_string();
+
+      if prompt.trim().len() == 0 {
+        break;
+      }
+      Scanner::execute(&prompt);
+      break;
     }
   }
 }

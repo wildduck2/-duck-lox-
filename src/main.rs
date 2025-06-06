@@ -1,14 +1,17 @@
+mod logger;
 mod scanner;
 
+use logger::{LOG, LOGGER};
 use scanner::Scanner;
 
 fn main() -> () {
   let args: Vec<String> = std::env::args().collect();
 
+  LOGGER::log(LOG::INFO, "Starting Lox interpreter");
   match args.len() {
     1 => {
       // Start an Ineractive prompt.
-      println!("Usage: lox [script]");
+      Scanner::start_interactive_prompt();
     },
     2 => {
       // Run a file
