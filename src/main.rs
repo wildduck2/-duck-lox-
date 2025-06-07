@@ -8,18 +8,19 @@ use lox::Lox;
 use scanner::Scanner;
 
 fn main() -> () {
-  Logger::log(Log::INFO, "Starting Lox interpreter");
+  Logger::log(Log::Info, "Starting Lox interpreter");
   let args: Vec<String> = std::env::args().collect();
-  let mut lox = Lox { has_error: false };
+  let mut lox = Lox::new();
+  let mut scanner = Scanner::new();
 
   match args.len() {
     1 => {
       // Start an Ineractive prompt.
-      Scanner::start_interactive_prompt(&mut lox);
+      scanner.start_interactive_prompt(&mut lox);
     },
     2 => {
       // Run a file
-      Scanner::run_file(&args[1], &mut lox);
+      scanner.run_file(&args[1], &mut lox);
     },
     _ => {
       // Multiple files

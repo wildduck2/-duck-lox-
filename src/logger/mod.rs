@@ -4,42 +4,42 @@ use color::{Color, ColorType};
 use colored::*;
 use std::{fs::OpenOptions, io::Write};
 
-use crate::lox::{CompilerError, LoxError};
+use crate::lox::types::LoxError;
 
 #[derive(Debug)]
 pub enum Log {
-  ERROR(LoxError),
-  WARNING,
-  INFO,
-  HINT,
+  Error(LoxError),
+  Warning,
+  Info,
+  Hint,
 }
 
 impl Log {
   fn to_plain_str(&self) -> String {
     match self {
-      Log::ERROR(error) => match error {
+      Log::Error(error) => match error {
         LoxError::CompileError(error) => match error {
           _ => format!("{:?}", error),
         },
         _ => format!("{:?}", error),
       },
-      Log::WARNING => "WARN".to_string(),
-      Log::INFO => "INFO".to_string(),
-      Log::HINT => "HINT".to_string(),
+      Log::Warning => "WARN".to_string(),
+      Log::Info => "INFO".to_string(),
+      Log::Hint => "HINT".to_string(),
     }
   }
 
   fn to_colored_str(&self) -> colored::ColoredString {
     match self {
-      Log::ERROR(error) => match error {
+      Log::Error(error) => match error {
         LoxError::CompileError(error) => match error {
           _ => format!("{:?}", error).red().bold(),
         },
         _ => format!("{:?}", error).red().bold(),
       },
-      Log::WARNING => "WARN".yellow().bold(),
-      Log::INFO => "INFO".cyan().bold(),
-      Log::HINT => "HINT".green(),
+      Log::Warning => "WARN".yellow().bold(),
+      Log::Info => "INFO".cyan().bold(),
+      Log::Hint => "HINT".green(),
     }
   }
 }
@@ -61,12 +61,12 @@ impl Logger {
 
     // For terminal.
     match level {
-      Log::ERROR(_) => {
+      Log::Error(_) => {
         eprintln!(
           "[{}] [{}] {}",
           now.to_string().to_colored_str(ColorType::ERROR),
           level.to_colored_str(),
-          message
+          message.red()
         );
       },
       _ => {

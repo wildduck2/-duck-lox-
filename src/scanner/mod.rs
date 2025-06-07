@@ -1,44 +1,70 @@
+mod token;
+mod utils;
+
+use token::Token;
+
 use crate::file::File;
 use crate::logger::{Log, Logger};
-use crate::lox::{CompilerError, Lox, LoxError};
-use std::collections::HashMap;
-use std::process;
-use std::{
-  fs,
-  io::{self, Read, Write},
+use crate::lox::{
+  types::{CompilerError, LoxError},
+  Lox,
 };
+use std::io::{self, Write};
 
-pub struct Scanner;
+pub struct Scanner {
+  source: String,
+  tokens: Vec<Token>,
+  start: usize,
+  current: usize,
+  line: usize,
+  column: usize,
+}
 
 impl Scanner {
-  pub fn run_file(file: &str, lox: &mut Lox) -> () {
-    let file_content = File::read_file(file);
-    Scanner::execute(&file_content, lox);
+  /// Creates a new `Scanner`
+  pub fn new() -> Scanner {
+    Self {
+      source: String::new(),
+      tokens: Vec::new(),
+      start: 0,
+      current: 0,
+      line: 1,
+      column: 0,
+    }
   }
 
-  // REPL mode
-  pub fn execute(content: &str, lox: &mut Lox) -> () {
-    Logger::log(Log::INFO, &format!("Executing code: {:?}", content));
-    let tokens = Scanner::get_file_tokens(&content);
+  /// Runs a file
+  pub fn run_file(&mut self, file: &str, lox: &mut Lox) -> () {
+    let file_content = File::read_file(file);
+    self.source = file_content;
+    self.execute(lox);
+  }
 
-    for token in tokens.iter() {
-      Lox::log_language(
-        Log::ERROR(LoxError::CompileError(CompilerError::SyntaxError)),
-        "you have to remove the prantheses",
-        "3:6",
-      );
-      lox.has_error = true;
+  /// Executes the code
+  pub fn execute(&mut self, lox: &mut Lox) -> () {
+    // Logger::log(Log::INFO, &format!("Executing code: {:?}", &self.source));
+    self.scan_tokens(lox);
+
+    for _token in self.tokens.iter() {
+      Logger::log(Log::Hint, &format!("{:?}", _token))
+      // println!("asdf {:?}", _token);
+      // Lox::log_language(
+      //   Log::ERROR(LoxError::CompileError(CompilerError::SyntaxError)),
+      //   "you have to remove the prantheses",
+      //   "3:6",
+      // );
+      // lox.has_error = true;
       // println!("{:?}", token);
     }
-
-    if lox.has_error {
-      process::exit(65);
-    }
+    //
+    // if lox.has_error {
+    //   process::exit(65);
+    // }
 
     // Logger::log(Log::INFO, &format!("Tokenized code: {:?}", tokens));
   }
 
-  pub fn start_interactive_prompt(lox: &mut Lox) -> () {
+  pub fn start_interactive_prompt(&mut self, lox: &mut Lox) -> () {
     loop {
       print!("> ");
       // Flush stdout to clear the Terminal.
@@ -56,16 +82,10 @@ impl Scanner {
         break;
       }
 
-      Logger::log(Log::INFO, &format!("Executing code: {:?}", prompt));
+      Logger::log(Log::Info, &format!("Executing code: {:?}", prompt));
 
       // Execute the code.
-      Scanner::execute(&prompt, lox);
+      self.execute(lox);
     }
-  }
-
-  pub fn get_file_tokens(file_content: &str) -> HashMap<String, String> {
-    let mut tokens: HashMap<String, String> = HashMap::new();
-    tokens.insert("a".to_string(), file_content.to_string());
-    tokens
   }
 }
