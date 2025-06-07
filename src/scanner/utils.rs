@@ -33,70 +33,96 @@ impl Scanner {
         '}' => Some(TokenType::RightBrace),
         ',' => Some(TokenType::Comma),
         '*' => Some(TokenType::Star),
-        '.' => Some(TokenType::Dot),
         '-' => Some(TokenType::Minus),
         '+' => Some(TokenType::Plus),
-        '/' => {
-          if self.match_char('/') {
-            while let Some(ch) = self.peek() {
-              if ch == '\n' {
+
+        // Handle Dot and the decimals starting with .
+        '.' => {
+          if let Some(ch) = self.peek() {
+            print!("{ch}\n");
+            if ch.is_ascii_digit() {
+              self.advance();
+
+              print!("{ch}\n");
+              while let Some(ch) = self.peek() {
+                println!("asdf");
+                if ch.is_ascii_digit() {
+                  self.advance();
+                  continue;
+                }
                 break;
               }
-              self.advance();
+              Some(TokenType::Number)
+            } else {
+              Some(TokenType::Number)
             }
-
-            // Shifting back to the start of the symbol, so the token type is correct
-            self.current -= 1;
-            Some(TokenType::Comment)
           } else {
-            // Shifting back to the start of the symbol, so the token type is correct
-            self.current -= 1;
+            Some(TokenType::Dot)
+          }
+        },
+        '/' => {
+          if let Some(ch) = self.peek() {
+            if ch == '/' {
+              while let Some(ch) = self.peek() {
+                if ch == '\n' {
+                  break;
+                }
+                self.advance();
+              }
+              Some(TokenType::Comment)
+            } else {
+              Some(TokenType::Divide)
+            }
+          } else {
             Some(TokenType::Divide)
           }
         },
+
+        // Handle end of statement terminator
         ';' => {
-          if !self.match_char('\n') {
-            let snippet: String = self.source[self.current..]
-              .chars()
-              .take_while(|&c| c != '\n')
-              .collect();
+          if let Some(ch) = self.peek() {
+            if ch == '\n' {
+              let snippet: String = self.source[self.current..]
+                .chars()
+                .take_while(|&c| c != '\n')
+                .collect();
 
-            while let Some(ch) = self.peek() {
-              if ch == '\n' {
-                break;
+              while let Some(ch) = self.peek() {
+                if ch == '\n' {
+                  break;
+                }
+                self.advance();
               }
-              self.advance();
+
+              lox.has_error = true;
+              Lox::log_language(
+                lox,
+                Log::Error(LoxError::CompileError(CompilerError::SyntaxError)),
+                &format!("Expect ';' after expression. Found ';{}' instead.", snippet),
+                &format!("{}:{}", self.line, self.column),
+              );
+              Lox::log_language(
+                lox,
+                Log::Info,
+                &format!(
+                  "Please make sure the end of your expression is followed by a single semicolon.",
+                ),
+                &format!("{}:{}", self.line, self.column),
+              );
+
+              None
+            } else {
+              Some(TokenType::Semicolon)
             }
-
-            lox.has_error = true;
-            Lox::log_language(
-              lox,
-              Log::Error(LoxError::CompileError(CompilerError::SyntaxError)),
-              &format!("Expect ';' after expression. Found ';{}' instead.", snippet),
-              &format!("{}:{}", self.line, self.column),
-            );
-            Lox::log_language(
-              lox,
-              Log::Info,
-              &format!(
-                "Please make sure the end of your expression is followed by a single semicolon.",
-              ),
-              &format!("{}:{}", self.line, self.column),
-            );
-
-            // Shifting back to the start of the symbol, so the token type is correct
-            self.current -= 1;
-            None
           } else {
-            // Shifting back to the start of the symbol, so the token type is correct
-            self.current -= 1;
-            Some(TokenType::Semicolon)
+            None
           }
         },
 
         // Handle possible two-character tokens (e.g., !=, ==, <=, >=)
         '!' => {
           if self.match_char('=') {
+            self.current += 1;
             Some(TokenType::BangEqual)
           } else {
             Some(TokenType::Bang)
@@ -104,6 +130,7 @@ impl Scanner {
         },
         '=' => {
           if self.match_char('=') {
+            self.current += 1;
             Some(TokenType::EqualEqual)
           } else {
             Some(TokenType::Equal)
@@ -111,6 +138,7 @@ impl Scanner {
         },
         '<' => {
           if self.match_char('=') {
+            self.current += 1;
             Some(TokenType::LessEqual)
           } else {
             Some(TokenType::Less)
@@ -118,6 +146,7 @@ impl Scanner {
         },
         '>' => {
           if self.match_char('=') {
+            self.current += 1;
             Some(TokenType::GreaterEqual)
           } else {
             Some(TokenType::Greater)
@@ -151,6 +180,9 @@ impl Scanner {
         // Handle identifiers and keywords
         'a'..='z' | 'A'..='Z' | '_' => Some(self.tokenize_identifier()),
 
+        // Handle integers and decimals
+        '0'..='9' => Some(self.tokenize_number()),
+
         // Default case: unrecognized characters
         _ => {
           lox.has_error = true;
@@ -172,6 +204,17 @@ impl Scanner {
 
     // Add EOF token at the end of scanning
     self.add_token(TokenType::Eof, "".to_string());
+  }
+
+  fn tokenize_number(&mut self) -> TokenType {
+    while let Some(c) = self.peek() {
+      if c.is_ascii_digit() {
+        self.advance();
+      } else {
+        break;
+      }
+    }
+    TokenType::Number
   }
 
   fn tokenize_identifier(&mut self) -> TokenType {
@@ -232,7 +275,6 @@ impl Scanner {
     if self.source[self.current..].chars().next().unwrap() != expected {
       return false;
     }
-    self.current += expected.len_utf8();
     true
   }
 

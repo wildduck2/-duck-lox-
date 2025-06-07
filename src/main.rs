@@ -3,11 +3,15 @@ mod logger;
 mod lox;
 mod scanner;
 
+use std::fs;
+
 use logger::{Log, Logger};
 use lox::Lox;
 use scanner::Scanner;
 
 fn main() -> () {
+  fs::remove_file("log.text");
+
   Logger::log(Log::Info, "Starting Lox interpreter");
   let args: Vec<String> = std::env::args().collect();
   let mut lox = Lox::new();
