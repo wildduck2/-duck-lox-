@@ -10,7 +10,7 @@ pub enum TokenType {
   Minus,
   Plus,
   Semicolon,
-  Slash,
+  Divide,
   Star,
   // One or two character tokens.
   Bang,
@@ -45,6 +45,7 @@ pub enum TokenType {
   Eof,
   Break,
   Continue,
+  Comment,
 }
 
 #[derive(Debug, Clone)]

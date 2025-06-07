@@ -32,10 +32,28 @@ impl Scanner {
         '{' => Some(TokenType::LeftBrace),
         '}' => Some(TokenType::RightBrace),
         ',' => Some(TokenType::Comma),
+        '*' => Some(TokenType::Star),
         '.' => Some(TokenType::Dot),
         '-' => Some(TokenType::Minus),
         '+' => Some(TokenType::Plus),
-        '*' => Some(TokenType::Star),
+        '/' => {
+          if self.match_char('/') {
+            while let Some(ch) = self.peek() {
+              if ch == '\n' {
+                break;
+              }
+              self.advance();
+            }
+
+            // Shifting back to the start of the symbol, so the token type is correct
+            self.current -= 1;
+            Some(TokenType::Comment)
+          } else {
+            // Shifting back to the start of the symbol, so the token type is correct
+            self.current -= 1;
+            Some(TokenType::Divide)
+          }
+        },
         ';' => {
           if !self.match_char('\n') {
             let snippet: String = self.source[self.current..]
@@ -66,9 +84,11 @@ impl Scanner {
               &format!("{}:{}", self.line, self.column),
             );
 
+            // Shifting back to the start of the symbol, so the token type is correct
             self.current -= 1;
             None
           } else {
+            // Shifting back to the start of the symbol, so the token type is correct
             self.current -= 1;
             Some(TokenType::Semicolon)
           }
@@ -235,7 +255,7 @@ impl Scanner {
       lexeme,
       literal,
       self.line,
-      self.column,
+      self.column + 1,
     ));
   }
 

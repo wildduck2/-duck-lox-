@@ -28,3 +28,16 @@ fn main() -> () {
     },
   }
 }
+
+#[derive(Debug)]
+pub enum GH {
+  Value(String),
+}
+
+impl GH {
+  pub fn get_value(&self) -> String {
+    match self {
+      GH::Value(value) => value.to_string(),
+    }
+  }
+}
