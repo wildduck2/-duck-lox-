@@ -11,6 +11,7 @@ pub enum TokenType {
   Plus,
   Semicolon,
   Divide,
+  Modulus,
   Star,
   // One or two character tokens.
   Bang,
@@ -28,6 +29,7 @@ pub enum TokenType {
   // Keywords.
   And,
   Class,
+  NullChar,
   Else,
   False,
   Fun,

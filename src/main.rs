@@ -10,7 +10,7 @@ use lox::Lox;
 use scanner::Scanner;
 
 fn main() -> () {
-  fs::remove_file("log.text");
+  fs::remove_file("log.txt").expect("Failed to flush the file");
 
   Logger::log(Log::Info, "Starting Lox interpreter");
   let args: Vec<String> = std::env::args().collect();
@@ -30,6 +30,10 @@ fn main() -> () {
       // Multiple files
       println!("Usage: lox [script]");
     },
+  }
+
+  if lox.has_error {
+    std::process::exit(65);
   }
 }
 
