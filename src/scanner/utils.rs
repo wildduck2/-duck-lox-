@@ -1,5 +1,3 @@
-use colored;
-
 use crate::{
   logger::Log,
   lox::{
@@ -11,7 +9,7 @@ use crate::{
 
 use super::token::{
   types::{Literal, TokenType},
-  Position, Token,
+  Token,
 };
 
 impl Scanner {
@@ -36,13 +34,10 @@ impl Scanner {
         // Handle Dot and the decimals starting with .
         '.' => {
           if let Some(ch) = self.peek() {
-            print!("{ch}\n");
             if ch.is_ascii_digit() {
               self.advance();
 
-              print!("{ch}\n");
               while let Some(ch) = self.peek() {
-                println!("asdf");
                 if ch.is_ascii_digit() {
                   self.advance();
                   continue;
@@ -65,6 +60,7 @@ impl Scanner {
         '%' => Some(TokenType::Modulus),
         '/' => {
           if self.match_char('/') {
+            // Handle single-line comment
             while let Some(ch) = self.peek() {
               if ch == '\n' {
                 break;
@@ -72,7 +68,35 @@ impl Scanner {
               self.advance();
             }
             Some(TokenType::Comment)
+          } else if self.match_char('*') {
+            // Handle multi-line comment
+            while !self.is_at_end() {
+              if self.peek() == Some('*') && self.peek_next() == Some('/') {
+                // Consume the '*' and '/'
+                self.advance();
+                self.advance();
+                break;
+              }
+              let ch = self.advance();
+              if ch == '\n' {
+                self.line += 1;
+                self.column = 0;
+              }
+            }
+
+            if self.is_at_end() {
+              // Unterminated multi-line comment
+              lox.has_error = true;
+              lox.log_language(
+                Log::Error(LoxError::CompileError(CompilerError::SyntaxError)),
+                "Unterminated multi-line comment",
+                &format!("line: {}:{}", self.line, self.column),
+              );
+            }
+
+            Some(TokenType::Comment)
           } else {
+            // It's just a '/'
             Some(TokenType::Divide)
           }
         },
@@ -80,7 +104,9 @@ impl Scanner {
         // Handle end of statement terminator
         ';' => {
           if self.match_char('\n') && self.tokens[self.tokens.len() - 1].lexeme == String::from(';')
+            || self.peek() != Some('\n')
           {
+            // Getting the the rest of the line to show it in the error
             let snippet: String = self.source[self.current..]
               .chars()
               .take_while(|&c| c != '\n')
@@ -156,15 +182,18 @@ impl Scanner {
         ' ' | '\r' | '\t' => None,
 
         // Handle strings
+        // TODO: handle the numbers inside of string
         '"' | '\'' | '`' => {
           let mut s = String::new();
           while let Some(next) = self.peek() {
-            if next == '\n' {
+            if self.is_at_end() {
               lox.has_error = true;
               break;
             }
             if next == '\n' {
-              println!("FUCK");
+              self.line += 1;
+              self.advance();
+              continue;
             }
 
             if next == '"' || next == '\'' || next == '`' {
@@ -184,7 +213,7 @@ impl Scanner {
                 "Unexpected character: `{}` String must have pairs of `{}`",
                 c, c
               ),
-              &format!("line: {}:{}", self.line, self.column + 1),
+              &format!("line: {}:{}", self.line - 1, self.column + 1),
             );
             None
           } else {
@@ -223,15 +252,34 @@ impl Scanner {
 
         // Ignore the comments token.
         match ttype {
-          TokenType::Comment => (),
-          // TokenType::String => self.add_token(ttype, lexeme[1..lexeme.len() - 1].to_string()),
+          // TokenType::Comment => {
+          //   print!("Comment: {}", lexeme);
+          //   ()
+          // },
+          // Getting the string value only
+          TokenType::String => self.add_token(ttype, lexeme[1..lexeme.len() - 1].to_string()),
+          // Handling the `0` before and after a `.` decimal
+          TokenType::Number => {
+            let number = if lexeme.ends_with('.') {
+              format!(
+                "{}",
+                lexeme.split('.').nth(0).expect("Failed to get the number")
+              )
+            } else if lexeme.starts_with('.') {
+              format!("{}{}", "0", lexeme)
+            } else {
+              lexeme
+            };
+            self.add_token(ttype, number)
+          },
+          TokenType::Identifier => {},
           _ => self.add_token(ttype, lexeme),
         }
       }
     }
 
     // Add EOF token at the end of scanning
-    self.add_token(TokenType::Eof, "".to_string());
+    self.add_token(TokenType::Eof, "EOF".to_string());
   }
 
   fn tokenize_number(&mut self) -> TokenType {
@@ -239,14 +287,34 @@ impl Scanner {
       if c.is_ascii_digit() {
         self.advance();
       } else {
-        break;
+        if self.match_char('.') {
+          self.advance();
+        } else {
+          break;
+        }
       }
     }
     TokenType::Number
   }
 
   fn tokenize_identifier(&mut self) -> TokenType {
-    // Consume the rest of the identifier: letters, digits, or underscores
+    /*
+    Consume the rest of the identifier: letters, digits, or underscores
+    this is an application of `maximal munch` principle:
+
+    `When two lexical grammar rules can both match a chunk of code that the scanner is
+    looking at, whichever one matches the most characters wins.`
+
+    By doing this i prevent the collision of "identifires" and "keywords"
+
+    @example
+    ```rs
+      var or_not = true;
+    ```
+    This var have a "or" which is a keyword in the language by consuming all the
+    "ascii_alphanumeric" i get all the chars as keywords and match them, and by doing this
+    i avoid the collision and yes, you're happy.
+    */
     while let Some(c) = self.peek() {
       if c.is_ascii_alphanumeric() || c == '_' {
         self.advance();
@@ -271,7 +339,12 @@ impl Scanner {
       "continue" => TokenType::Continue,
       "class" => TokenType::Class,
       "this" => TokenType::This,
-      // ...(e.g., "class", "this", etc.)
+      "true" => TokenType::True,
+      "false" => TokenType::False,
+      "nil" => TokenType::Nil,
+      "or" => TokenType::Or,
+      "and" => TokenType::And,
+      "super" => TokenType::Super,
       _ => TokenType::Identifier,
     }
   }
@@ -295,6 +368,17 @@ impl Scanner {
       Some('\0')
     } else {
       Some(self.source[self.current..].chars().next().unwrap())
+    }
+  }
+
+  /// Returns the next character without advancing the scanner.
+  ///
+  /// Returns `None` if at the end of input.
+  fn peek_next(&self) -> Option<char> {
+    if self.is_at_end() {
+      Some('\0')
+    } else {
+      Some(self.source[self.current + 1..].chars().next().unwrap())
     }
   }
 
@@ -330,8 +414,8 @@ impl Scanner {
   ///
   /// The lexeme spans from the `start` byte index to the `current` byte index.
   fn current_lexeme(&mut self) -> &str {
-    let ch = &self.source[self.start..self.current];
-    ch
+    let lexeme = &self.source[self.start..self.current];
+    lexeme
   }
 
   /// Helper function to add a token to the token list.

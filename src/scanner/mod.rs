@@ -5,10 +5,7 @@ use token::Token;
 
 use crate::file::File;
 use crate::logger::{Log, Logger};
-use crate::lox::{
-  types::{CompilerError, LoxError},
-  Lox,
-};
+use crate::lox::Lox;
 use std::io::{self, Write};
 
 pub struct Scanner {
@@ -36,6 +33,7 @@ impl Scanner {
   /// Runs a file
   pub fn run_file(&mut self, file: &str, lox: &mut Lox) -> () {
     let file_content = File::read_file(file);
+    println!("{:?}", file_content);
     self.source = file_content;
     self.execute(lox);
   }
