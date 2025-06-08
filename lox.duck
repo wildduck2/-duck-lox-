@@ -1,38 +1,6 @@
-fun makeCounter(start) {
-  var count = start;
+var name = "lox";;
 
-  fun counter() {
-    count = count + 1;
-    return count;
-  }
 
-  return counter;
+for (var i = 0; i < 10; i++) {
+  print(i);
 }
-
-var counterA = makeCounter(10);
-print counterA();
-print counterA();
-
-var counterB = makeCounter(100);
-print counterB();
-
-fun fib(n) {
-  if (n <= 1) return n;
-  return fib(n - 1) + fib(n - 2);
-}
-
-print fib(5);
-
-for (var i = 0; i < 5; i = i + 1) {
-  if (i % 2 == 0) {
-    print i + "is even";
-  } else {
-    print i + "is odd";
-  }
-
-  {
-    var msg = "Inside inner block at i = " + i;
-    print msg;
-  }
-}
-

@@ -104,7 +104,6 @@ impl Scanner {
         // Handle end of statement terminator
         ';' => {
           if self.match_char('\n') && self.tokens[self.tokens.len() - 1].lexeme == String::from(';')
-            || self.peek() != Some('\n')
           {
             // Getting the the rest of the line to show it in the error
             let snippet: String = self.source[self.current..]
@@ -252,10 +251,10 @@ impl Scanner {
 
         // Ignore the comments token.
         match ttype {
-          // TokenType::Comment => {
-          //   print!("Comment: {}", lexeme);
-          //   ()
-          // },
+          TokenType::Comment => {
+            print!("Comment: {}", lexeme);
+            ()
+          },
           // Getting the string value only
           TokenType::String => self.add_token(ttype, lexeme[1..lexeme.len() - 1].to_string()),
           // Handling the `0` before and after a `.` decimal
@@ -272,7 +271,6 @@ impl Scanner {
             };
             self.add_token(ttype, number)
           },
-          TokenType::Identifier => {},
           _ => self.add_token(ttype, lexeme),
         }
       }
@@ -384,8 +382,8 @@ impl Scanner {
 
   /// Checks if the next character matches the expected character.
   ///
-  /// If it matches, advances the scanner past the character and returns `true`.
-  /// Otherwise, does not advance and returns `false`.
+  /// If it matches, returns `true`.
+  /// Otherwise, returns `false`.
   fn match_char(&mut self, expected: char) -> bool {
     if self.is_at_end() {
       return false;
