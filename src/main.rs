@@ -1,6 +1,7 @@
 mod file;
 mod logger;
 mod lox;
+mod parser;
 mod scanner;
 
 use std::fs;

@@ -1,3 +1,6 @@
+// NOTE: These are the enums used to make the scanner
+// and achieve the regular which is the layer-2 of the Chmosky Hierarchy
+
 #[derive(Debug, Clone)]
 pub enum TokenType {
   // Single-character tokens.

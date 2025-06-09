@@ -1,6 +1,1 @@
-var name = "lox";;
-
-
-for (var i = 0; i < 10; i++) {
-  print(i);
-}
+1 + ( 2 * 5 ) < 4 = false

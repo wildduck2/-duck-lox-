@@ -13,7 +13,6 @@ pub struct Token {
   pub token_type: TokenType,
   pub lexeme: String,
   pub literal: Literal,
-  pub line: usize,
   pub position: Position,
 }
 
@@ -29,7 +28,6 @@ impl Token {
       token_type,
       lexeme,
       literal,
-      line,
       position: Position {
         line,
         column: column,
