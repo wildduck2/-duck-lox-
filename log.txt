@@ -1,31 +1,7 @@
-[2025-06-09 02:32:41] [INFO] Starting Lox interpreter
-[2025-06-09 02:32:41] [SyntaxError] [line: 1:18] Expect ';' after expression. Found ';' instead.
-[2025-06-09 02:32:41] [INFO] [line: 1:18] Please make sure the end of your expression is followed by a single semicolon.
-[2025-06-09 02:32:41] [HINT] Token { token_type: Var, lexeme: "var", literal: Nil, line: 1, position: Position { line: 1, column: 4 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: Identifier, lexeme: "name", literal: Nil, line: 1, position: Position { line: 1, column: 9 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: Equal, lexeme: "=", literal: Nil, line: 1, position: Position { line: 1, column: 11 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: String, lexeme: "lox", literal: String, line: 1, position: Position { line: 1, column: 17 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: Semicolon, lexeme: ";", literal: Nil, line: 1, position: Position { line: 1, column: 18 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: For, lexeme: "for", literal: Nil, line: 4, position: Position { line: 4, column: 4 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: LeftParen, lexeme: "(", literal: Nil, line: 4, position: Position { line: 4, column: 6 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: Var, lexeme: "var", literal: Nil, line: 4, position: Position { line: 4, column: 9 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: Identifier, lexeme: "i", literal: Nil, line: 4, position: Position { line: 4, column: 11 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: Equal, lexeme: "=", literal: Nil, line: 4, position: Position { line: 4, column: 13 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: Number, lexeme: "0", literal: Number, line: 4, position: Position { line: 4, column: 15 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: Semicolon, lexeme: ";", literal: Nil, line: 4, position: Position { line: 4, column: 16 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: Identifier, lexeme: "i", literal: Nil, line: 4, position: Position { line: 4, column: 18 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: Less, lexeme: "<", literal: Nil, line: 4, position: Position { line: 4, column: 20 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: Number, lexeme: "10", literal: Number, line: 4, position: Position { line: 4, column: 23 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: Semicolon, lexeme: ";", literal: Nil, line: 4, position: Position { line: 4, column: 24 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: Identifier, lexeme: "i", literal: Nil, line: 4, position: Position { line: 4, column: 26 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: Plus, lexeme: "+", literal: Nil, line: 4, position: Position { line: 4, column: 27 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: Plus, lexeme: "+", literal: Nil, line: 4, position: Position { line: 4, column: 28 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: RightParen, lexeme: ")", literal: Nil, line: 4, position: Position { line: 4, column: 29 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: LeftBrace, lexeme: "{", literal: Nil, line: 4, position: Position { line: 4, column: 31 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: Print, lexeme: "print", literal: Nil, line: 5, position: Position { line: 5, column: 8 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: LeftParen, lexeme: "(", literal: Nil, line: 5, position: Position { line: 5, column: 9 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: Identifier, lexeme: "i", literal: Nil, line: 5, position: Position { line: 5, column: 10 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: RightParen, lexeme: ")", literal: Nil, line: 5, position: Position { line: 5, column: 11 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: Semicolon, lexeme: ";", literal: Nil, line: 5, position: Position { line: 5, column: 12 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: RightBrace, lexeme: "}", literal: Nil, line: 6, position: Position { line: 6, column: 2 } }
-[2025-06-09 02:32:41] [HINT] Token { token_type: Eof, lexeme: "EOF", literal: Nil, line: 7, position: Position { line: 7, column: 1 } }
+[2025-07-08 13:09:16] [INFO] Starting Lox interpreter
+[2025-07-08 13:09:16] [HINT] Token { token_type: Var, lexeme: "var", literal: Nil, position: Position { line: 1, column: 4 } }
+[2025-07-08 13:09:16] [HINT] Token { token_type: Identifier, lexeme: "name", literal: Nil, position: Position { line: 1, column: 9 } }
+[2025-07-08 13:09:16] [HINT] Token { token_type: Equal, lexeme: "=", literal: Nil, position: Position { line: 1, column: 11 } }
+[2025-07-08 13:09:16] [HINT] Token { token_type: String, lexeme: "lox", literal: String, position: Position { line: 1, column: 17 } }
+[2025-07-08 13:09:16] [HINT] Token { token_type: Semicolon, lexeme: ";", literal: Nil, position: Position { line: 1, column: 18 } }
+[2025-07-08 13:09:16] [HINT] Token { token_type: Eof, lexeme: "EOF", literal: Nil, position: Position { line: 2, column: 1 } }
