@@ -1,9 +1,9 @@
 use logger::{self, Logger};
-use std::{fs, process};
+use std::{fs, process, slice::SliceIndex};
 
 use crate::{lox::Lox, token::Token};
 
-mod lox;
+pub mod lox;
 mod token;
 mod utils;
 
@@ -33,9 +33,7 @@ impl Scanner {
   pub fn run_interactive_mode(&self) {}
 
   /// Function that runs the process of compiling file.
-  pub fn run_file(&mut self, path: String) {
-    let lox = Lox::new();
-
+  pub fn run_file(&mut self, path: String, lox: &mut Lox) {
     self.source = match fs::read_to_string(path) {
       Ok(buff) => buff,
       Err(err) => {
@@ -48,7 +46,7 @@ impl Scanner {
   }
 
   /// Function that executes the scanning operation on a lox content.
-  fn execute(&mut self, lox: Lox) {
+  fn execute(&mut self, lox: &mut Lox) {
     self.get_tokens(lox);
     println!("{:#?}", self.tokens);
   }

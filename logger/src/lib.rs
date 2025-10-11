@@ -19,8 +19,8 @@ impl<'a> fmt::Display for LogType<'a> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
       LogType::Error(error) => write!(f, "{} {}", "[Error]".red().bold(), error.red().bold()),
-      LogType::Warn(warn) => write!(f, "{} {}", "[Warn]".red().bold(), warn.yellow().bold()),
-      LogType::Info(info) => write!(f, "{} {}", "[Info]".red().bold(), info.yellow().bold()),
+      LogType::Warn(warn) => write!(f, "{} {}", "[Warn]".yellow().bold(), warn.yellow().bold()),
+      LogType::Info(info) => write!(f, "{} {}", "[Info]".cyan().bold(), info.cyan().bold()),
       LogType::Debug(plain) => write!(f, "{} {}", "[Debug]", plain),
     }
   }
