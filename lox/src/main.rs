@@ -5,13 +5,15 @@ fn main() {
   let args: Vec<String> = std::env::args().collect();
   println!("{:?}", args);
 
+  let mut scanner = Scanner::new();
+
   match args.len() {
     1 => {
-      Scanner::run_interactive_mode();
+      scanner.run_interactive_mode();
       Logger::log(LogType::Info("Running the interactive mode"), 0);
     },
     2 => {
-      Scanner::run_file(args[1].clone());
+      scanner.run_file(args[1].clone());
       Logger::log(LogType::Info("Running the file mode"), 0);
     },
     _ => {
