@@ -1,7 +1,0 @@
-[2025-07-08 13:09:16] [INFO] Starting Lox interpreter
-[2025-07-08 13:09:16] [HINT] Token { token_type: Var, lexeme: "var", literal: Nil, position: Position { line: 1, column: 4 } }
-[2025-07-08 13:09:16] [HINT] Token { token_type: Identifier, lexeme: "name", literal: Nil, position: Position { line: 1, column: 9 } }
-[2025-07-08 13:09:16] [HINT] Token { token_type: Equal, lexeme: "=", literal: Nil, position: Position { line: 1, column: 11 } }
-[2025-07-08 13:09:16] [HINT] Token { token_type: String, lexeme: "lox", literal: String, position: Position { line: 1, column: 17 } }
-[2025-07-08 13:09:16] [HINT] Token { token_type: Semicolon, lexeme: ";", literal: Nil, position: Position { line: 1, column: 18 } }
-[2025-07-08 13:09:16] [HINT] Token { token_type: Eof, lexeme: "EOF", literal: Nil, position: Position { line: 2, column: 1 } }
