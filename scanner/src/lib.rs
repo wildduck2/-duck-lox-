@@ -4,7 +4,7 @@ use std::{fs, process, slice::SliceIndex};
 use crate::{lox::Lox, token::Token};
 
 pub mod lox;
-mod token;
+pub mod token;
 mod utils;
 
 pub struct Scanner {

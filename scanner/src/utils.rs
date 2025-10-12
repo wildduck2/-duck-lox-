@@ -25,16 +25,33 @@ impl Scanner {
         ']' => Some(TokenType::RightBracket),
 
         // Mathematical operators
+        //
+        // According to the maximal munch rule, +++a is tokenized as '++' '+a', not '+''++a'.
+        // The scanner always chooses the longest valid token, even if it leads to a syntax error later.
         '+' => {
-          if self.match_char(&'=') {
+          if self.match_char(&'+') {
+            self.advance();
+            Some(TokenType::PlusPlus)
+          } else if self.match_char(&'=') {
             self.advance();
             Some(TokenType::PlusEqual)
           } else {
             Some(TokenType::Plus)
           }
         },
+
+        // Note: '-' is parsed as a unary operator, not part of a number literal.
+        // This keeps expressions like `-n.abs()` and `-123.abs()` consistent,
+        // since method calls have higher precedence than unary minus.
+        // Treating '-' as part of the literal would make `-123.abs()` behave differently.
+        //
+        // According to the maximal munch rule, ---a is tokenized as '--' '-a', not '-''--a'.
+        // The scanner always chooses the longest valid token, even if it leads to a syntax error later.
         '-' => {
-          if self.match_char(&'=') {
+          if self.match_char(&'-') {
+            self.advance();
+            Some(TokenType::MinusMinus)
+          } else if self.match_char(&'=') {
             self.advance();
             Some(TokenType::MinusEqual)
           } else {
@@ -57,13 +74,6 @@ impl Scanner {
 
         // Strings
         '"' | '\'' | '`' => Some(self.tokenize_strings(lox)),
-
-        // New line
-        '\n' => {
-          self.column = 0;
-          self.line += 1;
-          None
-        },
 
         // And condition check
         '&' => {
@@ -126,14 +136,22 @@ impl Scanner {
         // SemiColon line Terminator
         ';' => self.tokenize_semicolon(lox),
 
-        '.' => Some(TokenType::Dot),
+        '.' => self.tokenize_dot(),
+        ',' => Some(TokenType::Comma),
 
         // Ignore whitespace
         ' ' | '\r' | '\t' => None,
         // String
         'a'..='z' | 'A'..='Z' | '_' => Some(self.tokenize_keywords()),
         // Number
-        '1'..='9' => Some(self.tokenize_numbers()),
+        '0'..='9' => Some(self.tokenize_numbers()),
+
+        // New line
+        '\n' => {
+          self.column = 0;
+          self.line += 1;
+          None
+        },
 
         // Default case: unrecognized characters
         _ => {
@@ -169,6 +187,21 @@ impl Scanner {
     ()
   }
 
+  fn tokenize_dot(&mut self) -> Option<TokenType> {
+    if let Some(char) = self.peek() {
+      if char.is_ascii_digit() {
+        while let Some(char) = self.peek() {
+          if !char.is_ascii_digit() {
+            break;
+          }
+          self.advance();
+        }
+        return Some(TokenType::Number);
+      }
+    }
+    Some(TokenType::Dot)
+  }
+
   // Function that tokenize the semi colon
   fn tokenize_semicolon(&mut self, lox: &mut Lox) -> Option<TokenType> {
     if self.tokens.len() > 0 && !self.tokens[self.tokens.len() - 1].lexeme.ends_with(';') {
@@ -191,14 +224,14 @@ impl Scanner {
         0,
       );
       Logger::log(
-              logger::LogType::Info(&format!(
-                "[{:?}] Please make sure the end of your expression is followed by a single semicolon. [{}:{}]",
-                LoxError::CompileError(CompilerError::SyntaxError),
-                self.line,
-                self.column + 1
-              )),
-              0,
-            );
+        logger::LogType::Info(&format!(
+          "[{:?}] Please make sure the end of your expression is followed by a single semicolon. [{}:{}]",
+          LoxError::CompileError(CompilerError::SyntaxError),
+          self.line,
+          self.column + 1
+        )),
+        0,
+      );
 
       None
     }
@@ -241,12 +274,14 @@ impl Scanner {
       self.advance();
       TokenType::DivideEqual
     } else if self.match_char(&'/') {
-      while let Some(char) = self.peek() {
-        // Check for line comment
-        if char == '\n' {
-          break;
+      loop {
+        match self.advance() {
+          char => {
+            if char == '\n' {
+              break;
+            };
+          },
         }
-        self.advance();
       }
 
       TokenType::Comment
@@ -294,7 +329,18 @@ impl Scanner {
         self.advance();
       } else {
         if self.match_char(&'.') {
-          self.advance();
+          match self.peek_next() {
+            Some(char) => {
+              if char.is_ascii_digit() {
+                self.advance();
+              } else {
+                break;
+              }
+            },
+            None => {
+              break;
+            },
+          }
         } else {
           break;
         }

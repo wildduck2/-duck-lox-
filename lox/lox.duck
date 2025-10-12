@@ -1,11 +1,37 @@
-var a = 1; // inline comment
+// Variable declarations
+var a = 1;
+var b = a + 2 * 3 - 4 / (5 + 6);
 
+// Conditionals
+if (a >= b) {
+  print "greater or equal";
+} else {
+  print "less";
+}
 
-a = a + 1;
-a += 2;
-a -= 3;
-a *= 4;
-a /= 5;
+// Loops
+for (var i = 0; i < 10; i = i + 1) {
+  print i;
+}
 
-print a;
+// Functions
+fun add(x, y) {
+  return x + y;
+}
+
+var result = add(2, 3);
+
+// Strings and equality
+if (result == 5 and "hello" != "world") {
+  print "ok";
+}
+
+// Unary operators
+var neg = -result;
+var dec = --neg;
+var inc = ++dec;
+
+// Boolean literals
+var flag = true;
+var nothing = nil;
 
