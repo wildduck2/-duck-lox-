@@ -1,0 +1,37 @@
+// Variable declarations
+var a = 1;
+var b = a + 2 * 3 - 4 / (5 + 6);
+
+// Conditionals
+if (a >= b) {
+  print "greater or equal";
+} else {
+  print "less";
+}
+
+// Loops
+for (var i = 0; i < 10; i = i + 1) {
+  print i;
+}
+
+// Functions
+fun add(x, y) {
+  return x + y;
+}
+
+var result = add(2, 3);
+
+// Strings and equality
+if (result == 5 and "hello" != "world") {
+  print "ok";
+}
+
+// Unary operators
+var neg = -result;
+var dec = --neg;
+var inc = ++dec;
+
+// Boolean literals
+var flag = true;
+var nothing = nil;
+
