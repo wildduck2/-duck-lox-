@@ -1,1 +1,11 @@
-var name = 2.;
+var a = 1; // inline comment
+
+
+a = a + 1;
+a += 2;
+a -= 3;
+a *= 4;
+a /= 5;
+
+print a;
+

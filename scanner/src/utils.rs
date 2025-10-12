@@ -25,9 +25,31 @@ impl Scanner {
         ']' => Some(TokenType::RightBracket),
 
         // Mathematical operators
-        '+' => Some(TokenType::Plus),
-        '-' => Some(TokenType::Minus),
-        '*' => Some(TokenType::Star),
+        '+' => {
+          if self.match_char(&'=') {
+            self.advance();
+            Some(TokenType::PlusEqual)
+          } else {
+            Some(TokenType::Plus)
+          }
+        },
+        '-' => {
+          if self.match_char(&'=') {
+            self.advance();
+            Some(TokenType::MinusEqual)
+          } else {
+            Some(TokenType::Minus)
+          }
+        },
+        '*' => {
+          if self.match_char(&'=') {
+            self.advance();
+            Some(TokenType::StarEqual)
+          } else {
+            Some(TokenType::Star)
+          }
+        },
+
         '%' => Some(TokenType::Modulus),
 
         // Comment and the Divide
@@ -46,7 +68,8 @@ impl Scanner {
         // And condition check
         '&' => {
           if self.match_char(&'&') {
-            Some(TokenType::Or)
+            self.advance();
+            Some(TokenType::And)
           } else {
             None
           }
@@ -55,6 +78,7 @@ impl Scanner {
         // Or condition check
         '|' => {
           if self.match_char(&'|') {
+            self.advance();
             Some(TokenType::Or)
           } else {
             None
@@ -64,6 +88,7 @@ impl Scanner {
         // Comparison And/Or Equality
         '>' => {
           if self.match_char(&'=') {
+            self.advance();
             Some(TokenType::GreaterEqual)
           } else {
             Some(TokenType::Greater)
@@ -71,6 +96,7 @@ impl Scanner {
         },
         '<' => {
           if self.match_char(&'=') {
+            self.advance();
             Some(TokenType::LessEqual)
           } else {
             Some(TokenType::Less)
@@ -80,25 +106,27 @@ impl Scanner {
         // Equal and Strict Equal
         '=' => {
           if self.match_char(&'=') {
+            self.advance();
             Some(TokenType::EqualEqual)
           } else {
             Some(TokenType::Equal)
           }
         },
 
-        // Not Equal
+        // Not Equal and Bang
         '!' => {
           if self.match_char(&'=') {
-            Some(TokenType::EqualEqual)
+            self.advance();
+            Some(TokenType::BangEqual)
           } else {
-            None
+            Some(TokenType::Bang)
           }
         },
 
         // SemiColon line Terminator
         ';' => self.tokenize_semicolon(lox),
 
-        '.' => self.tokenize_dot(lox),
+        '.' => Some(TokenType::Dot),
 
         // Ignore whitespace
         ' ' | '\r' | '\t' => None,
@@ -131,48 +159,19 @@ impl Scanner {
       };
     }
 
+    self.tokens.push(Token {
+      token_type: TokenType::Eof,
+      lexeme: String::from(""),
+      literal: Literal::Nil,
+      position: (self.line, self.column),
+    });
+
     ()
   }
 
-  // Function that tokenize dot
-  fn tokenize_dot(&mut self, lox: &mut Lox) -> Option<TokenType> {
-    while let Some(char) = self.peek() {
-      if char == '(' {
-        // Check for the second pair or the function execution
-        if self.match_char(&')') {
-          break;
-        }
-        // NOTE: later you have to make some token type for function execution.
-        return Some(TokenType::Fun);
-        // Function Execution
-      } else if char == ' ' {
-        let snippet: String = self.source[((self.current - 1) as usize)..]
-          .chars()
-          .take_while(|&c| c != '\n')
-          .collect();
-
-        // Throw Error wrong syntax
-        Logger::log(
-          logger::LogType::Error(&format!(
-            "[{:?}] Unexpected character: {:?} [{}:{}]",
-            LoxError::CompileError(CompilerError::SyntaxError),
-            format!("{}{}", self.get_current_lexeme(), snippet),
-            self.line,
-            self.column + 1
-          )),
-          0,
-        );
-      }
-    }
-    Some(TokenType::Dot)
-  }
-
   // Function that tokenize the semi colon
-  fn tokenize_semicolon(&self, lox: &mut Lox) -> Option<TokenType> {
-    if self.match_char(&'\n')
-      && self.tokens.len() > 0
-      && !self.tokens[self.tokens.len() - 1].lexeme.ends_with(';')
-    {
+  fn tokenize_semicolon(&mut self, lox: &mut Lox) -> Option<TokenType> {
+    if self.tokens.len() > 0 && !self.tokens[self.tokens.len() - 1].lexeme.ends_with(';') {
       Some(TokenType::SemiColon)
     } else {
       lox.has_error = true;
@@ -238,7 +237,10 @@ impl Scanner {
 
   /// Function that tokenize lox comments and if it's not a comment it might a "division" or `None`
   fn tokenize_comments(&mut self, lox: &mut Lox) -> TokenType {
-    if self.match_char(&'/') {
+    if self.match_char(&'=') {
+      self.advance();
+      TokenType::DivideEqual
+    } else if self.match_char(&'/') {
       while let Some(char) = self.peek() {
         // Check for line comment
         if char == '\n' {

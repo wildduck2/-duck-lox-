@@ -48,6 +48,6 @@ impl Scanner {
   /// Function that executes the scanning operation on a lox content.
   fn execute(&mut self, lox: &mut Lox) {
     self.get_tokens(lox);
-    println!("{:#?}", self.tokens);
+    println!("{:?}", self.tokens);
   }
 }
