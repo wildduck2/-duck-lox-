@@ -10,11 +10,4 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-# Core dependencies
 logger = { path = "../logger" }
-scanner = { path = "../scanner" }
-
-[dev-dependencies]
-
-
-
