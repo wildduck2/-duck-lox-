@@ -1,8 +1,6 @@
 // NOTE: These are the enums used to make the scanner
 // and achieve the regular which is the layer-2 of the Chmosky Hierarchy
 
-use std::fmt::write;
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
   // Single-character tokens.

@@ -1,7 +1,7 @@
 use logger::Logger;
+use lox::{CompilerError, Lox, LoxError};
 
 use crate::{
-  lox::{CompilerError, Lox, LoxError},
   token::{
     types::{Literal, TokenType},
     Token,

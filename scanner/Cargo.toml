@@ -11,3 +11,4 @@ categories.workspace = true
 
 [dependencies]
 logger = { path = "../logger" }
+lox = { path = "../lox" }

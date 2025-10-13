@@ -1,9 +1,6 @@
-use logger::{self, Logger};
-use std::{fs, process, slice::SliceIndex};
+use crate::token::Token;
+use lox::Lox;
 
-use crate::{lox::Lox, token::Token};
-
-pub mod lox;
 pub mod token;
 mod utils;
 
@@ -29,24 +26,8 @@ impl Scanner {
     }
   }
 
-  /// Function that starts the runtime env for the language takes stdin and puts stdout or strerr.
-  pub fn run_interactive_mode(&self) {}
-
-  /// Function that runs the process of compiling file.
-  pub fn run_file(&mut self, path: String, lox: &mut Lox) {
-    self.source = match fs::read_to_string(path) {
-      Ok(buff) => buff,
-      Err(err) => {
-        Logger::log(logger::LogType::Error(&err.to_string()), 0);
-        process::exit(1);
-      },
-    };
-
-    self.execute(lox);
-  }
-
   /// Function that executes the scanning operation on a lox content.
-  fn execute(&mut self, lox: &mut Lox) {
+  pub fn scan(&mut self, lox: &mut Lox) {
     self.get_tokens(lox);
     println!("{:?}", self.tokens);
   }
