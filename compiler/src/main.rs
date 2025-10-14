@@ -1,8 +1,6 @@
 use colored::*;
 use compiler::Compiler;
 use diagnostic::{diagnostic::Diagnostic, diagnostic_code::DiagnosticCode, DiagnosticEngine};
-use parser::Parser;
-use scanner::Scanner;
 
 mod compiler;
 mod error;
@@ -11,7 +9,7 @@ fn main() {
   let args: Vec<String> = std::env::args().collect();
 
   let mut diagnostic = DiagnosticEngine::new();
-  let mut compiler = Compiler::new(Scanner::new(), Parser::new());
+  let mut compiler = Compiler::new();
 
   match args.len() {
     1 => {

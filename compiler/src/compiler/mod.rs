@@ -3,14 +3,11 @@ use parser::Parser;
 use scanner::Scanner;
 use std::fs;
 
-pub struct Compiler {
-  scanner: Scanner,
-  parser: Parser,
-}
+pub struct Compiler {}
 
 impl Compiler {
-  pub fn new(scanner: Scanner, parser: Parser) -> Self {
-    Self { scanner, parser }
+  pub fn new() -> Self {
+    Self {}
   }
 
   /// Function that starts the runtime env for the language takes stdin and puts stdout or stderr.
@@ -25,6 +22,7 @@ impl Compiler {
 
   /// Function that runs the process of compiling file.
   pub fn run_file(&mut self, path: String, engine: &mut DiagnosticEngine) {
+    // Reading files to get the string buff
     let source = match fs::read_to_string(&path) {
       Ok(content) => content,
       Err(err) => {
@@ -40,11 +38,11 @@ impl Compiler {
       },
     };
 
-    // Set the source for the scanner
-    self.scanner.source = source.clone();
+    // Scanning the buffer of string
+    let mut scanner = Scanner::new(source.clone());
 
     // Scan the tokens
-    self.scanner.scan(engine);
+    scanner.scan(engine);
 
     // Check if there were scanning errors
     if engine.has_errors() {
@@ -53,7 +51,8 @@ impl Compiler {
     }
 
     // Parse the tokens
-    // self.parser.parse(engine, &self.scanner.tokens);
+    let mut parser = Parser::new(scanner.tokens);
+    parser.parse(engine);
 
     // Check if there were parsing errors
     if engine.has_errors() {

@@ -15,9 +15,9 @@ pub struct Scanner {
 
 impl Scanner {
   /// Function that created a new scanner
-  pub fn new() -> Self {
+  pub fn new(source: String) -> Self {
     Self {
-      source: String::from(""),
+      source,
       column: 0,
       line: 0,
       start: 0,
@@ -26,9 +26,8 @@ impl Scanner {
     }
   }
 
-  /// Function that executes the scanning operation on a lox content.
+  /// Funciton that scans the string buffer and returns tokens
   pub fn scan(&mut self, engine: &mut DiagnosticEngine) {
     self.get_tokens(engine);
-    println!("{:?}", self.tokens);
   }
 }
