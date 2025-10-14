@@ -1,6 +1,6 @@
 use colored::*;
 use compiler::Compiler;
-use diagnostic::{Diagnostic, DiagnosticCode, DiagnosticEngine};
+use diagnostic::{diagnostic::Diagnostic, diagnostic_code::DiagnosticCode, DiagnosticEngine};
 use parser::Parser;
 use scanner::Scanner;
 

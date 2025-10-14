@@ -1,4 +1,8 @@
-use diagnostic::{Diagnostic, DiagnosticCode, DiagnosticEngine, Label, Span};
+use diagnostic::{
+  diagnostic::{Diagnostic, Label, Span},
+  diagnostic_code::DiagnosticCode,
+  DiagnosticEngine,
+};
 
 use crate::{
   token::{

@@ -1,4 +1,4 @@
-use diagnostic::{Diagnostic, DiagnosticCode, DiagnosticEngine};
+use diagnostic::{diagnostic::Diagnostic, diagnostic_code::DiagnosticCode, DiagnosticEngine};
 use parser::Parser;
 use scanner::Scanner;
 use std::fs;
@@ -44,7 +44,7 @@ impl Compiler {
     self.scanner.source = source.clone();
 
     // Scan the tokens
-    self.scanner.get_tokens(engine);
+    self.scanner.scan(engine);
 
     // Check if there were scanning errors
     if engine.has_errors() {

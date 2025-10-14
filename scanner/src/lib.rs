@@ -29,6 +29,6 @@ impl Scanner {
   /// Function that executes the scanning operation on a lox content.
   pub fn scan(&mut self, engine: &mut DiagnosticEngine) {
     self.get_tokens(engine);
-    // println!("{:#?}", self.tokens);
+    println!("{:?}", self.tokens);
   }
 }
