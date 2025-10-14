@@ -1,5 +1,5 @@
 use crate::token::Token;
-use lox::Lox;
+use diagnostic::DiagnosticEngine;
 
 pub mod token;
 mod utils;
@@ -7,10 +7,10 @@ mod utils;
 pub struct Scanner {
   pub tokens: Vec<Token>,
   pub source: String,
-  pub line: u32,
-  pub column: u32,
-  pub current: u32,
-  pub start: u32,
+  pub line: usize,
+  pub column: usize,
+  pub current: usize,
+  pub start: usize,
 }
 
 impl Scanner {
@@ -27,8 +27,8 @@ impl Scanner {
   }
 
   /// Function that executes the scanning operation on a lox content.
-  pub fn scan(&mut self, lox: &mut Lox) {
-    self.get_tokens(lox);
-    println!("{:?}", self.tokens);
+  pub fn scan(&mut self, engine: &mut DiagnosticEngine) {
+    self.get_tokens(engine);
+    // println!("{:#?}", self.tokens);
   }
 }

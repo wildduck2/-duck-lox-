@@ -10,5 +10,5 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-logger = { path = "../logger" }
+diagnostic = { path = "../diagnostic" }
 scanner = { path = "../scanner" }

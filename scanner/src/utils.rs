@@ -1,5 +1,4 @@
-use logger::Logger;
-use lox::{CompilerError, Lox, LoxError};
+use diagnostic::{Diagnostic, DiagnosticCode, DiagnosticEngine, Label, Span};
 
 use crate::{
   token::{
@@ -11,7 +10,7 @@ use crate::{
 
 impl Scanner {
   /// Function that maps over the "lox" and returns a `Vec<Token>`.
-  pub fn get_tokens(&mut self, mut lox: &mut Lox) -> () {
+  pub fn get_tokens(&mut self, engine: &mut DiagnosticEngine) -> () {
     while !self.is_at_end() {
       self.start = self.current;
       let c = self.advance();
@@ -70,10 +69,10 @@ impl Scanner {
         '%' => Some(TokenType::Modulus),
 
         // Comment and the Divide
-        '/' => Some(self.tokenize_comments(&mut lox)),
+        '/' => Some(self.tokenize_comments(engine)),
 
         // Strings
-        '"' | '\'' | '`' => Some(self.tokenize_strings(lox)),
+        '"' | '\'' | '`' => Some(self.tokenize_strings(engine)),
 
         // And condition check
         '&' => {
@@ -134,7 +133,7 @@ impl Scanner {
         },
 
         // SemiColon line Terminator
-        ';' => self.tokenize_semicolon(lox),
+        ';' => self.tokenize_semicolon(engine),
 
         '.' => self.tokenize_dot(),
         ',' => Some(TokenType::Comma),
@@ -155,19 +154,21 @@ impl Scanner {
 
         // Default case: unrecognized characters
         _ => {
-          lox.has_error = true;
+          let diagnostic = Diagnostic::new(
+            DiagnosticCode::InvalidCharacter,
+            format!("unexpected character: {:?}", self.get_current_lexeme()),
+          )
+          .with_label(Label::primary(
+            Span {
+              file: "input".to_string(),
+              line: self.line,
+              column: self.column,
+              length: 1,
+            },
+            None,
+          ));
 
-          Logger::log(
-            logger::LogType::Error(&format!(
-              "[{:?}] Unexpected character: {:?} [{}:{}]",
-              LoxError::CompileError(CompilerError::SyntaxError),
-              self.get_current_lexeme(),
-              self.line,
-              self.column + 1
-            )),
-            0,
-          );
-
+          engine.emit(diagnostic);
           None
         },
       };
@@ -203,42 +204,39 @@ impl Scanner {
   }
 
   // Function that tokenize the semi colon
-  fn tokenize_semicolon(&mut self, lox: &mut Lox) -> Option<TokenType> {
+  fn tokenize_semicolon(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenType> {
     if self.tokens.len() > 0 && !self.tokens[self.tokens.len() - 1].lexeme.ends_with(';') {
       Some(TokenType::SemiColon)
     } else {
-      lox.has_error = true;
       let snippet: String = self.source[(self.current as usize)..]
         .chars()
         .take_while(|&c| c != '\n')
         .collect();
 
-      Logger::log(
-        logger::LogType::Error(&format!(
-          "[{:?}] Unexpected character: {:?} [{}:{}]",
-          LoxError::CompileError(CompilerError::SyntaxError),
-          format!("{}{}", self.get_current_lexeme(), snippet),
-          self.line,
-          self.column + 1
-        )),
-        0,
-      );
-      Logger::log(
-        logger::LogType::Info(&format!(
-          "[{:?}] Please make sure the end of your expression is followed by a single semicolon. [{}:{}]",
-          LoxError::CompileError(CompilerError::SyntaxError),
-          self.line,
-          self.column + 1
-        )),
-        0,
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::MissingSemicolon,
+        "unexpected character".to_string(),
+      )
+      .with_label(Label::primary(
+        Span {
+          file: "input".to_string(),
+          line: self.line,
+          column: self.column,
+          length: snippet.len(),
+        },
+        Some("expected semicolon at end of expression".to_string()),
+      ))
+      .with_help(
+        "make sure the end of your expression is followed by a single semicolon".to_string(),
       );
 
+      engine.emit(diagnostic);
       None
     }
   }
 
   /// Function that tokenize all the string shapes
-  fn tokenize_strings(&mut self, lox: &mut Lox) -> TokenType {
+  fn tokenize_strings(&mut self, engine: &mut DiagnosticEngine) -> TokenType {
     let current_char = self.get_current_lexeme().chars().collect::<Vec<_>>()[0];
 
     while let Some(char) = self.peek() {
@@ -251,17 +249,21 @@ impl Scanner {
       }
 
       if char == '\n' && current_char != '`' {
-        lox.has_error = true;
-        Logger::log(
-          logger::LogType::Error(&format!(
-            "[{:?}] wrong string syntax: {:?} [{}:{}]",
-            LoxError::CompileError(CompilerError::SyntaxError),
-            self.get_current_lexeme(),
-            self.line,
-            self.column + 1
-          )),
-          0,
-        );
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::UnterminatedString,
+          "wrong string syntax".to_string(),
+        )
+        .with_label(Label::primary(
+          Span {
+            file: "input".to_string(),
+            line: self.line,
+            column: self.start,
+            length: self.get_current_lexeme().len(),
+          },
+          Some("newline not allowed in string".to_string()),
+        ));
+
+        engine.emit(diagnostic);
       }
     }
 
@@ -269,7 +271,7 @@ impl Scanner {
   }
 
   /// Function that tokenize lox comments and if it's not a comment it might a "division" or `None`
-  fn tokenize_comments(&mut self, lox: &mut Lox) -> TokenType {
+  fn tokenize_comments(&mut self, engine: &mut DiagnosticEngine) -> TokenType {
     if self.match_char(&'=') {
       self.advance();
       TokenType::DivideEqual
@@ -303,18 +305,21 @@ impl Scanner {
       }
 
       if self.is_at_end() {
-        // Unterminated multi-line comment
-        lox.has_error = true;
-        Logger::log(
-          logger::LogType::Error(&format!(
-            "[{:?}] Unterminated multi-line comment: {:?} [{}:{}]",
-            LoxError::CompileError(CompilerError::SyntaxError),
-            self.get_current_lexeme(),
-            self.line,
-            self.column + 1,
-          )),
-          0,
-        );
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::UnterminatedString,
+          "unterminated multi-line comment".to_string(),
+        )
+        .with_label(Label::primary(
+          Span {
+            file: "input".to_string(),
+            line: self.line,
+            column: self.column,
+            length: self.get_current_lexeme().len(),
+          },
+          Some("reached end of file before closing comment".to_string()),
+        ));
+
+        engine.emit(diagnostic);
       }
       TokenType::Comment
     } else {

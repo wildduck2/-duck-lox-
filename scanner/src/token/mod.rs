@@ -7,7 +7,7 @@ pub struct Token {
   pub token_type: TokenType,
   pub lexeme: String,
   pub literal: Literal,
-  pub position: (u32, u32),
+  pub position: (usize, usize),
 }
 
 impl Token {
@@ -15,7 +15,7 @@ impl Token {
     token_type: TokenType,
     lexeme: String,
     literal: Literal,
-    position: (u32, u32),
+    position: (usize, usize),
   ) -> Self {
     Self {
       token_type,
