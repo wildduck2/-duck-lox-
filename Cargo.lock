@@ -65,8 +65,8 @@ dependencies = [
 name = "compiler"
 version = "0.1.0"
 dependencies = [
- "logger",
- "lox",
+ "colored",
+ "diagnostic",
  "parser",
  "scanner",
 ]
@@ -76,6 +76,14 @@ name = "core-foundation-sys"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
+
+[[package]]
+name = "diagnostic"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "colored",
+]
 
 [[package]]
 name = "find-msvc-tools"
@@ -130,21 +138,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34080505efa8e45a4b816c349525ebe327ceaa8559756f0356cba97ef3bf7432"
 
 [[package]]
-name = "logger"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "colored",
-]
-
-[[package]]
-name = "lox"
-version = "0.1.0"
-dependencies = [
- "logger",
-]
-
-[[package]]
 name = "num-traits"
 version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -163,7 +156,7 @@ checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 name = "parser"
 version = "0.1.0"
 dependencies = [
- "logger",
+ "diagnostic",
  "scanner",
 ]
 
@@ -195,8 +188,7 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 name = "scanner"
 version = "0.1.0"
 dependencies = [
- "logger",
- "lox",
+ "diagnostic",
 ]
 
 [[package]]

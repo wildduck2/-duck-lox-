@@ -11,8 +11,8 @@ categories.workspace = true
 
 [dependencies]
 # Core dependencies
-logger = { path = "../logger" }
-lox = { path = "../lox" }
+colored = { workspace = true }
+diagnostic = { path = "../diagnostic" }
 scanner = { path = "../scanner" }
 parser = { path = "../parser" }
 

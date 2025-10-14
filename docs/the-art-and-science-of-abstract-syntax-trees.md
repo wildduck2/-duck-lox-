@@ -92,7 +92,7 @@ The `Grouping` variant is interesting. It represents an expression wrapped in pa
 
 Now that we understand what an AST is conceptually, let's think about how you actually build one in practice. This process is called parsing, and it's one of the most intellectually satisfying parts of building a language.
 
-Parsing takes your flat sequence of tokens and builds the hierarchical tree structure. There are many ways to do this, but for simple expression languages, a technique called "recursive descent parsing" works beautifully and is easy to understand.
+Parsing takes your flat sequence of tokens and builds the hierarchical tree structure. There are many ways to do this, but for simple expression languages, a technique called "`recursive descent parsing`" works beautifully and is easy to understand.
 
 The basic idea is that you write a function for each level of precedence in your grammar. Let's think about how we'd parse arithmetic expressions with addition and multiplication. We know multiplication has higher precedence, so we want it to bind more tightly. We might have functions like this:
 

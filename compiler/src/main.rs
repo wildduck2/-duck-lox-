@@ -1,34 +1,45 @@
+use colored::*;
 use compiler::Compiler;
-use logger::{LogType, Logger};
-use lox::Lox;
+use diagnostic::{Diagnostic, DiagnosticCode, DiagnosticEngine};
 use parser::Parser;
 use scanner::Scanner;
 
 mod compiler;
+mod error;
 
 fn main() {
   let args: Vec<String> = std::env::args().collect();
-  println!("{:?}", args);
 
+  let mut diagnostic = DiagnosticEngine::new();
   let mut compiler = Compiler::new(Scanner::new(), Parser::new());
-
-  let mut lox = Lox::new();
 
   match args.len() {
     1 => {
-      Logger::log(LogType::Info("Running the interactive mode"), 0);
-      compiler.run_interactive_mode();
+      // Info message for interactive mode
+      println!("{}", "Running the interactive mode".cyan().bold());
+      compiler.run_interactive_mode(&mut diagnostic);
     },
     2 => {
-      Logger::log(LogType::Info("Running the file mode"), 0);
-      compiler.run_file(args[1].clone(), &mut lox);
+      // Info message for file mode
+      println!("{}", format!("Running file: {}", args[1]).cyan().bold());
+      compiler.run_file(args[1].clone(), &mut diagnostic);
     },
     _ => {
-      Logger::log(LogType::Info("Nothing"), 0);
+      // Error: Invalid arguments
+      let error = Diagnostic::new(
+        DiagnosticCode::InvalidArguments,
+        "invalid number of arguments".to_string(),
+      )
+      .with_help("Usage: lox [script]".to_string());
+
+      diagnostic.emit(error);
+      diagnostic.print_all("");
+      std::process::exit(64);
     },
   }
 
-  if lox.has_error {
+  // Check if compilation had errors
+  if diagnostic.has_errors() {
     std::process::exit(65);
   }
 }

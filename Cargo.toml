@@ -1,11 +1,10 @@
 [workspace]
 members = [
-"lox",
-  "logger",
-  "lox",
+  "diagnostic",
   "compiler",
-  "scanner"
-, "parser"]
+  "scanner",
+  "parser"
+]
 resolver = "2"
 
 [workspace.package]
