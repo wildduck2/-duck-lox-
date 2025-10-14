@@ -20,7 +20,8 @@
 *  binary     -> expression operator expression
 *
 *  operator   -> "+" | "-" | "*" | "/"
-*                "!=" | "==" | "<=" | ">=" | "<" | ">"
+*                "!=" | "==" | "<="
+*                | ">=" | "<" | ">"
 *
 */
 
@@ -31,12 +32,12 @@ pub enum Expr {
   Literal(Token),
   Unary {
     operator: Token,
-    right: Box<Expr>,
+    rhs: Box<Expr>,
   },
   Binary {
-    left: Box<Expr>,
+    lhs: Box<Expr>,
     operator: Token,
-    right: Box<Expr>,
+    rhs: Box<Expr>,
   },
   Grouping(Box<Expr>),
 }
@@ -54,14 +55,17 @@ impl Expr {
       Expr::Literal(token) => {
         println!("{}Literal({})", padding, token.lexeme);
       },
-      Expr::Unary { operator, right } => {
+      Expr::Unary {
+        operator,
+        rhs: right,
+      } => {
         println!("{}Unary({})", padding, operator.lexeme);
         right.pretty_print_internal(indent + 2);
       },
       Expr::Binary {
-        left,
+        lhs: left,
         operator,
-        right,
+        rhs: right,
       } => {
         println!("{}Binary({})", padding, operator.lexeme);
         left.pretty_print_internal(indent + 2);
@@ -98,14 +102,17 @@ impl Expr {
         // Literals are leaf nodes - they have no children
         (format!("({})", token.lexeme), vec![])
       },
-      Expr::Unary { operator, right } => {
+      Expr::Unary {
+        operator,
+        rhs: right,
+      } => {
         // Unary has one child on the right
         (format!("({})", operator.lexeme), vec![right.as_ref()])
       },
       Expr::Binary {
-        left,
+        lhs: left,
         operator,
-        right,
+        rhs: right,
       } => {
         // Binary has two children: left and right
         (
@@ -161,8 +168,12 @@ impl Expr {
 
     let children = match self {
       Expr::Literal(_) => vec![],
-      Expr::Unary { right, .. } => vec![right.as_ref()],
-      Expr::Binary { left, right, .. } => vec![left.as_ref(), right.as_ref()],
+      Expr::Unary { rhs: right, .. } => vec![right.as_ref()],
+      Expr::Binary {
+        lhs: left,
+        rhs: right,
+        ..
+      } => vec![left.as_ref(), right.as_ref()],
       Expr::Grouping(expr) => vec![expr.as_ref()],
     };
 
