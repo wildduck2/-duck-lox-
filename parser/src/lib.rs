@@ -1,27 +1,14 @@
 /*
 *
-*  The expressions
-*
-*  expression -> literal
-*              | unary
-*              | binary
-*              | grouping;
-*
-*  literal    -> NUMBER
-*              | STRING
-*              | "true"
-*              | "false"
-*              | "nil";
-*
-*  grouping   -> "(" expression ")" ;
-*
-*  unary      -> ("-" | "!") expression
-*
-*  binary     -> expression operator expression
-*
-*  operator   -> "+" | "-" | "*" | "/"
-*                "!=" | "==" | "<="
-*                | ">=" | "<" | ">"
+* expression   → equality ;
+* equality     → comparison ( ( "!=" | "==" ) comparison )* ;
+* comparison   → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
+* term         → factor ( ( "-" | "+" ) factor )* ;
+* factor       → unary ( ( "/" | "*" ) unary )* ;
+* unary        → ( "!" | "-" ) unary
+*                | primary ;
+* primary      → NUMBER | STRING | "true" | "false" | "nil"
+*                | "(" expression ")" ;
 *
 */
 
@@ -65,8 +52,8 @@ impl Parser {
   /// It repeatedly parses top-level expressions until the end of the token list.
   pub fn parse(&mut self, engine: &mut DiagnosticEngine) {
     // Start parsing an expression (lowest precedence is addition)
-    while !self.is_at_the_end() {
-      let expression = self.parse_addition(engine);
+    while !self.is_eof() {
+      let expression = self.parse_expression(engine);
       self.ast.push(expression);
     }
 
@@ -76,154 +63,130 @@ impl Parser {
     }
   }
 
-  /// Parses binary expressions involving addition and subtraction.
-  /// Example: `a + b - c`
-  ///
-  /// Grammar rule:
-  /// ```text
-  /// expression → term ( ( "+" | "-" ) term )* ;
-  /// ```
-  pub fn parse_addition(&mut self, engine: &mut DiagnosticEngine) -> Expr {
-    // Start by parsing the left-hand side (LHS) — a multiplication-level expression.
-    let mut lhs = self.parse_multiplication(engine);
+  fn parse_expression(&mut self, engine: &mut DiagnosticEngine) -> Expr {
+    return self.parse_equality(engine);
+  }
+  fn parse_equality(&mut self, engine: &mut DiagnosticEngine) -> Expr {
+    let mut lhs = self.parse_comparison(engine);
 
-    // As long as we see "+" or "-", keep parsing and combining expressions.
-    while !self.is_at_the_end() {
+    while !self.is_eof() {
       let token = self.get_current_token();
       match token.token_type {
-        TokenType::Plus | TokenType::Minus => {
-          // Consume the operator
+        TokenType::EqualEqual | TokenType::BangEqual => {
           self.advance();
+          let rhs = self.parse_comparison(engine);
 
-          // Parse the right-hand side (RHS)
-          let rhs = self.parse_multiplication(engine);
-
-          // Combine LHS and RHS into a binary expression tree node
           lhs = Expr::Binary {
             lhs: Box::new(lhs),
             operator: token,
             rhs: Box::new(rhs),
           }
         },
-        _ => break, // Stop when there’s no more + or -
+        _ => break,
       }
     }
-
-    // Return the final (possibly nested) binary expression
     lhs
   }
+  fn parse_comparison(&mut self, engine: &mut DiagnosticEngine) -> Expr {
+    let mut lhs = self.parse_term(engine);
 
-  /// Parses binary expressions involving multiplication and division.
-  /// Example: `a * b / c`
-  ///
-  /// Grammar rule:
-  /// ```text
-  /// term → factor ( ( "*" | "/" ) factor )* ;
-  /// ```
-  pub fn parse_multiplication(&mut self, engine: &mut DiagnosticEngine) -> Expr {
-    // Start by parsing the left-hand side (LHS) — a unary-level expression.
-    let mut lhs = self.parse_unary(engine);
-
-    // As long as we see "*" or "/", keep parsing and combining expressions.
-    while !self.is_at_the_end() {
+    while !self.is_eof() {
       let token = self.get_current_token();
       match token.token_type {
-        TokenType::Star | TokenType::Divide => {
-          // Consume the operator
+        TokenType::GreaterEqual | TokenType::Greater | TokenType::LessEqual | TokenType::Less => {
           self.advance();
+          let rhs = self.parse_term(engine);
 
-          // Parse the right-hand side (RHS)
-          let rhs = self.parse_unary(engine);
-
-          // Combine LHS and RHS into a binary expression node
           lhs = Expr::Binary {
             lhs: Box::new(lhs),
             operator: token,
             rhs: Box::new(rhs),
-          };
+          }
         },
-        _ => break, // Stop when there’s no more * or /
+        _ => break,
       }
     }
-
-    // Return the combined expression
     lhs
   }
 
-  /// Parses unary operators like logical NOT (`!`) and negation (`-`).
-  /// Example: `-x`, `!true`, or nested ones like `!!false` or `--5`.
-  ///
-  /// Grammar rule:
-  /// ```text
-  /// unary → ( "!" | "-" ) unary | primary ;
-  /// ```
-  pub fn parse_unary(&mut self, engine: &mut DiagnosticEngine) -> Expr {
-    // If we see a unary operator, consume it and recursively parse the operand.
-    while !self.is_at_the_end() {
+  fn parse_term(&mut self, engine: &mut DiagnosticEngine) -> Expr {
+    let mut lhs = self.parse_factor(engine);
+
+    while !self.is_eof() {
       let token = self.get_current_token();
       match token.token_type {
-        TokenType::Minus | TokenType::Bang => {
-          // Consume the operator
+        TokenType::Plus | TokenType::Minus => {
           self.advance();
+          let rhs = self.parse_factor(engine);
 
-          // Recursively parse the operand (right-hand side)
+          lhs = Expr::Binary {
+            lhs: Box::new(lhs),
+            operator: token,
+            rhs: Box::new(rhs),
+          }
+        },
+        _ => break,
+      }
+    }
+    lhs
+  }
+  fn parse_factor(&mut self, engine: &mut DiagnosticEngine) -> Expr {
+    let mut lhs = self.parse_unary(engine);
+
+    while !self.is_eof() {
+      let token = self.get_current_token();
+      match token.token_type {
+        TokenType::Star | TokenType::Divide => {
+          self.advance();
           let rhs = self.parse_unary(engine);
 
-          // Build a Unary AST node
+          lhs = Expr::Binary {
+            lhs: Box::new(lhs),
+            operator: token,
+            rhs: Box::new(rhs),
+          }
+        },
+        _ => break,
+      }
+    }
+    lhs
+  }
+  fn parse_unary(&mut self, engine: &mut DiagnosticEngine) -> Expr {
+    while !self.is_eof() {
+      let token = self.get_current_token();
+      match token.token_type {
+        TokenType::Star | TokenType::Divide => {
+          self.advance();
+          let rhs = self.parse_unary(engine);
+
           return Expr::Unary {
             operator: token,
             rhs: Box::new(rhs),
           };
         },
-        _ => break, // If not a unary operator, delegate to primary
+        _ => break,
       }
     }
 
-    // No unary operator found → parse as primary expression
     self.parse_primary(engine)
   }
-
-  /// Parses literals (numbers, strings, booleans) and grouping expressions `(expr)`.
-  ///
-  /// Grammar rule:
-  /// ```text
-  /// primary → NUMBER | STRING | "true" | "false" | "(" expression ")" ;
-  /// ```
-  pub fn parse_primary(&mut self, engine: &mut DiagnosticEngine) -> Expr {
-    if self.is_at_the_end() {}
-
+  fn parse_primary(&mut self, engine: &mut DiagnosticEngine) -> Expr {
     let token = self.get_current_token();
-
     match token.token_type {
-      // Handle literals like: `123`, `"hello"`, `true`, `false`
-      TokenType::String | TokenType::Number | TokenType::True | TokenType::False => {
-        // Consume the literal token
+      TokenType::Number | TokenType::String | TokenType::False | TokenType::True => {
         self.advance();
-
-        // Return a literal expression node
         return Expr::Literal(token);
       },
-
-      // Handle grouped expressions: `( expression )`
       TokenType::LeftParen => {
-        self.advance(); // Consume the '('
+        self.advance();
+        let expr = self.parse_expression(engine);
+        self.advance();
 
-        // Parse the inner expression recursively
-        let expr = self.parse_addition(engine);
-
-        // Expect and consume the closing ')'
-        if self.get_current_token().token_type == TokenType::RightParen {
-          self.advance(); // Consume the ')'
-          return Expr::Grouping(Box::new(expr));
-        } else {
-          // If no closing parenthesis found, that’s a syntax error
-          panic!("Expected ')' after expression");
-        }
+        return Expr::Grouping(Box::new(expr));
       },
 
-      // If we get here, the token isn’t a valid starting point for an expression
       _ => {
-        panic!("Unexpected token in primary expression");
+        panic!("")
       },
     }
   }
@@ -235,7 +198,7 @@ impl Parser {
 
   /// Function that returns Some(pointer +1) without shiting the pointer
   fn peek(&self) -> Option<&Token> {
-    if self.is_at_the_end() {
+    if self.is_eof() {
       return None;
     }
     Some(&self.tokens[self.current])
@@ -243,7 +206,7 @@ impl Parser {
 
   /// Function that shifts the pointer +1 and return it
   fn advance(&mut self) -> Option<&Token> {
-    if self.is_at_the_end() {
+    if self.is_eof() {
       return None;
     }
 
@@ -252,7 +215,7 @@ impl Parser {
   }
 
   /// Function that returns true if we are the end of the vec
-  fn is_at_the_end(&self) -> bool {
+  fn is_eof(&self) -> bool {
     if self.current == self.tokens.len() - 1 {
       return true;
     }
