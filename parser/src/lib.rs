@@ -241,14 +241,6 @@ impl Parser {
     Some(&self.tokens[self.current])
   }
 
-  /// Function that will return the last token without shifting the pointer
-  fn previous(&self) -> Option<&Token> {
-    if self.is_at_the_end() {
-      return None;
-    }
-    Some(&self.tokens[self.current - 1])
-  }
-
   /// Function that shifts the pointer +1 and return it
   fn advance(&mut self) -> Option<&Token> {
     if self.is_at_the_end() {

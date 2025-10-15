@@ -129,3 +129,32 @@ for accecing the second operand of a unary expression.
 ---
 
 
+
+```rs
+
+trait Visitor {
+  fn visit_circle(&mut self, circle: &Circle);
+  fn visit_square(&mut self, square: &Square);
+}
+
+trait Shape {
+  fn accept(&self, visitor: &mut dyn Visitor);
+}
+
+struct Circle;
+struct Square;
+
+impl Shape for Circle {
+  fn accept(&self, visitor: &mut dyn Visitor) {
+      visitor.visit_circle(self);
+  }
+}
+impl Shape for Square {
+  fn accept(&self, visitor: &mut dyn Visitor) {
+      visitor.visit_square(self);
+  }
+}
+
+
+```
+
