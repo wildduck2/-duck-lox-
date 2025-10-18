@@ -88,6 +88,9 @@ impl Scanner {
           }
         },
 
+        // Ternary operators
+        '?' => Some(TokenType::Question),
+        ':' => Some(TokenType::Colon),
         // Or condition check
         '|' => {
           if self.match_char(&'|') {

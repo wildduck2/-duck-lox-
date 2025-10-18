@@ -23,6 +23,8 @@ pub enum TokenType {
   Star,
   StarEqual,
   SemiColon,
+  Colon,
+  Question,
   Modulus,
   // One or two character tokens.
   Bang,

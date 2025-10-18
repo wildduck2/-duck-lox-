@@ -1,15 +1,18 @@
 /*
-*
-* expression   → equality ;
+* expression   → comma ;
+* comma        → ternary ( "," ternary )* ;
+* ternary      → assignment ( "?" expression ":" ternary )? ;
+* assignment   → IDENTIFIER "=" assignment
+*               | equality ;
 * equality     → comparison ( ( "!=" | "==" ) comparison )* ;
 * comparison   → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
 * term         → factor ( ( "-" | "+" ) factor )* ;
 * factor       → unary ( ( "/" | "*" ) unary )* ;
 * unary        → ( "!" | "-" ) unary
-*                | primary ;
-* primary      → NUMBER | STRING | "true" | "false" | "nil"
-*                | "(" expression ")" ;
-*
+*               | primary ;
+* primary      → NUMBER | STRING | IDENTIFIER
+*               | "true" | "false" | "nil"
+*               | "(" expression ")" ;
 */
 
 use std::panic;
@@ -64,16 +67,85 @@ impl Parser {
   }
 
   fn parse_expression(&mut self, engine: &mut DiagnosticEngine) -> Expr {
-    return self.parse_equality(engine);
+    return self.parse_coma(engine);
   }
-  fn parse_equality(&mut self, engine: &mut DiagnosticEngine) -> Expr {
-    let mut lhs = self.parse_comparison(engine);
+
+  fn parse_coma(&mut self, engine: &mut DiagnosticEngine) -> Expr {
+    let mut lhs = self.parse_turnary(engine);
 
     while !self.is_eof() {
       let token = self.get_current_token();
+
       match token.token_type {
-        TokenType::EqualEqual | TokenType::BangEqual => {
+        TokenType::Comma => {
           self.advance();
+
+          let rhs = self.parse_turnary(engine);
+
+          lhs = Expr::Binary {
+            lhs: Box::new(lhs),
+            operator: token,
+            rhs: Box::new(rhs),
+          }
+        },
+        _ => break,
+      }
+    }
+
+    lhs
+  }
+
+  // * ternary      → assignment ( "?" expression ":" ternary )? ;
+  fn parse_turnary(&mut self, engine: &mut DiagnosticEngine) -> Expr {
+    let considtion = self.parse_assignment(engine);
+
+    if !self.is_eof() && self.get_current_token().token_type == TokenType::Question {
+      self.advance(); // consume the (?)
+
+      let then_branch = self.parse_expression(engine);
+      if self.is_eof() && self.get_current_token().token_type != TokenType::Colon {
+        panic!("Expected ':' after then branch of ternary expression");
+      }
+
+      self.advance(); // consume the (:)
+      let else_branch = self.parse_turnary(engine);
+      return Expr::Ternary {
+        condition: Box::new(considtion),
+        then_branch: Box::new(then_branch),
+        else_branch: Box::new(else_branch),
+      };
+    }
+
+    considtion
+  }
+
+  fn parse_assignment(&mut self, engine: &mut DiagnosticEngine) -> Expr {
+    let lhs = self.parse_equality(engine);
+
+    if !self.is_eof() && self.get_current_token().token_type == TokenType::Equal {
+      self.advance(); // consume the (=)
+      let rhs = self.parse_assignment(engine);
+
+      if let Expr::Identifier(name) = rhs {
+        return Expr::Assign {
+          name: name,
+          value: Box::new(lhs),
+        };
+      } else {
+        panic!("Invalid right hand assignment");
+      }
+    }
+    lhs
+  }
+
+  fn parse_equality(&mut self, engine: &mut DiagnosticEngine) -> Expr {
+    let mut lhs = self.parse_comparison(engine);
+    while !self.is_eof() {
+      let token = self.get_current_token();
+
+      match token.token_type {
+        TokenType::Equal | TokenType::BangEqual => {
+          self.advance(); // consume (!=|==)
           let rhs = self.parse_comparison(engine);
 
           lhs = Expr::Binary {
@@ -85,16 +157,18 @@ impl Parser {
         _ => break,
       }
     }
+
     lhs
   }
+
   fn parse_comparison(&mut self, engine: &mut DiagnosticEngine) -> Expr {
     let mut lhs = self.parse_term(engine);
-
     while !self.is_eof() {
       let token = self.get_current_token();
+
       match token.token_type {
         TokenType::GreaterEqual | TokenType::Greater | TokenType::LessEqual | TokenType::Less => {
-          self.advance();
+          self.advance(); // consume (<=|<|>|>=)
           let rhs = self.parse_term(engine);
 
           lhs = Expr::Binary {
@@ -106,17 +180,18 @@ impl Parser {
         _ => break,
       }
     }
+
     lhs
   }
 
   fn parse_term(&mut self, engine: &mut DiagnosticEngine) -> Expr {
     let mut lhs = self.parse_factor(engine);
-
     while !self.is_eof() {
       let token = self.get_current_token();
+
       match token.token_type {
-        TokenType::Plus | TokenType::Minus => {
-          self.advance();
+        TokenType::Minus | TokenType::Plus => {
+          self.advance(); // consume (+|-)
           let rhs = self.parse_factor(engine);
 
           lhs = Expr::Binary {
@@ -128,18 +203,19 @@ impl Parser {
         _ => break,
       }
     }
+
     lhs
   }
+
   fn parse_factor(&mut self, engine: &mut DiagnosticEngine) -> Expr {
     let mut lhs = self.parse_unary(engine);
-
     while !self.is_eof() {
       let token = self.get_current_token();
+
       match token.token_type {
         TokenType::Star | TokenType::Divide => {
-          self.advance();
+          self.advance(); // Consume (*|/)
           let rhs = self.parse_unary(engine);
-
           lhs = Expr::Binary {
             lhs: Box::new(lhs),
             operator: token,
@@ -151,38 +227,61 @@ impl Parser {
     }
     lhs
   }
+
   fn parse_unary(&mut self, engine: &mut DiagnosticEngine) -> Expr {
     while !self.is_eof() {
       let token = self.get_current_token();
       match token.token_type {
-        TokenType::Star | TokenType::Divide => {
+        TokenType::Bang | TokenType::Minus => {
           self.advance();
-          let rhs = self.parse_unary(engine);
-
+          let rhs = self.parse_primary(engine);
           return Expr::Unary {
             operator: token,
             rhs: Box::new(rhs),
           };
         },
-        _ => break,
+        _ => {
+          break;
+        },
       }
     }
-
     self.parse_primary(engine)
   }
+
   fn parse_primary(&mut self, engine: &mut DiagnosticEngine) -> Expr {
+    if self.is_eof() {
+      panic!("we are EOF");
+    }
+
     let token = self.get_current_token();
+
     match token.token_type {
-      TokenType::Number | TokenType::String | TokenType::False | TokenType::True => {
-        self.advance();
+      TokenType::String
+      | TokenType::Number
+      | TokenType::Nil
+      | TokenType::True
+      | TokenType::False => {
+        self.advance(); // consume the literal
         return Expr::Literal(token);
       },
+
       TokenType::LeftParen => {
-        self.advance();
+        self.advance(); // Consume "("
+
         let expr = self.parse_expression(engine);
-        self.advance();
+
+        if self.is_eof() || self.get_current_token().token_type != TokenType::RightParen {
+          panic!("Expected ')' after expression");
+        }
+
+        self.advance(); // Consume ")"
 
         return Expr::Grouping(Box::new(expr));
+      },
+
+      TokenType::Identifier => {
+        self.advance(); // consume the identifier
+        return Expr::Identifier(token);
       },
 
       _ => {
