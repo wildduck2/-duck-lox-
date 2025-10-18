@@ -71,7 +71,7 @@ impl Parser {
   }
 
   fn parse_coma(&mut self, engine: &mut DiagnosticEngine) -> Expr {
-    let mut lhs = self.parse_turnary(engine);
+    let mut lhs = self.parse_ternary(engine);
 
     while !self.is_eof() {
       let token = self.get_current_token();
@@ -80,7 +80,7 @@ impl Parser {
         TokenType::Comma => {
           self.advance();
 
-          let rhs = self.parse_turnary(engine);
+          let rhs = self.parse_ternary(engine);
 
           lhs = Expr::Binary {
             lhs: Box::new(lhs),
@@ -96,7 +96,7 @@ impl Parser {
   }
 
   // * ternary      → assignment ( "?" expression ":" ternary )? ;
-  fn parse_turnary(&mut self, engine: &mut DiagnosticEngine) -> Expr {
+  fn parse_ternary(&mut self, engine: &mut DiagnosticEngine) -> Expr {
     let considtion = self.parse_assignment(engine);
 
     if !self.is_eof() && self.get_current_token().token_type == TokenType::Question {
@@ -108,7 +108,7 @@ impl Parser {
       }
 
       self.advance(); // consume the (:)
-      let else_branch = self.parse_turnary(engine);
+      let else_branch = self.parse_ternary(engine);
       return Expr::Ternary {
         condition: Box::new(considtion),
         then_branch: Box::new(then_branch),
@@ -126,10 +126,10 @@ impl Parser {
       self.advance(); // consume the (=)
       let rhs = self.parse_assignment(engine);
 
-      if let Expr::Identifier(name) = rhs {
+      if let Expr::Identifier(name) = lhs {
         return Expr::Assign {
           name: name,
-          value: Box::new(lhs),
+          value: Box::new(rhs),
         };
       } else {
         panic!("Invalid right hand assignment");
