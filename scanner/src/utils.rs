@@ -64,9 +64,9 @@ impl Scanner {
         '*' => {
           if self.match_char(&'=') {
             self.advance();
-            Some(TokenType::StarEqual)
+            Some(TokenType::MultiplyEqual)
           } else {
-            Some(TokenType::Star)
+            Some(TokenType::Multiply)
           }
         },
 
@@ -429,7 +429,7 @@ impl Scanner {
       token_type,
       lexeme,
       literal,
-      position: (self.line, self.column),
+      position: (self.line, self.start),
     });
   }
 

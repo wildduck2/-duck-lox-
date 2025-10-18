@@ -16,7 +16,7 @@ use std::fmt;
 
 use scanner::token::Token;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
   Literal(Token),
   Identifier(Token),

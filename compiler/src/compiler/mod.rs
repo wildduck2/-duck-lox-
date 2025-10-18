@@ -3,7 +3,6 @@ use parser::Parser;
 use scanner::Scanner;
 use std::fs;
 
-
 pub struct Compiler {}
 
 impl Compiler {

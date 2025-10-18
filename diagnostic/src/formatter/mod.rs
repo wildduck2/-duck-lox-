@@ -77,23 +77,23 @@ impl<'a> DiagnosticFormatter<'a> {
     output.push_str(&header);
     output.push_str("\n");
 
-    // Format each label with source code
-    for label in &self.diagnostic.labels {
+    // Get the primary label (first one, usually)
+    if let Some(primary_label) = self.diagnostic.labels.first() {
       // Location line: --> file:line:column
       output.push_str(&format!(
         "  {} {}:{}:{}\n",
         "-->".blue().bold(),
-        label.span.file.white().bold(),
-        label.span.line.to_string().white().bold(),
-        label.span.column.to_string().white().bold()
+        primary_label.span.file.white().bold(),
+        primary_label.span.line.to_string().white().bold(),
+        primary_label.span.column.to_string().white().bold()
       ));
 
       // Empty line with just the gutter
       output.push_str(&format!("   {}\n", "|".blue().bold()));
 
       // Get the source line
-      if let Some(line_content) = self.get_line_content(label.span.line) {
-        let line_num = label.span.line;
+      if let Some(line_content) = self.get_line_content(primary_label.span.line) {
+        let line_num = primary_label.span.line;
 
         // Line number and content
         output.push_str(&format!(
@@ -103,47 +103,53 @@ impl<'a> DiagnosticFormatter<'a> {
           line_content
         ));
 
-        // Underline with carets/dashes
-        let underline_char = self.underline_char(label.style);
-        let start_col = label.span.column;
-        let length = label.span.length;
+        // Now render ALL labels for this line
+        for label in &self.diagnostic.labels {
+          // Only show labels that are on the same line
+          if label.span.line == line_num {
+            let underline_char = self.underline_char(label.style);
+            let start_col = label.span.column;
+            let length = label.span.length;
 
-        let padding = " ".repeat(start_col);
-        let underline = underline_char.to_string().repeat(length);
+            let padding = " ".repeat(start_col);
+            let underline = underline_char.to_string().repeat(length);
 
-        let colored_underline = match (self.diagnostic.severity, label.style) {
-          (Severity::Error, LabelStyle::Primary) => underline.red().bold(),
-          (Severity::Warning, LabelStyle::Primary) => underline.yellow().bold(),
-          (_, LabelStyle::Secondary) => underline.cyan().bold(),
-          _ => underline.cyan().bold(),
-        };
+            let colored_underline = match (self.diagnostic.severity, label.style) {
+              (Severity::Error, LabelStyle::Primary) => underline.red().bold(),
+              (Severity::Warning, LabelStyle::Primary) => underline.yellow().bold(),
+              (_, LabelStyle::Secondary) => underline.cyan().bold(),
+              _ => underline.cyan().bold(),
+            };
 
-        output.push_str(&format!(
-          "   {} {}{}\n",
-          "|".blue().bold(),
-          padding,
-          colored_underline
-        ));
+            // Combine underline and message on the same line
+            if let Some(msg) = &label.message {
+              let colored_msg = match (self.diagnostic.severity, label.style) {
+                (Severity::Error, LabelStyle::Primary) => msg.red().bold(),
+                (Severity::Warning, LabelStyle::Primary) => msg.yellow().bold(),
+                (_, LabelStyle::Secondary) => msg.cyan().bold(),
+                _ => msg.cyan().bold(),
+              };
 
-        // Label message below the underline
-        if let Some(msg) = &label.message {
-          let colored_msg = match (self.diagnostic.severity, label.style) {
-            (Severity::Error, LabelStyle::Primary) => msg.red().bold(),
-            (Severity::Warning, LabelStyle::Primary) => msg.yellow().bold(),
-            (_, LabelStyle::Secondary) => msg.cyan().bold(),
-            _ => msg.cyan().bold(),
-          };
-
-          output.push_str(&format!(
-            "   {} {}{}\n",
-            "|".blue().bold(),
-            padding,
-            colored_msg
-          ));
+              output.push_str(&format!(
+                "   {} {}{} {}\n",
+                "|".blue().bold(),
+                padding,
+                colored_underline,
+                colored_msg
+              ));
+            } else {
+              output.push_str(&format!(
+                "   {} {}{}\n",
+                "|".blue().bold(),
+                padding,
+                colored_underline
+              ));
+            }
+          }
         }
       }
 
-      // Empty line after each label
+      // Empty line after all labels
       output.push_str(&format!("   {}\n", "|".blue().bold()));
     }
 
@@ -182,31 +188,37 @@ impl<'a> DiagnosticFormatter<'a> {
       self.diagnostic.message
     ));
 
-    // Format each label
-    for label in &self.diagnostic.labels {
+    // Get the primary label
+    if let Some(primary_label) = self.diagnostic.labels.first() {
       output.push_str(&format!(
         "  --> {}:{}:{}\n",
-        label.span.file, label.span.line, label.span.column
+        primary_label.span.file, primary_label.span.line, primary_label.span.column
       ));
 
       output.push_str("   |\n");
 
-      if let Some(line_content) = self.get_line_content(label.span.line) {
-        let line_num = label.span.line;
+      if let Some(line_content) = self.get_line_content(primary_label.span.line) {
+        let line_num = primary_label.span.line;
 
         output.push_str(&format!(" {:>3} | {}\n", line_num, line_content));
 
-        let underline_char = self.underline_char(label.style);
-        let start_col = label.span.column.saturating_sub(1);
-        let length = label.span.length.max(1);
+        // Render all labels for this line
+        for label in &self.diagnostic.labels {
+          if label.span.line == line_num {
+            let underline_char = self.underline_char(label.style);
+            let start_col = label.span.column.saturating_sub(1);
+            let length = label.span.length.max(1);
 
-        let padding = " ".repeat(start_col);
-        let underline = underline_char.to_string().repeat(length);
+            let padding = " ".repeat(start_col);
+            let underline = underline_char.to_string().repeat(length);
 
-        output.push_str(&format!("   | {}{}\n", padding, underline));
-
-        if let Some(msg) = &label.message {
-          output.push_str(&format!("   | {}{}\n", padding, msg));
+            // Combine underline and message on the same line
+            if let Some(msg) = &label.message {
+              output.push_str(&format!("   | {}{} {}\n", padding, underline, msg));
+            } else {
+              output.push_str(&format!("   | {}{}\n", padding, underline));
+            }
+          }
         }
       }
 

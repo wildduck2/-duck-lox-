@@ -17,7 +17,7 @@ mod tests {
     for op in [
       TokenType::Plus,
       TokenType::Minus,
-      TokenType::Star,
+      TokenType::Multiply,
       TokenType::Divide,
       TokenType::EqualEqual,
       TokenType::BangEqual,
