@@ -1,11 +1,12 @@
+use crate::interpreter::Interputer;
 use diagnostic::{diagnostic::Diagnostic, diagnostic_code::DiagnosticCode, DiagnosticEngine};
 use parser::Parser;
 use scanner::Scanner;
 use std::fs;
 
-pub struct Compiler {}
+pub struct Runner {}
 
-impl Compiler {
+impl Runner {
   pub fn new() -> Self {
     Self {}
   }
@@ -49,6 +50,7 @@ impl Compiler {
       engine.print_all(&source);
       return;
     }
+    println!("\n============= SCANNED ===============\n");
 
     // Parse the tokens
     let mut parser = Parser::new(scanner.tokens);
@@ -59,6 +61,16 @@ impl Compiler {
       engine.print_all(&source);
       return;
     }
+    println!("\n============== PARSED ===============\n");
+
+    let mut interputer = Interputer::new();
+    interputer.run(parser.ast);
+
+    if engine.has_errors() {
+      engine.print_all(&source);
+      return;
+    }
+    println!("\n============ INTERPRETED ============\n");
 
     // If no errors, compilation succeeded
     println!("Compilation successful!");

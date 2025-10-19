@@ -24,7 +24,7 @@ use scanner::token::{types::TokenType, Token};
 
 use crate::expression::Expr;
 
-mod expression;
+pub mod expression;
 
 pub struct Parser {
   /// The tokens preduced by the scanner

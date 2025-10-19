@@ -1,15 +1,16 @@
 use colored::*;
-use compiler::Compiler;
 use diagnostic::{diagnostic::Diagnostic, diagnostic_code::DiagnosticCode, DiagnosticEngine};
+use runner::Runner;
 
-mod compiler;
 mod error;
+mod interpreter;
+mod runner;
 
 fn main() {
   let args: Vec<String> = std::env::args().collect();
 
   let mut diagnostic = DiagnosticEngine::new();
-  let mut compiler = Compiler::new();
+  let mut compiler = Runner::new();
 
   match args.len() {
     1 => {

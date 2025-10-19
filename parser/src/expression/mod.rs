@@ -1,15 +1,18 @@
 /*
-*
-* expression   → equality ;
+* expression   → comma ;
+* comma        → ternary ( "," ternary )* ;
+* ternary      → assignment ( "?" expression ":" ternary )? ;
+* assignment   → IDENTIFIER "=" assignment
+*               | equality ;
 * equality     → comparison ( ( "!=" | "==" ) comparison )* ;
 * comparison   → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
 * term         → factor ( ( "-" | "+" ) factor )* ;
 * factor       → unary ( ( "/" | "*" ) unary )* ;
 * unary        → ( "!" | "-" ) unary
-*                | primary ;
-* primary      → NUMBER | STRING | "true" | "false" | "nil"
-*                | "(" expression ")" ;
-*
+*               | primary ;
+* primary      → NUMBER | STRING | IDENTIFIER
+*               | "true" | "false" | "nil"
+*               | "(" expression ")" ;
 */
 
 use std::fmt;
