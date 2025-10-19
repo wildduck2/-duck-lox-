@@ -1,4 +1,4 @@
-use crate::interpreter::Interputer;
+use crate::interpreter::Interpreter;
 use diagnostic::{diagnostic::Diagnostic, diagnostic_code::DiagnosticCode, DiagnosticEngine};
 use parser::Parser;
 use scanner::Scanner;
@@ -39,8 +39,14 @@ impl Runner {
       },
     };
 
+    println!("\n============== READ =================\n");
+
+    println!("  {} ", source);
+
     // Scanning the buffer of string
     let mut scanner = Scanner::new(source.clone());
+
+    println!("\n============= INITIALIZED ===========\n");
 
     // Scan the tokens
     scanner.scan(engine);
@@ -50,6 +56,7 @@ impl Runner {
       engine.print_all(&source);
       return;
     }
+    println!("ToLongVector(value...)");
     println!("\n============= SCANNED ===============\n");
 
     // Parse the tokens
@@ -63,8 +70,8 @@ impl Runner {
     }
     println!("\n============== PARSED ===============\n");
 
-    let mut interputer = Interputer::new();
-    interputer.run(parser.ast);
+    let mut interputer = Interpreter::new();
+    interputer.run(parser.ast, engine);
 
     if engine.has_errors() {
       engine.print_all(&source);

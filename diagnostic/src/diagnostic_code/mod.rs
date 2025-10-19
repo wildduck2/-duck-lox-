@@ -34,6 +34,9 @@ pub enum DiagnosticCode {
   FileNotFound,
   InvalidArguments,
   IoError,
+  InvalidUnaryOperator,
+  TypeError,
+  DivisionByZero,
 
   // Warning
   UnusedVariable,
@@ -63,11 +66,14 @@ impl DiagnosticCode {
       Self::InvalidOperator => "E0204".to_string(),
       Self::InvalidFunctionCall => "E0205".to_string(),
       Self::WrongNumberOfArguments => "E0206".to_string(),
+      Self::TypeError => "E0207".to_string(),
+      Self::DivisionByZero => "E0208".to_string(),
       Self::CannotInferType => "E0300".to_string(),
       Self::RecursiveType => "E0301".to_string(),
       Self::FileNotFound => "E0400".to_string(),
       Self::InvalidArguments => "E0401".to_string(),
       Self::IoError => "E0402".to_string(),
+      Self::InvalidUnaryOperator => "E0403".to_string(),
 
       // Warnings
       Self::UnusedVariable => "W0001".to_string(),
