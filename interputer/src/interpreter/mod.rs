@@ -20,9 +20,15 @@ impl Interpreter {
           println!("{:?}", x.0);
         },
         Err(_) => {
-          // Error already reported to diagnostic engine
+          // Error occurred, stop evaluation
+          return;
         },
       };
+
+      // Also check if diagnostic engine has errors
+      if engine.has_errors() {
+        return;
+      }
     }
   }
 
