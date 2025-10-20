@@ -3,14 +3,14 @@
 * program      → declaration* EOF ;
 *
 * declaration  → varDec
-*               | statement
+*               | statement ;
 *
-* varDec       → "var" IDENTIFIER ( "=" expression )? ";";
+* varDec       → "var" IDENTIFIER ( "=" expression )? ";" ;
 *
 * statement    → expression_statement
-*               | print_statement
+*               | print_statement ;
 *
-* expression_statements → expression ";" ;
+* expression_statement → expression ";" ;
 *
 * print_statement → "print" expression ";" ;
 *
@@ -18,7 +18,10 @@
 *
 * comma        → ternary ( "," ternary )* ;
 *
-* ternary      → equality ( "?" expression ":" ternary )? ;
+* ternary      → assignment ( "?" expression ":" ternary )? ;
+*
+* assignment   → IDENTIFIER "=" assignment
+*               | equality ;
 *
 * equality     → comparison ( ( "!=" | "==" ) comparison )* ;
 *
@@ -35,8 +38,6 @@
 *               | "true" | "false" | "nil"
 *               | "(" expression ")" ;
 */
-
-use std::collections::HashMap;
 
 use diagnostic::{
   diagnostic::{Diagnostic, Label, Span},
@@ -57,8 +58,6 @@ pub struct Parser {
   pub current: usize,
   /// List of expressions
   pub ast: Vec<Stmt>,
-  /// Environment
-  pub env: HashMap<String, Option<Expr>>,
 }
 
 impl Parser {
@@ -68,7 +67,6 @@ impl Parser {
       tokens,
       current: 0,
       ast: Vec::new(),
-      env: HashMap::new(),
     }
   }
 
@@ -107,37 +105,82 @@ impl Parser {
       return Err(());
     }
 
-    // * varDec       → "var" IDENTIFIER ( "=" expression )? ";";
     let token = self.current_token();
     if token.token_type == TokenType::Var {
       self.advance(); // consume the var
 
-      if matches!(self.current_token().token_type, TokenType::Identifier) {
-        let identifier = self.current_token();
-        self.advance(); // consume the identifier
+      // Check for identifier
+      if !matches!(self.current_token().token_type, TokenType::Identifier) {
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::ExpectedIdentifier,
+          "Expected identifier after 'var'".to_string(),
+        )
+        .with_label(Label::primary(
+          self.current_token().to_span(),
+          Some("expected variable name here".to_string()),
+        ))
+        .with_label(Label::secondary(
+          token.to_span(),
+          Some("'var' keyword here".to_string()),
+        ));
+
+        engine.emit(diagnostic);
+        return Err(());
+      }
+
+      let identifier = self.current_token();
+
+      self.advance(); // consume the identifier
+
+      if self.current_token().token_type == TokenType::SemiColon {
+        self.advance(); // consume ;
+        return Ok(Stmt::VarDec(identifier, None));
+      } else if self.current_token().token_type == TokenType::Equal {
+        self.advance(); // consume =
+        let expr = self.parse_expression(engine)?;
 
         if self.current_token().token_type == TokenType::SemiColon {
           self.advance(); // consume ;
-          self.env.insert(identifier.lexeme.clone(), None);
-          return Ok(Stmt::VarDec(identifier, None));
-        } else if self.current_token().token_type == TokenType::Equal {
-          self.advance(); // consume =
-          let expr = self.parse_expression(engine)?;
-
-          if self.current_token().token_type == TokenType::SemiColon {
-            self.advance(); // consume ;
-            self
-              .env
-              .insert(identifier.lexeme.clone(), Some(expr.clone()));
-            return Ok(Stmt::VarDec(identifier, Some(expr)));
-          }
+          return Ok(Stmt::VarDec(identifier, Some(expr)));
         } else {
+          // Missing semicolon diagnostic
+          let diagnostic = Diagnostic::new(
+            DiagnosticCode::MissingSemicolon,
+            "Expected ';' after variable declaration".to_string(),
+          )
+          .with_label(Label::primary(
+            self.span_prev(),
+            Some("semicolon missing here".to_string()),
+          ));
+
+          engine.emit(diagnostic);
           return Err(());
         }
-      }
+      } else {
+        // Expected = or ;
+        let token = self.current_token();
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::UnexpectedToken,
+          format!(
+            "Expected '=' or ';' after identifier, found '{}'",
+            token.lexeme
+          ),
+        )
+        .with_label(Label::primary(
+          token.to_span(),
+          Some("expected '=' or ';' here".to_string()),
+        ))
+        .with_label(Label::secondary(
+          identifier.to_span(),
+          Some("variable declared here".to_string()),
+        ));
 
-      return Err(());
+        engine.emit(diagnostic);
+        return Err(());
+      }
     } else {
+      // This should never happen if parse_declaration routes correctly
+      self.error_unexpected_token(engine, "expected 'var' keyword");
       return Err(());
     }
   }
@@ -155,13 +198,12 @@ impl Parser {
       self.advance();
       return Ok(Stmt::Expr(expr));
     } else {
-      let token = self.current_token();
       let diagnostic = Diagnostic::new(
         DiagnosticCode::MissingSemicolon,
         "Expected ';' after expression".to_string(),
       )
       .with_label(Label::primary(
-        token.to_span(),
+        self.span_prev(),
         Some("semicolon missing here".to_string()),
       ))
       .with_label(Label::secondary(
@@ -192,13 +234,12 @@ impl Parser {
           self.advance(); // consume ; token
           return Ok(Stmt::Print(expr));
         } else {
-          let token = self.current_token();
           let diagnostic = Diagnostic::new(
             DiagnosticCode::ExpectedToken,
             "Expected ';' after print statement".to_string(),
           )
           .with_label(Label::primary(
-            token.to_span(),
+            self.span_prev(),
             Some("semicolon is missing here".to_string()),
           ));
 
@@ -213,9 +254,32 @@ impl Parser {
     }
   }
 
-  // Function that handles expression
+  /// Function that handles expression
   fn parse_expression(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     self.parse_comma(engine)
+  }
+
+  /// Function that handles the assignments (=)
+  fn parse_assignment(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let lhs = self.parse_equality(engine)?;
+
+    if !self.is_eof() && self.current_token().token_type == TokenType::Equal {
+      self.advance();
+
+      let rhs = self.parse_assignment(engine)?;
+
+      if let Expr::Identifier(name) = lhs {
+        return Ok(Expr::Assign {
+          name: name,
+          value: Box::new(rhs),
+        });
+      } else {
+        self.error_unexpected_token(engine, "in assignment, left side must be an identifier");
+        return Err(());
+      }
+    }
+
+    Ok(lhs)
   }
 
   // Function that handles ,
@@ -246,7 +310,7 @@ impl Parser {
 
   /// Function that handles the ternary (?:)
   fn parse_ternary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let condition = self.parse_equality(engine)?;
+    let condition = self.parse_assignment(engine)?;
 
     if !self.is_eof() && self.current_token().token_type == TokenType::Question {
       let question_token = self.current_token();
@@ -561,5 +625,17 @@ impl Parser {
     ));
 
     engine.emit(diagnostic);
+  }
+
+  fn span_prev(&mut self) -> Span {
+    if self.current > 0 {
+      let token = self.current_token();
+      let mut prev_token = self.tokens[self.current - 1].clone();
+      prev_token.position.0 = token.position.0;
+      prev_token.lexeme = token.lexeme;
+      prev_token.to_span()
+    } else {
+      self.tokens[0].to_span()
+    }
   }
 }

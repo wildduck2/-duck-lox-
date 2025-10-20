@@ -429,7 +429,7 @@ impl Scanner {
       token_type,
       lexeme,
       literal,
-      position: (self.line, self.start),
+      position: (self.line, self.column),
     });
   }
 

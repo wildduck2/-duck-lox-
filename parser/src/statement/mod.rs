@@ -1,3 +1,28 @@
+/*
+*
+* program      → declaration* EOF ;
+* declaration  → expression_statements
+*               | print_statement;
+*
+* expression_statements → expression ";" ;
+* print_statement → "print" expression ";" ;
+*
+* expression   → comma ;
+* comma        → ternary ( "," ternary )* ;
+* ternary      → assignment ( "?" expression ":" ternary )? ;
+* assignment   → IDENTIFIER "=" assignment
+*               | equality ;
+* equality     → comparison ( ( "!=" | "==" ) comparison )* ;
+* comparison   → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
+* term         → factor ( ( "-" | "+" ) factor )* ;
+* factor       → unary ( ( "/" | "*" ) unary )* ;
+* unary        → ( "!" | "-" ) unary
+*               | primary ;
+* primary      → NUMBER | STRING | IDENTIFIER
+*               | "true" | "false" | "nil"
+*               | "(" expression ")" ;
+*/
+
 use scanner::token::Token;
 
 use crate::expression::Expr;

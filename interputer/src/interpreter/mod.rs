@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, hash::Hash, panic};
 
 use diagnostic::{
   diagnostic::{Diagnostic, Label},
@@ -9,12 +9,15 @@ use parser::{expression::Expr, statement::Stmt};
 use scanner::token::{types::Literal, Token};
 
 pub struct Interpreter {
-  pub env: HashMap<String, Option<Expr>>,
+  /// Environment
+  pub env: HashMap<String, LoxValue>,
 }
 
 impl Interpreter {
-  pub fn new(env: HashMap<String, Option<Expr>>) -> Self {
-    Self { env }
+  pub fn new() -> Self {
+    Self {
+      env: HashMap::new(),
+    }
   }
 
   pub fn run(&mut self, ast: Vec<Stmt>, engine: &mut DiagnosticEngine) {
@@ -41,17 +44,23 @@ impl Interpreter {
         };
       },
       Stmt::Expr(expr) => {
-        self.eval_expression(expr, engine);
+        self.eval_expression(expr, engine)?;
         return Ok(());
       },
-      Stmt::VarDec(name, expr) => {
+      Stmt::VarDec(identifier_token, Some(expr)) => {
+        let (expr_value, _) = self.eval_expression(expr, engine)?;
+        self.env.insert(identifier_token.lexeme, expr_value);
+        return Ok(());
+      },
+      Stmt::VarDec(token, None) => {
+        self.env.insert(token.lexeme, LoxValue::Nil);
         return Ok(());
       },
     }
   }
 
   fn eval_expression(
-    &self,
+    &mut self,
     expr: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
@@ -65,7 +74,11 @@ impl Interpreter {
         then_branch,
         else_branch,
       } => self.eval_ternary(*condition, *then_branch, *else_branch, engine),
+      Expr::Assign { name, value } => self.eval_assign(name, *value, engine),
       Expr::Identifier(token) => self.eval_identifier(token, engine), // _ => Ok((LoxValue::Nil, None)),
+      _ => {
+        todo!()
+      },                                   //
     }
   }
 
@@ -75,19 +88,39 @@ impl Interpreter {
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
     match self.env.get(&token.lexeme) {
-      Some(v) => {
-        let expr = v.clone().unwrap();
-        self.eval_expression(expr, engine)
-      },
-      None => {
-        println!("Fuck");
-        Err(())
-      },
+      Some(v) => Ok((v.clone(), Some(token))),
+      None => Ok((LoxValue::Nil, Some(token))),
     }
   }
 
+  fn eval_assign(
+    &mut self,
+    name: Token,
+    value: Expr,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<(LoxValue, Option<Token>), ()> {
+    if !self.env.contains_key(&name.lexeme) {
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::UndeclaredVariable,
+        format!("Cannot assign to undeclared variable '{}'", name.lexeme),
+      )
+      .with_label(Label::primary(
+        name.to_span(),
+        Some("variable not declared".to_string()),
+      ))
+      .with_help("Use 'var' to declare variables before assigning to them".to_string());
+
+      engine.emit(diagnostic);
+      return Err(());
+    }
+
+    let (value, token) = self.eval_expression(value, engine)?;
+    self.env.insert(name.lexeme, value.clone());
+    Ok((value, token))
+  }
+
   fn eval_ternary(
-    &self,
+    &mut self,
     condition: Expr,
     then_branch: Expr,
     else_branch: Expr,
@@ -110,7 +143,7 @@ impl Interpreter {
   }
 
   fn eval_binary(
-    &self,
+    &mut self,
     lhs: Expr,
     operator: Token,
     rhs: Expr,
@@ -292,7 +325,7 @@ impl Interpreter {
   }
 
   fn eval_unary(
-    &self,
+    &mut self,
     operator: Token,
     rhs: Expr,
     engine: &mut DiagnosticEngine,
@@ -331,7 +364,7 @@ impl Interpreter {
   }
 
   fn eval_grouping(
-    &self,
+    &mut self,
     expr: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {

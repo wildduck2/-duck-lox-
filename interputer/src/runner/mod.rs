@@ -56,6 +56,8 @@ impl Runner {
       engine.print_all(&source);
       return;
     }
+
+    // println!("ToLongVector(value...) {:?}", scanner.tokens);
     println!("ToLongVector(value...)");
     println!("\n============= SCANNED ===============\n");
 
@@ -70,7 +72,7 @@ impl Runner {
     }
     println!("\n============== PARSED ===============\n");
 
-    let mut interputer = Interpreter::new(parser.env);
+    let mut interputer = Interpreter::new();
     interputer.run(parser.ast, engine);
 
     if engine.has_errors() {
