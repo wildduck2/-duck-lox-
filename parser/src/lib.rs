@@ -16,12 +16,12 @@
 *
 * expression   → comma ;
 *
-* comma        → ternary ( "," ternary )* ;
-*
-* ternary      → assignment ( "?" expression ":" ternary )? ;
+* comma        → assignment ( "," assignment )* ;
 *
 * assignment   → IDENTIFIER "=" assignment
-*               | equality ;
+*               | ternary ;
+*
+* ternary      → equality ( "?" expression ":" ternary )? ;
 *
 * equality     → comparison ( ( "!=" | "==" ) comparison )* ;
 *
@@ -261,7 +261,7 @@ impl Parser {
 
   /// Function that handles the assignments (=)
   fn parse_assignment(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let lhs = self.parse_equality(engine)?;
+    let lhs = self.parse_ternary(engine)?;
 
     if !self.is_eof() && self.current_token().token_type == TokenType::Equal {
       self.advance();
@@ -284,7 +284,7 @@ impl Parser {
 
   // Function that handles ,
   fn parse_comma(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let mut lhs = self.parse_ternary(engine)?;
+    let mut lhs = self.parse_assignment(engine)?;
 
     while !self.is_eof() {
       let token = self.current_token();
@@ -293,7 +293,7 @@ impl Parser {
         TokenType::Comma => {
           self.advance(); // consume the ,
 
-          let rhs = self.parse_ternary(engine)?;
+          let rhs = self.parse_assignment(engine)?;
 
           lhs = Expr::Binary {
             lhs: Box::new(lhs),
@@ -310,7 +310,7 @@ impl Parser {
 
   /// Function that handles the ternary (?:)
   fn parse_ternary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let condition = self.parse_assignment(engine)?;
+    let condition = self.parse_equality(engine)?;
 
     if !self.is_eof() && self.current_token().token_type == TokenType::Question {
       let question_token = self.current_token();
