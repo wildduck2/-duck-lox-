@@ -69,7 +69,7 @@ impl Expr {
     self.pretty_print_internal(0);
   }
 
-  fn pretty_print_internal(&self, indent: usize) {
+  pub fn pretty_print_internal(&self, indent: usize) {
     let padding = " ".repeat(indent);
     match self {
       Expr::Literal(token) => {
@@ -136,7 +136,13 @@ impl Expr {
 
   /// Recursively builds the tree representation
   /// This is the core algorithm that constructs the ASCII art
-  fn build_tree(&self, lines: &mut Vec<String>, prefix: &str, child_prefix: &str, is_last: bool) {
+  pub fn build_tree(
+    &self,
+    lines: &mut Vec<String>,
+    prefix: &str,
+    child_prefix: &str,
+    is_last: bool,
+  ) {
     let (node_label, children) = match self {
       Expr::Literal(token) => {
         // Literals are leaf nodes - they have no children
@@ -222,7 +228,7 @@ impl Expr {
     println!();
   }
 
-  fn print_node(&self, prefix: String, child_prefix: String, is_tail: bool) {
+  pub fn print_node(&self, prefix: String, child_prefix: String, is_tail: bool) {
     let label = match self {
       Expr::Literal(token) => format!("📍 {}", token.lexeme),
       Expr::Identifier(token) => format!("📍 {}", token.lexeme),

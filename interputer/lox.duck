@@ -1,2 +1,1 @@
-0 > "Hello, World!"
-x = 5 * 5
+var x;

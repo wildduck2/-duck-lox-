@@ -3,7 +3,7 @@ use diagnostic::{
   diagnostic_code::DiagnosticCode,
   DiagnosticEngine,
 };
-use parser::expression::Expr;
+use parser::{expression::Expr, statement::Stmt};
 use scanner::token::{types::Literal, Token};
 
 pub struct Interpreter {}
@@ -13,22 +13,36 @@ impl Interpreter {
     Self {}
   }
 
-  pub fn run(&mut self, ast: Vec<Expr>, engine: &mut DiagnosticEngine) {
-    for expr in ast {
-      match self.run_expression(expr, engine) {
-        Ok(x) => {
-          println!("{:?}", x.0);
-        },
-        Err(_) => {
-          // Error occurred, stop evaluation
-          return;
-        },
-      };
-
-      // Also check if diagnostic engine has errors
-      if engine.has_errors() {
-        return;
+  pub fn run(&mut self, ast: Vec<Stmt>, engine: &mut DiagnosticEngine) {
+    for stmt in ast {
+      match self.run_statement(stmt, engine) {
+        Ok(x) => {},
+        Err(_) => return,
       }
+    }
+  }
+
+  fn run_statement(&mut self, stmt: Stmt, engine: &mut DiagnosticEngine) -> Result<(), ()> {
+    match stmt {
+      Stmt::Print(expr) => {
+        match self.run_expression(expr, engine) {
+          Ok(x) => {
+            println!("{:?}", x.0);
+            return Ok(());
+          },
+          Err(_) => {
+            // Error occurred, stop evaluation
+            return Ok(());
+          },
+        };
+      },
+      Stmt::Expr(expr) => {
+        self.run_expression(expr, engine);
+        return Ok(());
+      },
+      Stmt::VarDec(name, expr) => {
+        return Ok(());
+      },
     }
   }
 

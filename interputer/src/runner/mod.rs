@@ -41,7 +41,7 @@ impl Runner {
 
     println!("\n============== READ =================\n");
 
-    println!("  {} ", source);
+    println!("{}", source);
 
     // Scanning the buffer of string
     let mut scanner = Scanner::new(source.clone());
