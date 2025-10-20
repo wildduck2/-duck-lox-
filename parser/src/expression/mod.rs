@@ -1,20 +1,3 @@
-/*
-* expression   → comma ;
-* comma        → ternary ( "," ternary )* ;
-* ternary      → assignment ( "?" expression ":" ternary )? ;
-* assignment   → IDENTIFIER "=" assignment
-*               | equality ;
-* equality     → comparison ( ( "!=" | "==" ) comparison )* ;
-* comparison   → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
-* term         → factor ( ( "-" | "+" ) factor )* ;
-* factor       → unary ( ( "/" | "*" ) unary )* ;
-* unary        → ( "!" | "-" ) unary
-*               | primary ;
-* primary      → NUMBER | STRING | IDENTIFIER
-*               | "true" | "false" | "nil"
-*               | "(" expression ")" ;
-*/
-
 use std::fmt;
 
 use scanner::token::Token;
@@ -33,10 +16,6 @@ pub enum Expr {
     rhs: Box<Expr>,
   },
   Grouping(Box<Expr>),
-  Assign {
-    name: Token, // must be IDENTIFIER
-    value: Box<Expr>,
-  },
   Ternary {
     condition: Box<Expr>,
     then_branch: Box<Expr>,
@@ -52,7 +31,6 @@ impl fmt::Display for Expr {
       Expr::Unary { operator, rhs } => write!(f, "🔧 ({} {})", operator.lexeme, rhs),
       Expr::Binary { lhs, operator, rhs } => write!(f, "⚙️ ({} {} {})", lhs, operator.lexeme, rhs),
       Expr::Grouping(expr) => write!(f, "📦 ({})", expr),
-      Expr::Assign { name, value } => write!(f, "🔧 ({} = {})", name.lexeme, value),
       Expr::Ternary {
         condition,
         then_branch,
@@ -98,17 +76,10 @@ impl Expr {
         println!("{}Grouping", padding);
         expr.pretty_print_internal(indent + 2);
       },
-      Expr::Assign {
-        name: operator,
-        value: rhs,
-      } => {
-        println!("{}Assign({})", padding, operator.lexeme);
-        rhs.pretty_print_internal(indent + 2);
-      },
       Expr::Ternary {
-        condition: condition,
-        then_branch: then_branch,
-        else_branch: else_branch,
+        condition,
+        then_branch,
+        else_branch,
       } => {
         println!("{}Ternary", padding);
         condition.pretty_print_internal(indent + 2);
@@ -174,17 +145,10 @@ impl Expr {
         // Grouping has one child
         ("(group)".to_string(), vec![expr.as_ref()])
       },
-      Expr::Assign {
-        name: operator,
-        value: rhs,
-      } => {
-        // Grouping has one child
-        (format!("({})", operator.lexeme), vec![rhs.as_ref()])
-      },
       Expr::Ternary {
-        condition: condition,
-        then_branch: then_branch,
-        else_branch: else_branch,
+        condition,
+        then_branch,
+        else_branch,
       } => {
         // Grouping has one child
         (
@@ -235,7 +199,6 @@ impl Expr {
       Expr::Unary { operator, .. } => format!("🔧 {}", operator.lexeme),
       Expr::Binary { operator, .. } => format!("⚙️  {}", operator.lexeme),
       Expr::Grouping(_) => "📦 group".to_string(),
-      Expr::Assign { name: operator, .. } => format!("🔧 {}", operator.lexeme),
       Expr::Ternary {
         condition,
         then_branch,
@@ -255,11 +218,10 @@ impl Expr {
         ..
       } => vec![left.as_ref(), right.as_ref()],
       Expr::Grouping(expr) => vec![expr.as_ref()],
-      Expr::Assign { value: right, .. } => vec![right.as_ref()],
       Expr::Ternary {
-        condition: condition,
-        then_branch: then_branch,
-        else_branch: else_branch,
+        condition,
+        then_branch,
+        else_branch,
       } => vec![
         condition.as_ref(),
         then_branch.as_ref(),

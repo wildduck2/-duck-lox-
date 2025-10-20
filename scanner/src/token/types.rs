@@ -1,7 +1,7 @@
 // NOTE: These are the enums used to make the scanner
 // and achieve the regular which is the layer-2 of the Chmosky Hierarchy
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TokenType {
   // Single-character tokens.
   LeftParen,
@@ -63,7 +63,7 @@ pub enum TokenType {
   Comment,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Literal {
   Number,
   String,

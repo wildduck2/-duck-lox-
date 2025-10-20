@@ -4,7 +4,7 @@ use crate::token::types::{Literal, TokenType};
 
 pub mod types;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Token {
   pub token_type: TokenType,
   pub lexeme: String,

@@ -36,6 +36,8 @@
 *               | "(" expression ")" ;
 */
 
+use std::collections::HashMap;
+
 use diagnostic::{
   diagnostic::{Diagnostic, Label, Span},
   diagnostic_code::DiagnosticCode,
@@ -55,6 +57,8 @@ pub struct Parser {
   pub current: usize,
   /// List of expressions
   pub ast: Vec<Stmt>,
+  /// Environment
+  pub env: HashMap<String, Option<Expr>>,
 }
 
 impl Parser {
@@ -63,7 +67,8 @@ impl Parser {
     Self {
       tokens,
       current: 0,
-      ast: vec![],
+      ast: Vec::new(),
+      env: HashMap::new(),
     }
   }
 
@@ -113,6 +118,7 @@ impl Parser {
 
         if self.current_token().token_type == TokenType::SemiColon {
           self.advance(); // consume ;
+          self.env.insert(identifier.lexeme.clone(), None);
           return Ok(Stmt::VarDec(identifier, None));
         } else if self.current_token().token_type == TokenType::Equal {
           self.advance(); // consume =
@@ -120,6 +126,9 @@ impl Parser {
 
           if self.current_token().token_type == TokenType::SemiColon {
             self.advance(); // consume ;
+            self
+              .env
+              .insert(identifier.lexeme.clone(), Some(expr.clone()));
             return Ok(Stmt::VarDec(identifier, Some(expr)));
           }
         } else {

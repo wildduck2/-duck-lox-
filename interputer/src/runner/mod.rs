@@ -70,7 +70,7 @@ impl Runner {
     }
     println!("\n============== PARSED ===============\n");
 
-    let mut interputer = Interpreter::new();
+    let mut interputer = Interpreter::new(parser.env);
     interputer.run(parser.ast, engine);
 
     if engine.has_errors() {

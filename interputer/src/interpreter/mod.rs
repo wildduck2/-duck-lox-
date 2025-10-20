@@ -1,3 +1,5 @@
+use std::{collections::HashMap, hash::Hash};
+
 use diagnostic::{
   diagnostic::{Diagnostic, Label},
   diagnostic_code::DiagnosticCode,
@@ -6,11 +8,13 @@ use diagnostic::{
 use parser::{expression::Expr, statement::Stmt};
 use scanner::token::{types::Literal, Token};
 
-pub struct Interpreter {}
+pub struct Interpreter {
+  pub env: HashMap<String, Option<Expr>>,
+}
 
 impl Interpreter {
-  pub fn new() -> Self {
-    Self {}
+  pub fn new(env: HashMap<String, Option<Expr>>) -> Self {
+    Self { env }
   }
 
   pub fn run(&mut self, ast: Vec<Stmt>, engine: &mut DiagnosticEngine) {
@@ -25,7 +29,7 @@ impl Interpreter {
   fn run_statement(&mut self, stmt: Stmt, engine: &mut DiagnosticEngine) -> Result<(), ()> {
     match stmt {
       Stmt::Print(expr) => {
-        match self.run_expression(expr, engine) {
+        match self.eval_expression(expr, engine) {
           Ok(x) => {
             println!("{:?}", x.0);
             return Ok(());
@@ -37,7 +41,7 @@ impl Interpreter {
         };
       },
       Stmt::Expr(expr) => {
-        self.run_expression(expr, engine);
+        self.eval_expression(expr, engine);
         return Ok(());
       },
       Stmt::VarDec(name, expr) => {
@@ -46,7 +50,7 @@ impl Interpreter {
     }
   }
 
-  fn run_expression(
+  fn eval_expression(
     &self,
     expr: Expr,
     engine: &mut DiagnosticEngine,
@@ -61,20 +65,25 @@ impl Interpreter {
         then_branch,
         else_branch,
       } => self.eval_ternary(*condition, *then_branch, *else_branch, engine),
-      Expr::Assign { name, value } => self.eval_assign(name, *value, engine),
-      _ => Ok((LoxValue::Nil, None)),
+      Expr::Identifier(token) => self.eval_identifier(token, engine), // _ => Ok((LoxValue::Nil, None)),
     }
   }
 
-  fn eval_assign(
+  fn eval_identifier(
     &self,
-    name: Token,
-    value: Expr,
+    token: Token,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    let value = self.run_expression(value, engine)?;
-    // TODO: Implement variable storage
-    Ok(value)
+    match self.env.get(&token.lexeme) {
+      Some(v) => {
+        let expr = v.clone().unwrap();
+        self.eval_expression(expr, engine)
+      },
+      None => {
+        println!("Fuck");
+        Err(())
+      },
+    }
   }
 
   fn eval_ternary(
@@ -84,7 +93,7 @@ impl Interpreter {
     else_branch: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    let (condition_val, condition_token) = self.run_expression(condition, engine)?;
+    let (condition_val, condition_token) = self.eval_expression(condition, engine)?;
 
     let is_truthy = match &condition_val {
       LoxValue::Boolean(b) => *b,
@@ -94,9 +103,9 @@ impl Interpreter {
     };
 
     if is_truthy {
-      self.run_expression(then_branch, engine)
+      self.eval_expression(then_branch, engine)
     } else {
-      self.run_expression(else_branch, engine)
+      self.eval_expression(else_branch, engine)
     }
   }
 
@@ -107,8 +116,8 @@ impl Interpreter {
     rhs: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    let (lhs_val, lhs_token) = self.run_expression(lhs, engine)?;
-    let (rhs_val, rhs_token) = self.run_expression(rhs, engine)?;
+    let (lhs_val, lhs_token) = self.eval_expression(lhs, engine)?;
+    let (rhs_val, rhs_token) = self.eval_expression(rhs, engine)?;
 
     match operator.lexeme.as_str() {
       "*" | "/" | "-" => {
@@ -288,7 +297,7 @@ impl Interpreter {
     rhs: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    let (rhs_val, rhs_token) = self.run_expression(rhs, engine)?;
+    let (rhs_val, rhs_token) = self.eval_expression(rhs, engine)?;
 
     match operator.lexeme.as_str() {
       "!" => {
@@ -326,7 +335,7 @@ impl Interpreter {
     expr: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    self.run_expression(expr, engine)
+    self.eval_expression(expr, engine)
   }
 
   fn eval_literal(
