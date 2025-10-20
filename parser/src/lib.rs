@@ -1,15 +1,36 @@
 /*
+*
+* program      → declaration* EOF ;
+*
+* declaration  → varDec
+*               | statement
+*
+* varDec       → "var" IDENTIFIER ( "=" expression )? ";";
+*
+* statement    → expression_statement
+*               | print_statement
+*
+* expression_statements → expression ";" ;
+*
+* print_statement → "print" expression ";" ;
+*
 * expression   → comma ;
+*
 * comma        → ternary ( "," ternary )* ;
-* ternary      → assignment ( "?" expression ":" ternary )? ;
-* assignment   → IDENTIFIER "=" assignment
-*               | equality ;
+*
+* ternary      → equality ( "?" expression ":" ternary )? ;
+*
 * equality     → comparison ( ( "!=" | "==" ) comparison )* ;
+*
 * comparison   → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
+*
 * term         → factor ( ( "-" | "+" ) factor )* ;
+*
 * factor       → unary ( ( "/" | "*" ) unary )* ;
+*
 * unary        → ( "!" | "-" ) unary
 *               | primary ;
+*
 * primary      → NUMBER | STRING | IDENTIFIER
 *               | "true" | "false" | "nil"
 *               | "(" expression ")" ;
@@ -22,9 +43,10 @@ use diagnostic::{
 };
 use scanner::token::{types::TokenType, Token};
 
-use crate::expression::Expr;
+use crate::{expression::Expr, statement::Stmt};
 
 pub mod expression;
+pub mod statement;
 
 pub struct Parser {
   /// The tokens preduced by the scanner
@@ -32,7 +54,7 @@ pub struct Parser {
   /// The pointer to the current token we are looking at
   pub current: usize,
   /// List of expressions
-  pub ast: Vec<Expr>,
+  pub ast: Vec<Stmt>,
 }
 
 impl Parser {
@@ -47,23 +69,147 @@ impl Parser {
 
   pub fn parse(&mut self, engine: &mut DiagnosticEngine) {
     while !self.is_eof() {
-      match self.parse_expression(engine) {
-        Ok(expr) => {
-          expr.print_tree();
-          self.ast.push(expr);
+      match self.parse_program(engine) {
+        Ok(stmt) => {
+          stmt.print_tree();
+          self.ast.push(stmt);
         },
         Err(_) => self.synchronize(),
       }
     }
   }
 
+  fn parse_program(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    self.parse_declaration(engine)
+  }
+
+  fn parse_declaration(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    if self.is_eof() {
+      self.error_eof(engine);
+      return Err(());
+    }
+
+    match self.current_token().token_type {
+      TokenType::Print => self.parse_print_statement(engine),
+      TokenType::Var => self.parse_var_dec(engine),
+      _ => self.parse_expression_statements(engine),
+    }
+  }
+
+  fn parse_var_dec(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    if self.is_eof() {
+      self.error_eof(engine);
+      return Err(());
+    }
+
+    // * varDec       → "var" IDENTIFIER ( "=" expression )? ";";
+    let token = self.current_token();
+    if token.token_type == TokenType::Var {
+      self.advance(); // consume the var
+
+      if matches!(self.current_token().token_type, TokenType::Identifier) {
+        let identifier = self.current_token();
+        self.advance(); // consume the identifier
+
+        if self.current_token().token_type == TokenType::SemiColon {
+          self.advance(); // consume ;
+          return Ok(Stmt::VarDec(identifier, None));
+        } else if self.current_token().token_type == TokenType::Equal {
+          self.advance(); // consume =
+          let expr = self.parse_expression(engine)?;
+
+          if self.current_token().token_type == TokenType::SemiColon {
+            self.advance(); // consume ;
+            return Ok(Stmt::VarDec(identifier, Some(expr)));
+          }
+        } else {
+          return Err(());
+        }
+      }
+
+      return Err(());
+    } else {
+      return Err(());
+    }
+  }
+
+  fn parse_expression_statements(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    let expr_start = self.current_token(); // Capture start
+    let expr = self.parse_expression(engine)?;
+
+    if self.is_eof() {
+      self.error_eof(engine);
+      return Err(());
+    }
+
+    if self.current_token().token_type == TokenType::SemiColon {
+      self.advance();
+      return Ok(Stmt::Expr(expr));
+    } else {
+      let token = self.current_token();
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::MissingSemicolon,
+        "Expected ';' after expression".to_string(),
+      )
+      .with_label(Label::primary(
+        token.to_span(),
+        Some("semicolon missing here".to_string()),
+      ))
+      .with_label(Label::secondary(
+        expr_start.to_span(),
+        Some("expression started here".to_string()),
+      ));
+
+      engine.emit(diagnostic);
+      Err(())
+    }
+  }
+
+  // Function that handles print statement
+  fn parse_print_statement(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    let token = self.current_token();
+
+    if self.is_eof() {
+      self.error_eof(engine);
+      return Err(());
+    }
+
+    match token.token_type {
+      TokenType::Print => {
+        self.advance(); // consume print token
+        let expr = self.parse_expression(engine)?;
+
+        if self.current_token().token_type == TokenType::SemiColon {
+          self.advance(); // consume ; token
+          return Ok(Stmt::Print(expr));
+        } else {
+          let token = self.current_token();
+          let diagnostic = Diagnostic::new(
+            DiagnosticCode::ExpectedToken,
+            "Expected ';' after print statement".to_string(),
+          )
+          .with_label(Label::primary(
+            token.to_span(),
+            Some("semicolon is missing here".to_string()),
+          ));
+
+          engine.emit(diagnostic);
+          Err(())
+        }
+      },
+      _ => {
+        self.error_unexpected_token(engine, "in print statement, expected 'print' keyword");
+        Err(())
+      },
+    }
+  }
+
+  // Function that handles expression
   fn parse_expression(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     self.parse_comma(engine)
   }
 
-  // * expression   → comma ;
-  // * comma        → ternary ( "," ternary )* ;
-
+  // Function that handles ,
   fn parse_comma(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_ternary(engine)?;
 
@@ -72,7 +218,7 @@ impl Parser {
 
       match token.token_type {
         TokenType::Comma => {
-          self.advance();
+          self.advance(); // consume the ,
 
           let rhs = self.parse_ternary(engine)?;
 
@@ -89,9 +235,9 @@ impl Parser {
     Ok(lhs)
   }
 
-  /// Function that handles the assignments (=)
+  /// Function that handles the ternary (?:)
   fn parse_ternary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let condition = self.parse_assignment(engine)?;
+    let condition = self.parse_equality(engine)?;
 
     if !self.is_eof() && self.current_token().token_type == TokenType::Question {
       let question_token = self.current_token();
@@ -136,28 +282,6 @@ impl Parser {
     }
 
     Ok(condition)
-  }
-
-  /// Function that handles the assignments (=)
-  fn parse_assignment(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let lhs = self.parse_equality(engine)?;
-
-    if !self.is_eof() && self.current_token().token_type == TokenType::Equal {
-      self.advance();
-
-      let rhs = self.parse_assignment(engine)?;
-
-      if let Expr::Identifier(name) = lhs {
-        return Ok(Expr::Assign {
-          name: name,
-          value: Box::new(rhs),
-        });
-      } else {
-        return Err(());
-      }
-    }
-
-    Ok(lhs)
   }
 
   /// Function that handles the terms (==|!=)
@@ -278,27 +402,15 @@ impl Parser {
           rhs: Box::new(rhs),
         });
       },
-      _ => {},
+      _ => self.parse_primary(engine),
     }
-
-    self.parse_primary(engine)
   }
 
   // Function that parses the primary (String|Number|True|False|Nil)
   fn parse_primary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let token = self.current_token();
     if self.is_eof() {
-      let diagnostic = Diagnostic::new(
-        DiagnosticCode::UnexpectedEof,
-        "Unexpected end of file".to_string(),
-      )
-      .with_label(Label::primary(
-        token.to_span(),
-        Some("expected some expression".to_string()),
-      ));
-
-      engine.emit(diagnostic);
-
+      self.error_eof(engine);
       return Err(());
     }
 
@@ -412,5 +524,33 @@ impl Parser {
         _ => self.advance(),
       }
     }
+  }
+
+  fn error_unexpected_token(&mut self, engine: &mut DiagnosticEngine, context: &str) {
+    let token = self.current_token();
+    let diagnostic = Diagnostic::new(
+      DiagnosticCode::UnexpectedToken,
+      format!("Unexpected token '{}' {}", token.lexeme, context),
+    )
+    .with_label(Label::primary(
+      token.to_span(),
+      Some("unexpected token found here".to_string()),
+    ));
+
+    engine.emit(diagnostic);
+  }
+
+  fn error_eof(&mut self, engine: &mut DiagnosticEngine) {
+    let token = self.current_token();
+    let diagnostic = Diagnostic::new(
+      DiagnosticCode::UnexpectedEof,
+      "Unexpected end of file".to_string(),
+    )
+    .with_label(Label::primary(
+      token.to_span(),
+      Some("expected some expression".to_string()),
+    ));
+
+    engine.emit(diagnostic);
   }
 }
