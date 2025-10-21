@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash, panic};
+use std::fmt;
 
 use diagnostic::{
   diagnostic::{Diagnostic, Label},
@@ -8,33 +8,37 @@ use diagnostic::{
 use parser::{expression::Expr, statement::Stmt};
 use scanner::token::{types::Literal, Token};
 
+use crate::env::Env;
+
+#[derive(Debug, Clone)]
 pub struct Interpreter {
-  /// Environment
-  pub env: HashMap<String, LoxValue>,
+  pub env: Env,
 }
 
 impl Interpreter {
   pub fn new() -> Self {
-    Self {
-      env: HashMap::new(),
-    }
+    Self { env: Env::new() }
   }
 
   pub fn run(&mut self, ast: Vec<Stmt>, engine: &mut DiagnosticEngine) {
+    let mut env = self.env.clone();
     for stmt in ast {
-      match self.run_statement(stmt, engine) {
-        Ok(x) => {},
-        Err(_) => return,
-      }
+      let _ = self.run_statement(stmt, &mut env, engine);
     }
+    self.env = env;
   }
 
-  fn run_statement(&mut self, stmt: Stmt, engine: &mut DiagnosticEngine) -> Result<(), ()> {
+  fn run_statement(
+    &mut self,
+    stmt: Stmt,
+    env: &mut Env,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<(), ()> {
     match stmt {
       Stmt::Print(expr) => {
-        match self.eval_expression(expr, engine) {
+        match self.eval_expression(expr, env, engine) {
           Ok(x) => {
-            println!("{:?}", x.0);
+            println!("{}", x.0);
             return Ok(());
           },
           Err(_) => {
@@ -44,62 +48,113 @@ impl Interpreter {
         };
       },
       Stmt::Expr(expr) => {
-        self.eval_expression(expr, engine)?;
+        self.eval_expression(expr, env, engine)?;
         return Ok(());
       },
       Stmt::VarDec(identifier_token, Some(expr)) => {
-        let (expr_value, _) = self.eval_expression(expr, engine)?;
-        self.env.insert(identifier_token.lexeme, expr_value);
+        let (expr_value, _) = self.eval_expression(expr, env, engine)?;
+        env.define(identifier_token.lexeme, expr_value);
         return Ok(());
       },
       Stmt::VarDec(token, None) => {
-        self.env.insert(token.lexeme, LoxValue::Nil);
+        env.define(token.lexeme, LoxValue::Nil);
+        return Ok(());
+      },
+      Stmt::Block(block) => {
+        self.eval_block(block, env, engine)?;
         return Ok(());
       },
     }
+  }
+  fn eval_block(
+    &mut self,
+    block: Box<Vec<Stmt>>,
+    env: &mut Env,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<(LoxValue, Option<Token>), ()> {
+    let mut enclosing_env = env.with_enclosing(Env::new());
+
+    for stmt in *block {
+      match stmt {
+        Stmt::VarDec(token, Some(value)) => {
+          let (expr_value, _) = self.eval_expression(value, &mut enclosing_env, engine)?;
+          enclosing_env.define(token.lexeme, expr_value);
+        },
+        Stmt::VarDec(token, None) => {
+          enclosing_env.define(token.lexeme, LoxValue::Nil);
+        },
+        Stmt::Print(expr) => {
+          let (value, _) = self.eval_expression(expr, &mut enclosing_env, engine)?;
+          println!("{}", value);
+        },
+        _ => {
+          // todo!()
+        },
+      }
+    }
+
+    Err(())
   }
 
   fn eval_expression(
     &mut self,
     expr: Expr,
+    env: &mut Env,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
     match expr {
       Expr::Literal(token) => self.eval_literal(token, engine),
-      Expr::Grouping(expr) => self.eval_grouping(*expr, engine),
-      Expr::Unary { operator, rhs } => self.eval_unary(operator, *rhs, engine),
-      Expr::Binary { lhs, operator, rhs } => self.eval_binary(*lhs, operator, *rhs, engine),
+      Expr::Grouping(expr) => self.eval_grouping(env, *expr, engine),
+      Expr::Unary { operator, rhs } => self.eval_unary(env, operator, *rhs, engine),
+      Expr::Binary { lhs, operator, rhs } => self.eval_binary(env, *lhs, operator, *rhs, engine),
       Expr::Ternary {
         condition,
         then_branch,
         else_branch,
-      } => self.eval_ternary(*condition, *then_branch, *else_branch, engine),
-      Expr::Assign { name, value } => self.eval_assign(name, *value, engine),
-      Expr::Identifier(token) => self.eval_identifier(token, engine), // _ => Ok((LoxValue::Nil, None)),
-      _ => {
-        todo!()
-      },                                   //
+      } => self.eval_ternary(env, *condition, *then_branch, *else_branch, engine),
+      Expr::Assign { name, value } => self.eval_assign(name, *value, env, engine),
+      Expr::Identifier(token) => self.eval_identifier(token, env, engine), // _ => Ok((LoxValue::Nil, None)),
     }
   }
 
   fn eval_identifier(
     &self,
-    token: Token,
+    mut token: Token,
+    env: &mut Env,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    match self.env.get(&token.lexeme) {
+    match env.get(&token.lexeme) {
       Some(v) => Ok((v.clone(), Some(token))),
-      None => Ok((LoxValue::Nil, Some(token))),
+      None => {
+        token.position.0 += 1;
+        token.position.1 -= 1;
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::UndeclaredVariable,
+          format!("Cannot assign to undeclared variable '{}'", token.lexeme),
+        )
+        .with_label(Label::primary(
+          token.to_span(),
+          Some("variable not declared".to_string()),
+        ))
+        .with_help("Use 'var' to declare variables before assigning to them".to_string());
+
+        engine.emit(diagnostic);
+        Err(())
+      },
     }
   }
 
   fn eval_assign(
     &mut self,
-    name: Token,
+    mut name: Token,
     value: Expr,
+    env: &mut Env,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    if !self.env.contains_key(&name.lexeme) {
+    let (value, token) = self.eval_expression(value, env, engine)?;
+    if !env.assign(&name.lexeme, value.clone()) {
+      name.position.0 += 1;
+      name.position.1 -= 1;
       let diagnostic = Diagnostic::new(
         DiagnosticCode::UndeclaredVariable,
         format!("Cannot assign to undeclared variable '{}'", name.lexeme),
@@ -114,43 +169,43 @@ impl Interpreter {
       return Err(());
     }
 
-    let (value, token) = self.eval_expression(value, engine)?;
-    self.env.insert(name.lexeme, value.clone());
     Ok((value, token))
   }
 
   fn eval_ternary(
     &mut self,
+    env: &mut Env,
     condition: Expr,
     then_branch: Expr,
     else_branch: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    let (condition_val, condition_token) = self.eval_expression(condition, engine)?;
+    let (condition_val, condition_token) = self.eval_expression(condition, env, engine)?;
 
     let is_truthy = match &condition_val {
-      LoxValue::Boolean(b) => *b,
+      LoxValue::Bool(b) => *b,
       LoxValue::Nil => false,
       LoxValue::Number(n) => *n != 0.0,
       LoxValue::String(s) => !s.is_empty(),
     };
 
     if is_truthy {
-      self.eval_expression(then_branch, engine)
+      self.eval_expression(then_branch, env, engine)
     } else {
-      self.eval_expression(else_branch, engine)
+      self.eval_expression(else_branch, env, engine)
     }
   }
 
   fn eval_binary(
     &mut self,
+    env: &mut Env,
     lhs: Expr,
     operator: Token,
     rhs: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    let (lhs_val, lhs_token) = self.eval_expression(lhs, engine)?;
-    let (rhs_val, rhs_token) = self.eval_expression(rhs, engine)?;
+    let (lhs_val, lhs_token) = self.eval_expression(lhs, env, engine)?;
+    let (rhs_val, rhs_token) = self.eval_expression(rhs, env, engine)?;
 
     match operator.lexeme.as_str() {
       "*" | "/" | "-" => {
@@ -286,7 +341,7 @@ impl Interpreter {
       "!=" => !Self::is_equal(&lhs, &rhs),
       _ => unreachable!(),
     };
-    Ok((LoxValue::Boolean(result), Some(operator)))
+    Ok((LoxValue::Bool(result), Some(operator)))
   }
 
   fn eval_comparison(
@@ -307,7 +362,7 @@ impl Interpreter {
           "<=" => a <= b,
           _ => unreachable!(),
         };
-        Ok((LoxValue::Boolean(result), Some(operator)))
+        Ok((LoxValue::Bool(result), Some(operator)))
       },
       (lhs, rhs) => self.emit_error(
         engine,
@@ -326,21 +381,22 @@ impl Interpreter {
 
   fn eval_unary(
     &mut self,
+    env: &mut Env,
     operator: Token,
     rhs: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    let (rhs_val, rhs_token) = self.eval_expression(rhs, engine)?;
+    let (rhs_val, rhs_token) = self.eval_expression(rhs, env, engine)?;
 
     match operator.lexeme.as_str() {
       "!" => {
         let is_truthy = match &rhs_val {
-          LoxValue::Boolean(b) => *b,
+          LoxValue::Bool(b) => *b,
           LoxValue::Nil => false,
           LoxValue::Number(n) => *n != 0.0,
           LoxValue::String(s) => !s.is_empty(),
         };
-        Ok((LoxValue::Boolean(!is_truthy), Some(operator)))
+        Ok((LoxValue::Bool(!is_truthy), Some(operator)))
       },
       "-" => match rhs_val {
         LoxValue::Number(n) => Ok((LoxValue::Number(-n), Some(operator))),
@@ -365,10 +421,11 @@ impl Interpreter {
 
   fn eval_grouping(
     &mut self,
+    env: &mut Env,
     expr: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    self.eval_expression(expr, engine)
+    self.eval_expression(expr, env, engine)
   }
 
   fn eval_literal(
@@ -389,7 +446,7 @@ impl Interpreter {
         ),
       },
       Literal::String => Ok((LoxValue::String(token.lexeme.clone()), Some(token))),
-      Literal::Boolean => Ok((LoxValue::Boolean(token.lexeme == "true"), Some(token))),
+      Literal::Boolean => Ok((LoxValue::Bool(token.lexeme == "true"), Some(token))),
       Literal::Nil => Ok((LoxValue::Nil, Some(token))),
     }
   }
@@ -401,7 +458,7 @@ impl Interpreter {
       LoxValue::Nil => "nil",
       LoxValue::Number(_) => "number",
       LoxValue::String(_) => "string",
-      LoxValue::Boolean(_) => "boolean",
+      LoxValue::Bool(_) => "boolean",
     }
   }
 
@@ -410,7 +467,7 @@ impl Interpreter {
       (LoxValue::Nil, LoxValue::Nil) => true,
       (LoxValue::Number(a), LoxValue::Number(b)) => a == b,
       (LoxValue::String(a), LoxValue::String(b)) => a == b,
-      (LoxValue::Boolean(a), LoxValue::Boolean(b)) => a == b,
+      (LoxValue::Bool(a), LoxValue::Bool(b)) => a == b,
       _ => false,
     }
   }
@@ -495,5 +552,16 @@ pub enum LoxValue {
   Nil,
   Number(f64),
   String(String),
-  Boolean(bool),
+  Bool(bool),
+}
+
+impl fmt::Display for LoxValue {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match self {
+      LoxValue::String(s) => write!(f, "{s}"),
+      LoxValue::Number(n) => write!(f, "{n}"),
+      LoxValue::Bool(b) => write!(f, "{b}"),
+      LoxValue::Nil => write!(f, "nil"),
+    }
+  }
 }

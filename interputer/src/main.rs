@@ -2,6 +2,7 @@ use colored::*;
 use diagnostic::{diagnostic::Diagnostic, diagnostic_code::DiagnosticCode, DiagnosticEngine};
 use runner::Runner;
 
+mod env;
 mod error;
 mod interpreter;
 mod runner;
@@ -22,6 +23,11 @@ fn main() {
       // Info message for file mode
       println!("{}", format!("Running file: {}", args[1]).cyan().bold());
       compiler.run_file(args[1].clone(), &mut diagnostic);
+
+      // Check if compilation had errors
+      if diagnostic.has_errors() {
+        std::process::exit(65);
+      }
     },
     _ => {
       // Error: Invalid arguments
@@ -35,10 +41,5 @@ fn main() {
       diagnostic.print_all("");
       std::process::exit(64);
     },
-  }
-
-  // Check if compilation had errors
-  if diagnostic.has_errors() {
-    std::process::exit(65);
   }
 }

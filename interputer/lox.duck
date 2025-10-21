@@ -1,5 +1,6 @@
-var y = 5;
-var x = 5;
-print 1 + x / y >= 3 ? 4 * y : y * 1.5;
-x = 4;
-print x;
+var x = 1; // This is the var x 
+var y = (x * 5) >= 5 ? 12 : 5; // This a ternary making 
+                             // some math considitonalyy
+print y;
+
+{  var y = 5;  var x = 8; print y + x; }

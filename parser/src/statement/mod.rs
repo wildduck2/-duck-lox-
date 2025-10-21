@@ -33,6 +33,7 @@ pub enum Stmt {
   Expr(Expr),
   Print(Expr),
   VarDec(Token, Option<Expr>),
+  Block(Box<Vec<Stmt>>),
 }
 
 impl fmt::Display for Stmt {
@@ -42,6 +43,7 @@ impl fmt::Display for Stmt {
       Stmt::Print(expr) => write!(f, "🖨️  PrintStmt({})", expr),
       Stmt::VarDec(name, Some(expr)) => write!(f, "📝 VarDec({}, {})", name.lexeme, expr),
       Stmt::VarDec(name, None) => write!(f, "📝 VarDec({}, <uninitialized>)", name.lexeme),
+      Stmt::Block(stmts) => write!(f, "📝 BlockStmt({:?})", stmts),
     }
   }
 }
@@ -70,6 +72,12 @@ impl Stmt {
       Stmt::VarDec(name, None) => {
         println!("{}VarDec({}, uninitialized)", padding, name.lexeme);
       },
+      Stmt::Block(stmts) => {
+        println!("{}BlockStatement", padding);
+        for stmt in stmts.clone().into_iter() {
+          stmt.pretty_print_internal(indent + 2);
+        }
+      },
     }
   }
 
@@ -88,6 +96,7 @@ impl Stmt {
       Stmt::Expr(_) => "ExprStmt".to_string(),
       Stmt::Print(_) => "PrintStmt".to_string(),
       Stmt::VarDec(name, _) => format!("VarDec({})", name.lexeme),
+      Stmt::Block(_) => "BlockStmt".to_string(),
     };
 
     lines.push(format!("{}{}{}", prefix, connector, label));
@@ -105,38 +114,14 @@ impl Stmt {
       Stmt::VarDec(_, None) => {
         lines.push(format!("{}└── <uninitialized>", new_prefix));
       },
-    }
-  }
-
-  /// Fancy tree with emojis
-  pub fn print_fancy_tree(&self) {
-    println!();
-    self.print_node(String::new(), String::new(), true);
-    println!();
-  }
-
-  fn print_node(&self, prefix: String, child_prefix: String, is_tail: bool) {
-    let label = match self {
-      Stmt::Expr(_) => "📝 Expression Statement".to_string(),
-      Stmt::Print(_) => "🖨️  Print Statement".to_string(),
-      Stmt::VarDec(_, _) => "📝 Variable Declaration".to_string(),
-    };
-
-    println!("{}{}{}", prefix, if is_tail { "└─ " } else { "├─ " }, label);
-
-    let new_prefix = format!("{}{}", child_prefix, if is_tail { "   " } else { "│  " });
-    let new_child_prefix = new_prefix.clone();
-
-    match self {
-      Stmt::Expr(expr) => expr.print_node(new_prefix, new_child_prefix, true),
-      Stmt::Print(expr) => expr.print_node(new_prefix, new_child_prefix, true),
-      Stmt::VarDec(name, Some(expr)) => {
-        println!("{}   ├─ Name: {}", child_prefix, name.lexeme);
-        expr.print_node(format!("{}   ", child_prefix), new_child_prefix, true);
-      },
-      Stmt::VarDec(name, None) => {
-        println!("{}   ├─ Name: {}", child_prefix, name.lexeme);
-        println!("{}   └─ <uninitialized>", child_prefix);
+      Stmt::Block(stmts) => {
+        for (i, stmt) in stmts.clone().into_iter().enumerate() {
+          if i == stmts.len() - 1 {
+            stmt.build_tree(lines, &new_prefix, &new_prefix, true);
+          } else {
+            stmt.build_tree(lines, &new_prefix, &new_prefix, false);
+          }
+        }
       },
     }
   }

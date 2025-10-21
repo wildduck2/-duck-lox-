@@ -402,7 +402,7 @@ impl Scanner {
 
     match token_type {
       TokenType::Comment => {
-        println!("Comment: {}", lexeme);
+        // println!("Comment: {}", lexeme);
         return; // don't add comment tokens
       },
 

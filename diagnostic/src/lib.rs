@@ -18,6 +18,11 @@ impl DiagnosticEngine {
   pub fn new() -> Self {
     Self::default()
   }
+  pub fn clear(&mut self) {
+    self.diagnostics = vec![];
+    self.error_count = 0;
+    self.warning_count = 0;
+  }
 
   pub fn emit(&mut self, diagnostic: Diagnostic) {
     match diagnostic.severity {

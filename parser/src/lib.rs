@@ -9,6 +9,9 @@
 *
 * statement    → expression_statement
 *               | print_statement ;
+*               | block ;
+*
+* block        → "{" declaration* "}" ;
 *
 * expression_statement → expression ";" ;
 *
@@ -93,13 +96,40 @@ impl Parser {
     }
 
     match self.current_token().token_type {
-      TokenType::Print => self.parse_print_statement(engine),
-      TokenType::Var => self.parse_var_dec(engine),
-      _ => self.parse_expression_statements(engine),
+      TokenType::Var => self.parse_var_stmt(engine),
+      TokenType::Print => self.parse_print_stmt(engine),
+      TokenType::LeftBrace => self.parse_block_stmt(engine),
+      _ => self.parse_expression_stmt(engine),
     }
   }
 
-  fn parse_var_dec(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+  fn parse_block_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    if self.is_eof() {
+      self.error_eof(engine);
+      return Err(());
+    }
+
+    let token = self.current_token();
+    if token.token_type == TokenType::LeftBrace {
+      self.advance(); // consume the {
+
+      let mut declaration_vec: Vec<Stmt> = vec![];
+
+      while !self.is_eof() {
+        if !matches!(self.current_token().token_type, TokenType::RightBrace) {
+          declaration_vec.push(self.parse_declaration(engine)?);
+        } else {
+          self.advance(); // consume the }
+          break;
+        }
+      }
+      return Ok(Stmt::Block(Box::new(declaration_vec)));
+    } else {
+      return Err(());
+    }
+  }
+
+  fn parse_var_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     if self.is_eof() {
       self.error_eof(engine);
       return Err(());
@@ -111,16 +141,23 @@ impl Parser {
 
       // Check for identifier
       if !matches!(self.current_token().token_type, TokenType::Identifier) {
+        let mut span = self.current_token().to_span();
+        span.line += 1;
+        span.column -= 1;
         let diagnostic = Diagnostic::new(
           DiagnosticCode::ExpectedIdentifier,
           "Expected identifier after 'var'".to_string(),
         )
         .with_label(Label::primary(
-          self.current_token().to_span(),
+          span.clone(),
           Some("expected variable name here".to_string()),
         ))
         .with_label(Label::secondary(
-          token.to_span(),
+          Span {
+            length: 3,
+            column: 0,
+            ..span
+          },
           Some("'var' keyword here".to_string()),
         ));
 
@@ -159,6 +196,10 @@ impl Parser {
       } else {
         // Expected = or ;
         let token = self.current_token();
+        let mut span = token.to_span();
+        span.length = 1;
+        span.column = identifier.position.1;
+        let len = identifier.lexeme.len();
         let diagnostic = Diagnostic::new(
           DiagnosticCode::UnexpectedToken,
           format!(
@@ -167,11 +208,16 @@ impl Parser {
           ),
         )
         .with_label(Label::primary(
-          token.to_span(),
+          span,
           Some("expected '=' or ';' here".to_string()),
         ))
         .with_label(Label::secondary(
-          identifier.to_span(),
+          Span {
+            length: len,
+            column: identifier.position.1 - len,
+            ..token.to_span()
+          },
+          // identifier.to_span(),
           Some("variable declared here".to_string()),
         ));
 
@@ -185,7 +231,7 @@ impl Parser {
     }
   }
 
-  fn parse_expression_statements(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+  fn parse_expression_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     let expr_start = self.current_token(); // Capture start
     let expr = self.parse_expression(engine)?;
 
@@ -217,7 +263,7 @@ impl Parser {
   }
 
   // Function that handles print statement
-  fn parse_print_statement(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+  fn parse_print_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     let token = self.current_token();
 
     if self.is_eof() {
@@ -600,7 +646,9 @@ impl Parser {
   }
 
   fn error_unexpected_token(&mut self, engine: &mut DiagnosticEngine, context: &str) {
-    let token = self.current_token();
+    let mut token = self.current_token();
+    token.position.0 += 1;
+    token.position.1 -= 1;
     let diagnostic = Diagnostic::new(
       DiagnosticCode::UnexpectedToken,
       format!("Unexpected token '{}' {}", token.lexeme, context),
