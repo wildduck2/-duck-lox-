@@ -1,11 +1,11 @@
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::interpreter::LoxValue;
 
 #[derive(Debug, Clone)]
 pub struct Env {
   values: HashMap<String, LoxValue>,
-  enclosing: Option<Box<Env>>,
+  enclosing: Option<Rc<RefCell<Env>>>,
 }
 
 impl Env {
@@ -16,11 +16,15 @@ impl Env {
     }
   }
 
-  pub fn with_enclosing(&mut self, env: Env) -> Self {
+  pub fn with_enclosing(&mut self, env: Rc<RefCell<Env>>) -> Self {
     Self {
       values: HashMap::new(),
-      enclosing: Some(Box::new(env)),
+      enclosing: Some(env),
     }
+  }
+
+  pub fn define(&mut self, name: String, value: LoxValue) {
+    self.values.insert(name, value);
   }
 
   pub fn get(&self, name: &str) -> Option<LoxValue> {
@@ -28,13 +32,9 @@ impl Env {
       return Some(v.clone());
     }
     if let Some(enclosing) = &self.enclosing {
-      return enclosing.get(name);
+      return enclosing.borrow().get(name);
     }
     None
-  }
-
-  pub fn define(&mut self, name: String, value: LoxValue) {
-    self.values.insert(name, value);
   }
 
   pub fn assign(&mut self, name: &str, value: LoxValue) -> bool {
@@ -43,7 +43,7 @@ impl Env {
       return true;
     }
     if let Some(enclosing) = &mut self.enclosing {
-      return enclosing.assign(name, value);
+      return enclosing.borrow_mut().assign(name, value);
     }
     false
   }

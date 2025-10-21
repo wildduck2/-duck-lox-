@@ -10,7 +10,13 @@
 * stmt         → expr_stmt
 *               | if_stmt;
 *               | print_stmt ;
+*               | while_stmt ;
+*               | for_stmt ;
 *               | block ;
+*
+* for_stmt      → "for" "(" ( varDec | exprStmt | ";" )* ";" expr? ";" expr? ")" stmt ;
+*
+* while_stmt      → "while" "(" expr ")" stmt ;
 *
 * if_stmt      → "if" "(" expr* ")" stmt ( "else" stmt )?;
 *
@@ -113,7 +119,40 @@ impl Parser {
       TokenType::If => self.parse_if_stmt(engine),
       TokenType::Print => self.parse_print_stmt(engine),
       TokenType::LeftBrace => self.parse_block_stmt(engine),
+      TokenType::While => self.parse_while_stmt(engine),
       _ => self.parse_expr_stmt(engine),
+    }
+  }
+
+  fn parse_while_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    if self.is_eof() {
+      self.error_eof(engine);
+      return Err(());
+    }
+
+    if matches!(self.current_token().token_type, TokenType::While) {
+      self.advance(); // consume the while
+
+      if matches!(self.current_token().token_type, TokenType::LeftParen) {
+        self.advance(); // consume the (
+        let condition = self.parse_expr(engine)?;
+
+        if matches!(self.current_token().token_type, TokenType::RightParen) {
+          self.advance(); // consume the )
+          let stmt = self.parse_stmt(engine)?;
+
+          Ok(Stmt::While(Box::new(condition), Box::new(stmt)))
+        } else {
+          println!("---{:?} Error", self.current_token());
+          Err(())
+        }
+      } else {
+        println!("--{:?} Error", self.current_token());
+        Err(())
+      }
+    } else {
+      println!("-{:?} Error", self.current_token());
+      Err(())
     }
   }
 
@@ -123,7 +162,6 @@ impl Parser {
       return Err(());
     }
 
-    // * if_stmt      → "if" "(" expr* ")" stmt ( "else" stmt )?;
     if matches!(self.current_token().token_type, TokenType::If) {
       self.advance(); // consume the if
 

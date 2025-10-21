@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{cell::RefCell, fmt, rc::Rc};
 
 use diagnostic::{
   diagnostic::{Diagnostic, Label},
@@ -12,12 +12,14 @@ use crate::env::Env;
 
 #[derive(Debug, Clone)]
 pub struct Interpreter {
-  pub env: Env,
+  pub env: Rc<RefCell<Env>>,
 }
 
 impl Interpreter {
   pub fn new() -> Self {
-    Self { env: Env::new() }
+    Self {
+      env: Rc::new(RefCell::new(Env::new())),
+    }
   }
 
   pub fn run(&mut self, ast: Vec<Stmt>, engine: &mut DiagnosticEngine) {
@@ -31,7 +33,7 @@ impl Interpreter {
   fn eval_stmt(
     &mut self,
     stmt: Stmt,
-    env: &mut Env,
+    env: &mut Rc<RefCell<Env>>,
     engine: &mut DiagnosticEngine,
   ) -> Result<(), ()> {
     match stmt {
@@ -53,11 +55,11 @@ impl Interpreter {
       },
       Stmt::VarDec(identifier_token, Some(expr)) => {
         let (expr_value, _) = self.eval_expr(expr, env, engine)?;
-        env.define(identifier_token.lexeme, expr_value);
+        env.borrow_mut().define(identifier_token.lexeme, expr_value);
         return Ok(());
       },
       Stmt::VarDec(token, None) => {
-        env.define(token.lexeme, LoxValue::Nil);
+        env.borrow_mut().define(token.lexeme, LoxValue::Nil);
         return Ok(());
       },
       Stmt::Block(block) => {
@@ -68,12 +70,20 @@ impl Interpreter {
         self.eval_if(env, *condition, *then_branch, else_branch, engine)?;
         return Ok(());
       },
+      Stmt::While(condition, stmt) => {
+        self.eval_while(env, *condition, *stmt, engine)?;
+        return Ok(());
+      },
+      Stmt::For(initializer, condition, increment, stmt) => {
+        // self.eval_for(env, *initializer, *condition, *increment, *stmt, engine)?;
+        return Ok(());
+      },
     }
   }
 
   fn eval_if(
     &mut self,
-    env: &mut Env,
+    env: &mut Rc<RefCell<Env>>,
     condition: Expr,
     then_branch: Stmt,
     else_branch: Option<Box<Stmt>>,
@@ -95,7 +105,7 @@ impl Interpreter {
       _ => {
         self.emit_type_error(
           engine,
-          &token.unwrap(), // You'd need to capture this
+          &token.unwrap(),
           None,
           "If condition must be a boolean",
           &format!("Expected boolean, found {}", Self::type_name(&expr_val)),
@@ -108,19 +118,23 @@ impl Interpreter {
   fn eval_block(
     &mut self,
     block: Box<Vec<Stmt>>,
-    env: &mut Env,
+    env: &mut Rc<RefCell<Env>>,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    let mut enclosing_env = env.with_enclosing(Env::new());
+    let mut enclosing_env = Rc::new(RefCell::new(
+      env.borrow_mut().with_enclosing(Rc::clone(env)),
+    ));
 
     for stmt in *block {
       match stmt {
         Stmt::VarDec(token, Some(value)) => {
           let (expr_value, _) = self.eval_expr(value, &mut enclosing_env, engine)?;
-          enclosing_env.define(token.lexeme, expr_value);
+          enclosing_env.borrow_mut().define(token.lexeme, expr_value);
         },
         Stmt::VarDec(token, None) => {
-          enclosing_env.define(token.lexeme, LoxValue::Nil);
+          enclosing_env
+            .borrow_mut()
+            .define(token.lexeme, LoxValue::Nil);
         },
         Stmt::Expr(expr) => {
           self.eval_expr(expr, &mut enclosing_env, engine)?;
@@ -141,7 +155,40 @@ impl Interpreter {
             engine,
           )?;
         },
+        Stmt::While(condition, stmt) => {
+          self.eval_while(&mut enclosing_env, *condition, *stmt, engine)?;
+        },
+        Stmt::For(initializer, condition, increment, stmt) => {
+          // self.eval_for(
+          //   &mut enclosing_env,
+          //   *initializer,
+          //   *condition,
+          //   *increment,
+          //   *stmt,
+          //   engine,
+          // )?;
+        },
       }
+    }
+
+    Ok((LoxValue::Nil, None))
+  }
+
+  fn eval_while(
+    &mut self,
+    env: &mut Rc<RefCell<Env>>,
+    condition: Expr,
+    stmt: Stmt,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<(LoxValue, Option<Token>), ()> {
+    loop {
+      let (condition_val, _) = self.eval_expr(condition.clone(), env, engine)?;
+
+      if !self.is_truthy(&condition_val) {
+        break;
+      }
+
+      self.eval_stmt(stmt.clone(), env, engine)?;
     }
 
     Ok((LoxValue::Nil, None))
@@ -150,7 +197,7 @@ impl Interpreter {
   fn eval_expr(
     &mut self,
     expr: Expr,
-    env: &mut Env,
+    env: &mut Rc<RefCell<Env>>,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
     match expr {
@@ -171,13 +218,13 @@ impl Interpreter {
   fn eval_identifier(
     &self,
     mut token: Token,
-    env: &mut Env,
+    env: &mut Rc<RefCell<Env>>,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    match env.get(&token.lexeme) {
+    match env.borrow().get(&token.lexeme) {
       Some(v) => Ok((v.clone(), Some(token))),
       None => {
-        token.position.0 += 1;
+        // token.position.0 += 1;
         token.position.1 -= 1;
         let diagnostic = Diagnostic::new(
           DiagnosticCode::UndeclaredVariable,
@@ -199,11 +246,11 @@ impl Interpreter {
     &mut self,
     mut name: Token,
     value: Expr,
-    env: &mut Env,
+    env: &mut Rc<RefCell<Env>>,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
     let (value, token) = self.eval_expr(value, env, engine)?;
-    if !env.assign(&name.lexeme, value.clone()) {
+    if !env.borrow_mut().assign(&name.lexeme, value.clone()) {
       name.position.0 += 1;
       name.position.1 -= 1;
       let diagnostic = Diagnostic::new(
@@ -225,7 +272,7 @@ impl Interpreter {
 
   fn eval_ternary(
     &mut self,
-    env: &mut Env,
+    env: &mut Rc<RefCell<Env>>,
     condition: Expr,
     then_branch: Expr,
     else_branch: Expr,
@@ -233,14 +280,7 @@ impl Interpreter {
   ) -> Result<(LoxValue, Option<Token>), ()> {
     let (condition_val, _) = self.eval_expr(condition, env, engine)?;
 
-    let is_truthy = match &condition_val {
-      LoxValue::Bool(b) => *b,
-      LoxValue::Nil => false,
-      LoxValue::Number(n) => *n != 0.0,
-      LoxValue::String(s) => !s.is_empty(),
-    };
-
-    if is_truthy {
+    if self.is_truthy(&condition_val) {
       self.eval_expr(then_branch, env, engine)
     } else {
       self.eval_expr(else_branch, env, engine)
@@ -249,15 +289,12 @@ impl Interpreter {
 
   fn eval_binary(
     &mut self,
-    env: &mut Env,
+    env: &mut Rc<RefCell<Env>>,
     lhs: Expr,
     operator: Token,
     rhs: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    // let (lhs_val, lhs_token) = self.eval_expr(lhs, env, engine)?;
-    // let (rhs_val, rhs_token) = self.eval_expr(rhs, env, engine)?;
-
     match operator.lexeme.as_str() {
       "*" | "/" | "-" => self.eval_arithmetic(env, operator, lhs, rhs, engine),
       "+" => self.eval_addition(env, operator, lhs, rhs, engine),
@@ -277,7 +314,7 @@ impl Interpreter {
 
   fn eval_logical(
     &mut self,
-    env: &mut Env,
+    env: &mut Rc<RefCell<Env>>,
     operator: Token,
     lhs: Expr,
     rhs: Expr,
@@ -285,12 +322,7 @@ impl Interpreter {
   ) -> Result<(LoxValue, Option<Token>), ()> {
     let (lhs_val, lhs_token) = self.eval_expr(lhs, env, engine)?;
 
-    let is_truthy = match &lhs_val {
-      LoxValue::Bool(b) => *b,
-      LoxValue::Nil => false,
-      LoxValue::Number(n) => *n != 0.0,
-      LoxValue::String(s) => !s.is_empty(),
-    };
+    let is_truthy = self.is_truthy(&lhs_val);
 
     match operator.lexeme.as_str() {
       "||" => {
@@ -315,7 +347,7 @@ impl Interpreter {
 
   fn eval_arithmetic(
     &mut self,
-    env: &mut Env,
+    env: &mut Rc<RefCell<Env>>,
     operator: Token,
     lhs: Expr,
     rhs: Expr,
@@ -384,7 +416,7 @@ impl Interpreter {
 
   fn eval_addition(
     &mut self,
-    env: &mut Env,
+    env: &mut Rc<RefCell<Env>>,
     operator: Token,
     lhs: Expr,
     rhs: Expr,
@@ -421,7 +453,7 @@ impl Interpreter {
 
   fn eval_equality(
     &mut self,
-    env: &mut Env,
+    env: &mut Rc<RefCell<Env>>,
     operator: Token,
     lhs: Expr,
     rhs: Expr,
@@ -440,7 +472,7 @@ impl Interpreter {
 
   fn eval_comparison(
     &mut self,
-    env: &mut Env,
+    env: &mut Rc<RefCell<Env>>,
     operator: Token,
     lhs: Expr,
     rhs: Expr,
@@ -477,7 +509,7 @@ impl Interpreter {
 
   fn eval_unary(
     &mut self,
-    env: &mut Env,
+    env: &mut Rc<RefCell<Env>>,
     operator: Token,
     rhs: Expr,
     engine: &mut DiagnosticEngine,
@@ -517,7 +549,7 @@ impl Interpreter {
 
   fn eval_grouping(
     &mut self,
-    env: &mut Env,
+    env: &mut Rc<RefCell<Env>>,
     expr: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
@@ -640,6 +672,15 @@ impl Interpreter {
 
     engine.emit(diagnostic);
     Err(())
+  }
+
+  fn is_truthy(&self, val: &LoxValue) -> bool {
+    return match &val {
+      LoxValue::Bool(b) => *b,
+      LoxValue::Nil => false,
+      LoxValue::Number(n) => *n != 0.0,
+      LoxValue::String(s) => !s.is_empty(),
+    };
   }
 }
 

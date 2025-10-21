@@ -35,6 +35,8 @@ pub enum Stmt {
   VarDec(Token, Option<Expr>),
   Block(Box<Vec<Stmt>>),
   If(Box<Expr>, Box<Stmt>, Option<Box<Stmt>>),
+  While(Box<Expr>, Box<Stmt>),
+  For(Box<Stmt>, Box<Expr>, Box<Expr>, Box<Stmt>),
 }
 
 impl fmt::Display for Stmt {
@@ -53,6 +55,12 @@ impl fmt::Display for Stmt {
       Stmt::If(condition, then_branch, None) => {
         write!(f, "📝 IfStmt({}, {}, <nil>)", condition, then_branch)
       },
+      Stmt::While(condition, body) => write!(f, "📝 WhileStmt({}, {})", condition, body),
+      Stmt::For(initializer, condition, increment, body) => write!(
+        f,
+        "📝 ForStmt({}, {}, {}, {})",
+        initializer, condition, increment, body
+      ),
     }
   }
 }
@@ -95,6 +103,18 @@ impl Stmt {
           else_branch.pretty_print_internal(indent + 2);
         }
       },
+      Stmt::While(condition, body) => {
+        println!("{}WhileStatement", padding);
+        condition.pretty_print_internal(indent + 2);
+        body.pretty_print_internal(indent + 2);
+      },
+      Stmt::For(initializer, condition, increment, body) => {
+        println!("{}ForStatement", padding);
+        initializer.pretty_print_internal(indent + 2);
+        condition.pretty_print_internal(indent + 2);
+        increment.pretty_print_internal(indent + 2);
+        body.pretty_print_internal(indent + 2);
+      },
     }
   }
 
@@ -115,6 +135,8 @@ impl Stmt {
       Stmt::VarDec(name, _) => format!("VarDec({})", name.lexeme),
       Stmt::Block(_) => "BlockStmt".to_string(),
       Stmt::If(_, _, _) => "IfStmt".to_string(),
+      Stmt::While(_, _) => "WhileStmt".to_string(),
+      Stmt::For(_, _, _, _) => "ForStmt".to_string(),
     };
 
     lines.push(format!("{}{}{}", prefix, connector, label));
@@ -147,6 +169,16 @@ impl Stmt {
         if let Some(else_branch) = else_branch {
           else_branch.build_tree(lines, &new_prefix, &new_prefix, true);
         }
+      },
+      Stmt::While(condition, body) => {
+        condition.build_tree(lines, &new_prefix, &new_prefix, true);
+        body.build_tree(lines, &new_prefix, &new_prefix, true);
+      },
+      Stmt::For(initializer, condition, increment, body) => {
+        initializer.build_tree(lines, &new_prefix, &new_prefix, true);
+        condition.build_tree(lines, &new_prefix, &new_prefix, true);
+        increment.build_tree(lines, &new_prefix, &new_prefix, true);
+        body.build_tree(lines, &new_prefix, &new_prefix, true);
       },
     }
   }
