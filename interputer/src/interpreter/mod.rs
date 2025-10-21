@@ -231,7 +231,7 @@ impl Interpreter {
     else_branch: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    let (condition_val, condition_token) = self.eval_expr(condition, env, engine)?;
+    let (condition_val, _) = self.eval_expr(condition, env, engine)?;
 
     let is_truthy = match &condition_val {
       LoxValue::Bool(b) => *b,
@@ -255,18 +255,15 @@ impl Interpreter {
     rhs: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    let (lhs_val, lhs_token) = self.eval_expr(lhs, env, engine)?;
-    let (rhs_val, rhs_token) = self.eval_expr(rhs, env, engine)?;
+    // let (lhs_val, lhs_token) = self.eval_expr(lhs, env, engine)?;
+    // let (rhs_val, rhs_token) = self.eval_expr(rhs, env, engine)?;
 
     match operator.lexeme.as_str() {
-      "*" | "/" | "-" => {
-        self.eval_arithmetic(lhs_val, operator, rhs_val, lhs_token, rhs_token, engine)
-      },
-      "+" => self.eval_addition(lhs_val, operator, rhs_val, lhs_token, rhs_token, engine),
-      "==" | "!=" => self.eval_equality(lhs_val, operator, rhs_val, engine),
-      ">" | ">=" | "<" | "<=" => {
-        self.eval_comparison(lhs_val, operator, rhs_val, lhs_token, rhs_token, engine)
-      },
+      "*" | "/" | "-" => self.eval_arithmetic(env, operator, lhs, rhs, engine),
+      "+" => self.eval_addition(env, operator, lhs, rhs, engine),
+      "==" | "!=" => self.eval_equality(env, operator, lhs, rhs, engine),
+      ">" | ">=" | "<" | "<=" => self.eval_comparison(env, operator, lhs, rhs, engine),
+      "||" | "&&" => self.eval_logical(env, operator, lhs, rhs, engine),
       _ => self.emit_error(
         engine,
         DiagnosticCode::InvalidOperator,
@@ -278,21 +275,61 @@ impl Interpreter {
     }
   }
 
-  fn eval_arithmetic(
-    &self,
-    lhs: LoxValue,
+  fn eval_logical(
+    &mut self,
+    env: &mut Env,
     operator: Token,
-    rhs: LoxValue,
-    lhs_token: Option<Token>,
-    rhs_token: Option<Token>,
+    lhs: Expr,
+    rhs: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    match (lhs.clone(), rhs) {
+    let (lhs_val, lhs_token) = self.eval_expr(lhs, env, engine)?;
+
+    let is_truthy = match &lhs_val {
+      LoxValue::Bool(b) => *b,
+      LoxValue::Nil => false,
+      LoxValue::Number(n) => *n != 0.0,
+      LoxValue::String(s) => !s.is_empty(),
+    };
+
+    match operator.lexeme.as_str() {
+      "||" => {
+        // short-circuit: if lhs is truthy, return it
+        if is_truthy {
+          Ok((lhs_val, lhs_token))
+        } else {
+          self.eval_expr(rhs, env, engine)
+        }
+      },
+      "&&" => {
+        // short-circuit: if lhs is falsy, return it
+        if !is_truthy {
+          Ok((lhs_val, lhs_token))
+        } else {
+          self.eval_expr(rhs, env, engine)
+        }
+      },
+      _ => Err(()),
+    }
+  }
+
+  fn eval_arithmetic(
+    &mut self,
+    env: &mut Env,
+    operator: Token,
+    lhs: Expr,
+    rhs: Expr,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<(LoxValue, Option<Token>), ()> {
+    let (lhs_val, lhs_token) = self.eval_expr(lhs, env, engine)?;
+    let (rhs_val, rhs_token) = self.eval_expr(rhs, env, engine)?;
+
+    match (&lhs_val, &rhs_val) {
       (LoxValue::Number(a), LoxValue::Number(b)) => {
         let result = match operator.lexeme.as_str() {
           "*" => a * b,
           "/" => {
-            if b == 0.0 {
+            if *b == 0.0 {
               return self.emit_error_with_note(
                 engine,
                 DiagnosticCode::DivisionByZero,
@@ -312,7 +349,7 @@ impl Interpreter {
         Ok((LoxValue::Number(result), Some(operator)))
       },
       (LoxValue::Number(_), non_number) | (non_number, LoxValue::Number(_)) => {
-        let (bad_token, bad_value) = if matches!(lhs, LoxValue::Number(_)) {
+        let (bad_token, bad_value) = if matches!(lhs_val, LoxValue::Number(_)) {
           (rhs_token, non_number)
         } else {
           (lhs_token, non_number)
@@ -346,15 +383,17 @@ impl Interpreter {
   }
 
   fn eval_addition(
-    &self,
-    lhs: LoxValue,
+    &mut self,
+    env: &mut Env,
     operator: Token,
-    rhs: LoxValue,
-    lhs_token: Option<Token>,
-    rhs_token: Option<Token>,
+    lhs: Expr,
+    rhs: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    match (lhs, rhs) {
+    let (lhs_val, _) = self.eval_expr(lhs, env, engine)?;
+    let (rhs_val, _) = self.eval_expr(rhs, env, engine)?;
+
+    match (lhs_val, rhs_val) {
       (LoxValue::Number(a), LoxValue::Number(b)) => Ok((LoxValue::Number(a + b), Some(operator))),
       (LoxValue::String(a), LoxValue::String(b)) => {
         Ok((LoxValue::String(format!("{}{}", a, b)), Some(operator)))
@@ -381,30 +420,36 @@ impl Interpreter {
   }
 
   fn eval_equality(
-    &self,
-    lhs: LoxValue,
+    &mut self,
+    env: &mut Env,
     operator: Token,
-    rhs: LoxValue,
+    lhs: Expr,
+    rhs: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
+    let (lhs_val, _) = self.eval_expr(lhs, env, engine)?;
+    let (rhs_val, _) = self.eval_expr(rhs, env, engine)?;
+
     let result = match operator.lexeme.as_str() {
-      "==" => Self::is_equal(&lhs, &rhs),
-      "!=" => !Self::is_equal(&lhs, &rhs),
+      "==" => Self::is_equal(&lhs_val, &rhs_val),
+      "!=" => !Self::is_equal(&lhs_val, &rhs_val),
       _ => unreachable!(),
     };
     Ok((LoxValue::Bool(result), Some(operator)))
   }
 
   fn eval_comparison(
-    &self,
-    lhs: LoxValue,
+    &mut self,
+    env: &mut Env,
     operator: Token,
-    rhs: LoxValue,
-    lhs_token: Option<Token>,
-    rhs_token: Option<Token>,
+    lhs: Expr,
+    rhs: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    match (lhs, rhs) {
+    let (lhs_val, _) = self.eval_expr(lhs, env, engine)?;
+    let (rhs_val, _) = self.eval_expr(rhs, env, engine)?;
+
+    match (lhs_val, rhs_val) {
       (LoxValue::Number(a), LoxValue::Number(b)) => {
         let result = match operator.lexeme.as_str() {
           ">" => a > b,

@@ -27,7 +27,11 @@
 * assignment   → IDENTIFIER "=" assignment
 *               | ternary ;
 *
-* ternary      → equality ( "?" expr ":" ternary )? ;
+* ternary      → logical_or ( "?" expr ":" ternary )? ;
+*
+* logical_or   → logical_and ( "or" logical_and )* ;
+*
+* logical_and  → equality ( "and" equality )* ;
 *
 * equality     → comparison ( ( "!=" | "==" ) comparison )* ;
 *
@@ -120,19 +124,19 @@ impl Parser {
     }
 
     // * if_stmt      → "if" "(" expr* ")" stmt ( "else" stmt )?;
-    if self.current_token().token_type == TokenType::If {
+    if matches!(self.current_token().token_type, TokenType::If) {
       self.advance(); // consume the if
 
-      if self.current_token().token_type == TokenType::LeftParen {
+      if matches!(self.current_token().token_type, TokenType::LeftParen) {
         self.advance(); // consume the (
         let expr = self.parse_expr(engine)?;
 
-        if self.current_token().token_type == TokenType::RightParen {
+        if matches!(self.current_token().token_type, TokenType::RightParen) {
           self.advance(); // consume the )
 
           let stmt = self.parse_stmt(engine)?;
 
-          if self.current_token().token_type == TokenType::Else {
+          if matches!(self.current_token().token_type, TokenType::Else) {
             self.advance(); // consume the else
 
             // Check for else if and precede
@@ -169,8 +173,7 @@ impl Parser {
       return Err(());
     }
 
-    let token = self.current_token();
-    if token.token_type == TokenType::LeftBrace {
+    if matches!(self.current_token().token_type, TokenType::LeftBrace) {
       self.advance(); // consume the {
 
       let mut declaration_vec: Vec<Stmt> = vec![];
@@ -196,7 +199,7 @@ impl Parser {
     }
 
     let token = self.current_token();
-    if token.token_type == TokenType::Var {
+    if matches!(token.token_type, TokenType::Var) {
       self.advance(); // consume the var
 
       // Check for identifier
@@ -229,14 +232,14 @@ impl Parser {
 
       self.advance(); // consume the identifier
 
-      if self.current_token().token_type == TokenType::SemiColon {
+      if matches!(self.current_token().token_type, TokenType::SemiColon) {
         self.advance(); // consume ;
         return Ok(Stmt::VarDec(identifier, None));
-      } else if self.current_token().token_type == TokenType::Equal {
+      } else if matches!(self.current_token().token_type, TokenType::Equal) {
         self.advance(); // consume =
         let expr = self.parse_expr(engine)?;
 
-        if self.current_token().token_type == TokenType::SemiColon {
+        if matches!(self.current_token().token_type, TokenType::SemiColon) {
           self.advance(); // consume ;
           return Ok(Stmt::VarDec(identifier, Some(expr)));
         } else {
@@ -300,7 +303,7 @@ impl Parser {
       return Err(());
     }
 
-    if self.current_token().token_type == TokenType::SemiColon {
+    if matches!(self.current_token().token_type, TokenType::SemiColon) {
       self.advance();
       return Ok(Stmt::Expr(expr));
     } else {
@@ -336,7 +339,7 @@ impl Parser {
         self.advance(); // consume print token
         let expr = self.parse_expr(engine)?;
 
-        if self.current_token().token_type == TokenType::SemiColon {
+        if matches!(self.current_token().token_type, TokenType::SemiColon) {
           self.advance(); // consume ; token
           return Ok(Stmt::Print(expr));
         } else {
@@ -365,29 +368,6 @@ impl Parser {
     self.parse_comma(engine)
   }
 
-  /// Function that handles the assignments (=)
-  fn parse_assignment(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let lhs = self.parse_ternary(engine)?;
-
-    if !self.is_eof() && self.current_token().token_type == TokenType::Equal {
-      self.advance();
-
-      let rhs = self.parse_assignment(engine)?;
-
-      if let Expr::Identifier(name) = lhs {
-        return Ok(Expr::Assign {
-          name: name,
-          value: Box::new(rhs),
-        });
-      } else {
-        self.error_unexpected_token(engine, "in assignment, left side must be an identifier");
-        return Err(());
-      }
-    }
-
-    Ok(lhs)
-  }
-
   // Function that handles ,
   fn parse_comma(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_assignment(engine)?;
@@ -414,17 +394,40 @@ impl Parser {
     Ok(lhs)
   }
 
+  /// Function that handles the assignments (=)
+  fn parse_assignment(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let lhs = self.parse_ternary(engine)?;
+
+    if !self.is_eof() && matches!(self.current_token().token_type, TokenType::Equal) {
+      self.advance();
+
+      let rhs = self.parse_assignment(engine)?;
+
+      if let Expr::Identifier(name) = lhs {
+        return Ok(Expr::Assign {
+          name: name,
+          value: Box::new(rhs),
+        });
+      } else {
+        self.error_unexpected_token(engine, "in assignment, left side must be an identifier");
+        return Err(());
+      }
+    }
+
+    Ok(lhs)
+  }
+
   /// Function that handles the ternary (?:)
   fn parse_ternary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let condition = self.parse_equality(engine)?;
+    let condition = self.parse_logic_or(engine)?;
 
-    if !self.is_eof() && self.current_token().token_type == TokenType::Question {
+    if !self.is_eof() && matches!(self.current_token().token_type, TokenType::Question) {
       let question_token = self.current_token();
       self.advance(); // consume the (?)
 
       let then_branch = self.parse_expr(engine)?;
 
-      if self.is_eof() || self.current_token().token_type != TokenType::Colon {
+      if self.is_eof() || !matches!(self.current_token().token_type, TokenType::Colon) {
         let current_token = self.current_token();
 
         let error = Diagnostic::new(
@@ -461,6 +464,40 @@ impl Parser {
     }
 
     Ok(condition)
+  }
+
+  fn parse_logic_or(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let mut lhs = self.parse_logic_and(engine)?;
+
+    while !self.is_eof() && matches!(self.current_token().token_type, TokenType::Or) {
+      let token = self.current_token();
+      self.advance(); // consume the &&
+      let rhs = self.parse_logic_and(engine)?;
+      lhs = Expr::Binary {
+        lhs: Box::new(lhs),
+        operator: token,
+        rhs: Box::new(rhs),
+      }
+    }
+
+    Ok(lhs)
+  }
+
+  fn parse_logic_and(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let mut lhs = self.parse_equality(engine)?;
+
+    while !self.is_eof() && matches!(self.current_token().token_type, TokenType::And) {
+      let token = self.current_token();
+      self.advance(); // consume the &&
+      let rhs = self.parse_equality(engine)?;
+      lhs = Expr::Binary {
+        lhs: Box::new(lhs),
+        operator: token,
+        rhs: Box::new(rhs),
+      }
+    }
+
+    Ok(lhs)
   }
 
   /// Function that handles the terms (==|!=)
