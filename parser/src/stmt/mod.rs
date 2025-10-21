@@ -25,7 +25,7 @@
 
 use scanner::token::Token;
 
-use crate::expression::Expr;
+use crate::expr::Expr;
 use std::fmt;
 
 #[derive(Debug, Clone)]
@@ -34,6 +34,7 @@ pub enum Stmt {
   Print(Expr),
   VarDec(Token, Option<Expr>),
   Block(Box<Vec<Stmt>>),
+  If(Box<Expr>, Box<Stmt>, Option<Box<Stmt>>),
 }
 
 impl fmt::Display for Stmt {
@@ -44,6 +45,14 @@ impl fmt::Display for Stmt {
       Stmt::VarDec(name, Some(expr)) => write!(f, "📝 VarDec({}, {})", name.lexeme, expr),
       Stmt::VarDec(name, None) => write!(f, "📝 VarDec({}, <uninitialized>)", name.lexeme),
       Stmt::Block(stmts) => write!(f, "📝 BlockStmt({:?})", stmts),
+      Stmt::If(condition, then_branch, Some(else_branch)) => write!(
+        f,
+        "📝 IfStmt({}, {}, {})",
+        condition, then_branch, else_branch
+      ),
+      Stmt::If(condition, then_branch, None) => {
+        write!(f, "📝 IfStmt({}, {}, <nil>)", condition, then_branch)
+      },
     }
   }
 }
@@ -78,6 +87,14 @@ impl Stmt {
           stmt.pretty_print_internal(indent + 2);
         }
       },
+      Stmt::If(condition, then_branch, else_branch) => {
+        println!("{}IfStatement", padding);
+        condition.pretty_print_internal(indent + 2);
+        then_branch.pretty_print_internal(indent + 2);
+        if let Some(else_branch) = else_branch {
+          else_branch.pretty_print_internal(indent + 2);
+        }
+      },
     }
   }
 
@@ -97,6 +114,7 @@ impl Stmt {
       Stmt::Print(_) => "PrintStmt".to_string(),
       Stmt::VarDec(name, _) => format!("VarDec({})", name.lexeme),
       Stmt::Block(_) => "BlockStmt".to_string(),
+      Stmt::If(_, _, _) => "IfStmt".to_string(),
     };
 
     lines.push(format!("{}{}{}", prefix, connector, label));
@@ -121,6 +139,13 @@ impl Stmt {
           } else {
             stmt.build_tree(lines, &new_prefix, &new_prefix, false);
           }
+        }
+      },
+      Stmt::If(condition, then_branch, else_branch) => {
+        condition.build_tree(lines, &new_prefix, &new_prefix, true);
+        then_branch.build_tree(lines, &new_prefix, &new_prefix, true);
+        if let Some(else_branch) = else_branch {
+          else_branch.build_tree(lines, &new_prefix, &new_prefix, true);
         }
       },
     }

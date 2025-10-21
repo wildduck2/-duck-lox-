@@ -1,6 +1,11 @@
-var x = 1; // This is the var x 
-var y = (x * 5) >= 5 ? 12 : 5; // This a ternary making 
-                             // some math considitonalyy
-print y;
-
-{  var y = 5;  var x = 8; print y + x; }
+if (1 > 2) {
+  print "hello";
+} else if (4 < 5) {
+  if (1 < 4) {
+    print "world";
+  } else {
+    print "Fuck you";
+  }
+} else {
+  print "Hell";
+}

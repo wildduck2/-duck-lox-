@@ -5,7 +5,7 @@ use diagnostic::{
   diagnostic_code::DiagnosticCode,
   DiagnosticEngine,
 };
-use parser::{expression::Expr, statement::Stmt};
+use parser::{expr::Expr, stmt::Stmt};
 use scanner::token::{types::Literal, Token};
 
 use crate::env::Env;
@@ -23,12 +23,12 @@ impl Interpreter {
   pub fn run(&mut self, ast: Vec<Stmt>, engine: &mut DiagnosticEngine) {
     let mut env = self.env.clone();
     for stmt in ast {
-      let _ = self.run_statement(stmt, &mut env, engine);
+      let _ = self.eval_stmt(stmt, &mut env, engine);
     }
     self.env = env;
   }
 
-  fn run_statement(
+  fn eval_stmt(
     &mut self,
     stmt: Stmt,
     env: &mut Env,
@@ -36,7 +36,7 @@ impl Interpreter {
   ) -> Result<(), ()> {
     match stmt {
       Stmt::Print(expr) => {
-        match self.eval_expression(expr, env, engine) {
+        match self.eval_expr(expr, env, engine) {
           Ok(x) => {
             println!("{}", x.0);
             return Ok(());
@@ -48,11 +48,11 @@ impl Interpreter {
         };
       },
       Stmt::Expr(expr) => {
-        self.eval_expression(expr, env, engine)?;
+        self.eval_expr(expr, env, engine)?;
         return Ok(());
       },
       Stmt::VarDec(identifier_token, Some(expr)) => {
-        let (expr_value, _) = self.eval_expression(expr, env, engine)?;
+        let (expr_value, _) = self.eval_expr(expr, env, engine)?;
         env.define(identifier_token.lexeme, expr_value);
         return Ok(());
       },
@@ -64,8 +64,47 @@ impl Interpreter {
         self.eval_block(block, env, engine)?;
         return Ok(());
       },
+      Stmt::If(condition, then_branch, else_branch) => {
+        self.eval_if(env, *condition, *then_branch, else_branch, engine)?;
+        return Ok(());
+      },
     }
   }
+
+  fn eval_if(
+    &mut self,
+    env: &mut Env,
+    condition: Expr,
+    then_branch: Stmt,
+    else_branch: Option<Box<Stmt>>,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<(), ()> {
+    let (expr_val, token) = self.eval_expr(condition, env, engine)?;
+
+    match expr_val {
+      LoxValue::Bool(v) => {
+        if v {
+          self.eval_stmt(then_branch, env, engine)
+        } else {
+          match else_branch {
+            Some(else_branch) => self.eval_stmt(*else_branch, env, engine),
+            None => Ok(()),
+          }
+        }
+      },
+      _ => {
+        self.emit_type_error(
+          engine,
+          &token.unwrap(), // You'd need to capture this
+          None,
+          "If condition must be a boolean",
+          &format!("Expected boolean, found {}", Self::type_name(&expr_val)),
+        )?;
+        Err(())
+      },
+    }
+  }
+
   fn eval_block(
     &mut self,
     block: Box<Vec<Stmt>>,
@@ -77,26 +116,38 @@ impl Interpreter {
     for stmt in *block {
       match stmt {
         Stmt::VarDec(token, Some(value)) => {
-          let (expr_value, _) = self.eval_expression(value, &mut enclosing_env, engine)?;
+          let (expr_value, _) = self.eval_expr(value, &mut enclosing_env, engine)?;
           enclosing_env.define(token.lexeme, expr_value);
         },
         Stmt::VarDec(token, None) => {
           enclosing_env.define(token.lexeme, LoxValue::Nil);
         },
+        Stmt::Expr(expr) => {
+          self.eval_expr(expr, &mut enclosing_env, engine)?;
+        },
         Stmt::Print(expr) => {
-          let (value, _) = self.eval_expression(expr, &mut enclosing_env, engine)?;
+          let (value, _) = self.eval_expr(expr, &mut enclosing_env, engine)?;
           println!("{}", value);
         },
-        _ => {
-          // todo!()
+        Stmt::Block(block) => {
+          self.eval_block(block, &mut enclosing_env, engine)?;
+        },
+        Stmt::If(condition, then_branch, else_branch) => {
+          self.eval_if(
+            &mut enclosing_env,
+            *condition,
+            *then_branch,
+            else_branch,
+            engine,
+          )?;
         },
       }
     }
 
-    Err(())
+    Ok((LoxValue::Nil, None))
   }
 
-  fn eval_expression(
+  fn eval_expr(
     &mut self,
     expr: Expr,
     env: &mut Env,
@@ -151,7 +202,7 @@ impl Interpreter {
     env: &mut Env,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    let (value, token) = self.eval_expression(value, env, engine)?;
+    let (value, token) = self.eval_expr(value, env, engine)?;
     if !env.assign(&name.lexeme, value.clone()) {
       name.position.0 += 1;
       name.position.1 -= 1;
@@ -180,7 +231,7 @@ impl Interpreter {
     else_branch: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    let (condition_val, condition_token) = self.eval_expression(condition, env, engine)?;
+    let (condition_val, condition_token) = self.eval_expr(condition, env, engine)?;
 
     let is_truthy = match &condition_val {
       LoxValue::Bool(b) => *b,
@@ -190,9 +241,9 @@ impl Interpreter {
     };
 
     if is_truthy {
-      self.eval_expression(then_branch, env, engine)
+      self.eval_expr(then_branch, env, engine)
     } else {
-      self.eval_expression(else_branch, env, engine)
+      self.eval_expr(else_branch, env, engine)
     }
   }
 
@@ -204,8 +255,8 @@ impl Interpreter {
     rhs: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    let (lhs_val, lhs_token) = self.eval_expression(lhs, env, engine)?;
-    let (rhs_val, rhs_token) = self.eval_expression(rhs, env, engine)?;
+    let (lhs_val, lhs_token) = self.eval_expr(lhs, env, engine)?;
+    let (rhs_val, rhs_token) = self.eval_expr(rhs, env, engine)?;
 
     match operator.lexeme.as_str() {
       "*" | "/" | "-" => {
@@ -386,7 +437,7 @@ impl Interpreter {
     rhs: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    let (rhs_val, rhs_token) = self.eval_expression(rhs, env, engine)?;
+    let (rhs_val, rhs_token) = self.eval_expr(rhs, env, engine)?;
 
     match operator.lexeme.as_str() {
       "!" => {
@@ -425,7 +476,7 @@ impl Interpreter {
     expr: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
-    self.eval_expression(expr, env, engine)
+    self.eval_expr(expr, env, engine)
   }
 
   fn eval_literal(
