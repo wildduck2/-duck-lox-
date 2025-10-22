@@ -1,6 +1,8 @@
 // NOTE: These are the enums used to make the scanner
 // and achieve the regular which is the layer-2 of the Chmosky Hierarchy
 
+use std::fmt;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TokenType {
   // Single-character tokens.
@@ -61,6 +63,75 @@ pub enum TokenType {
   Break,
   Continue,
   Comment,
+}
+
+impl fmt::Display for TokenType {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    let s = match self {
+      // Single-character tokens
+      TokenType::LeftParen => "(",
+      TokenType::RightParen => ")",
+      TokenType::LeftBrace => "{",
+      TokenType::RightBrace => "}",
+      TokenType::LeftBracket => "[",
+      TokenType::RightBracket => "]",
+      TokenType::Comma => ",",
+      TokenType::Dot => ".",
+      TokenType::Minus => "-",
+      TokenType::MinusEqual => "-=",
+      TokenType::MinusMinus => "--",
+      TokenType::Plus => "+",
+      TokenType::PlusEqual => "+=",
+      TokenType::PlusPlus => "++",
+      TokenType::Divide => "/",
+      TokenType::DivideEqual => "/=",
+      TokenType::Multiply => "*",
+      TokenType::MultiplyEqual => "*=",
+      TokenType::SemiColon => ";",
+      TokenType::Colon => ":",
+      TokenType::Question => "?",
+      TokenType::Modulus => "%",
+
+      // One or two character tokens
+      TokenType::Bang => "!",
+      TokenType::BangEqual => "!=",
+      TokenType::Equal => "=",
+      TokenType::EqualEqual => "==",
+      TokenType::Greater => ">",
+      TokenType::GreaterEqual => ">=",
+      TokenType::Less => "<",
+      TokenType::LessEqual => "<=",
+
+      // Literals
+      TokenType::Identifier => "identifier",
+      TokenType::String => "string",
+      TokenType::Number => "number",
+
+      // Keywords
+      TokenType::And => "and",
+      TokenType::Class => "class",
+      TokenType::NullChar => "null",
+      TokenType::Else => "else",
+      TokenType::False => "false",
+      TokenType::Fun => "fun",
+      TokenType::For => "for",
+      TokenType::If => "if",
+      TokenType::Nil => "nil",
+      TokenType::Or => "or",
+      TokenType::Print => "print",
+      TokenType::Return => "return",
+      TokenType::Super => "super",
+      TokenType::This => "this",
+      TokenType::True => "true",
+      TokenType::Var => "var",
+      TokenType::While => "while",
+      TokenType::Eof => "eof",
+      TokenType::Break => "break",
+      TokenType::Continue => "continue",
+      TokenType::Comment => "comment",
+    };
+    write!(f, "{}", s)
+  }
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]

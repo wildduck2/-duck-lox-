@@ -140,7 +140,7 @@ impl Scanner {
         },
 
         // SemiColon line Terminator
-        ';' => self.tokenize_semicolon(engine),
+        ';' => Some(TokenType::SemiColon),
 
         '.' => self.tokenize_dot(),
         ',' => Some(TokenType::Comma),
@@ -208,38 +208,6 @@ impl Scanner {
       }
     }
     Some(TokenType::Dot)
-  }
-
-  // Function that tokenize the semi colon
-  fn tokenize_semicolon(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenType> {
-    if self.tokens.len() > 0 && !self.tokens[self.tokens.len() - 1].lexeme.ends_with(';') {
-      Some(TokenType::SemiColon)
-    } else {
-      let snippet: String = self.source[(self.current as usize)..]
-        .chars()
-        .take_while(|&c| c != '\n')
-        .collect();
-
-      let diagnostic = Diagnostic::new(
-        DiagnosticCode::MissingSemicolon,
-        "unexpected character".to_string(),
-      )
-      .with_label(Label::primary(
-        Span {
-          file: "input".to_string(),
-          line: self.line,
-          column: self.column,
-          length: snippet.len(),
-        },
-        Some("expected semicolon at end of expression".to_string()),
-      ))
-      .with_help(
-        "make sure the end of your expression is followed by a single semicolon".to_string(),
-      );
-
-      engine.emit(diagnostic);
-      None
-    }
   }
 
   /// Function that tokenize all the string shapes

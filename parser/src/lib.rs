@@ -8,10 +8,10 @@
 * varDec       → "var" IDENTIFIER ( "=" expr )? ";" ;
 *
 * stmt         → expr_stmt
+*               | for_stmt ;
 *               | if_stmt;
 *               | print_stmt ;
 *               | while_stmt ;
-*               | for_stmt ;
 *               | block ;
 *
 * for_stmt      → "for" "(" ( varDec | exprStmt | ";" )* ";" expr? ";" expr? ")" stmt ;
@@ -60,7 +60,10 @@ use diagnostic::{
   diagnostic_code::DiagnosticCode,
   DiagnosticEngine,
 };
-use scanner::token::{types::TokenType, Token};
+use scanner::token::{
+  types::{Literal, TokenType},
+  Token,
+};
 
 use crate::{expr::Expr, stmt::Stmt};
 
@@ -97,7 +100,9 @@ impl Parser {
       }
     }
   }
+}
 
+impl Parser {
   fn parse_program(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     self.parse_declaration(engine)
   }
@@ -116,117 +121,12 @@ impl Parser {
 
   fn parse_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     match self.current_token().token_type {
+      TokenType::For => self.parse_for_stmt(engine),
       TokenType::If => self.parse_if_stmt(engine),
       TokenType::Print => self.parse_print_stmt(engine),
       TokenType::LeftBrace => self.parse_block_stmt(engine),
       TokenType::While => self.parse_while_stmt(engine),
       _ => self.parse_expr_stmt(engine),
-    }
-  }
-
-  fn parse_while_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
-    if self.is_eof() {
-      self.error_eof(engine);
-      return Err(());
-    }
-
-    if matches!(self.current_token().token_type, TokenType::While) {
-      self.advance(); // consume the while
-
-      if matches!(self.current_token().token_type, TokenType::LeftParen) {
-        self.advance(); // consume the (
-        let condition = self.parse_expr(engine)?;
-
-        if matches!(self.current_token().token_type, TokenType::RightParen) {
-          self.advance(); // consume the )
-          let stmt = self.parse_stmt(engine)?;
-
-          Ok(Stmt::While(Box::new(condition), Box::new(stmt)))
-        } else {
-          println!("---{:?} Error", self.current_token());
-          Err(())
-        }
-      } else {
-        println!("--{:?} Error", self.current_token());
-        Err(())
-      }
-    } else {
-      println!("-{:?} Error", self.current_token());
-      Err(())
-    }
-  }
-
-  fn parse_if_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
-    if self.is_eof() {
-      self.error_eof(engine);
-      return Err(());
-    }
-
-    if matches!(self.current_token().token_type, TokenType::If) {
-      self.advance(); // consume the if
-
-      if matches!(self.current_token().token_type, TokenType::LeftParen) {
-        self.advance(); // consume the (
-        let expr = self.parse_expr(engine)?;
-
-        if matches!(self.current_token().token_type, TokenType::RightParen) {
-          self.advance(); // consume the )
-
-          let stmt = self.parse_stmt(engine)?;
-
-          if matches!(self.current_token().token_type, TokenType::Else) {
-            self.advance(); // consume the else
-
-            // Check for else if and precede
-            if self.current_token().token_type == TokenType::If {
-              return self.parse_if_stmt(engine);
-            } else {
-              let else_branch = self.parse_stmt(engine)?;
-              return Ok(Stmt::If(
-                Box::new(expr),
-                Box::new(stmt),
-                Some(Box::new(else_branch)),
-              ));
-            }
-          }
-
-          return Ok(Stmt::If(Box::new(expr), Box::new(stmt), None));
-        } else {
-          println!("---{:?} Error", self.current_token());
-          Err(())
-        }
-      } else {
-        println!("--{:?} Error", self.current_token());
-        Err(())
-      }
-    } else {
-      println!("-{:?} Error", self.current_token());
-      Err(())
-    }
-  }
-
-  fn parse_block_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
-    if self.is_eof() {
-      self.error_eof(engine);
-      return Err(());
-    }
-
-    if matches!(self.current_token().token_type, TokenType::LeftBrace) {
-      self.advance(); // consume the {
-
-      let mut declaration_vec: Vec<Stmt> = vec![];
-
-      while !self.is_eof() {
-        if !matches!(self.current_token().token_type, TokenType::RightBrace) {
-          declaration_vec.push(self.parse_declaration(engine)?);
-        } else {
-          self.advance(); // consume the }
-          break;
-        }
-      }
-      return Ok(Stmt::Block(Box::new(declaration_vec)));
-    } else {
-      return Err(());
     }
   }
 
@@ -236,171 +136,223 @@ impl Parser {
       return Err(());
     }
 
-    let token = self.current_token();
-    if matches!(token.token_type, TokenType::Var) {
-      self.advance(); // consume the var
+    self.expect(TokenType::Var, engine)?; // already at 'for'
 
-      // Check for identifier
-      if !matches!(self.current_token().token_type, TokenType::Identifier) {
-        let mut span = self.current_token().to_span();
-        span.line += 1;
-        span.column -= 1;
-        let diagnostic = Diagnostic::new(
-          DiagnosticCode::ExpectedIdentifier,
-          "Expected identifier after 'var'".to_string(),
-        )
-        .with_label(Label::primary(
-          span.clone(),
-          Some("expected variable name here".to_string()),
-        ))
-        .with_label(Label::secondary(
-          Span {
-            length: 3,
-            column: 0,
-            ..span
-          },
-          Some("'var' keyword here".to_string()),
-        ));
-
-        engine.emit(diagnostic);
-        return Err(());
-      }
-
-      let identifier = self.current_token();
-
-      self.advance(); // consume the identifier
-
-      if matches!(self.current_token().token_type, TokenType::SemiColon) {
-        self.advance(); // consume ;
-        return Ok(Stmt::VarDec(identifier, None));
-      } else if matches!(self.current_token().token_type, TokenType::Equal) {
-        self.advance(); // consume =
-        let expr = self.parse_expr(engine)?;
-
-        if matches!(self.current_token().token_type, TokenType::SemiColon) {
-          self.advance(); // consume ;
-          return Ok(Stmt::VarDec(identifier, Some(expr)));
-        } else {
-          // Missing semicolon diagnostic
-          let diagnostic = Diagnostic::new(
-            DiagnosticCode::MissingSemicolon,
-            "Expected ';' after variable declaration".to_string(),
-          )
-          .with_label(Label::primary(
-            self.span_prev(),
-            Some("semicolon missing here".to_string()),
-          ));
-
-          engine.emit(diagnostic);
-          return Err(());
-        }
-      } else {
-        // Expected = or ;
-        let token = self.current_token();
-        let mut span = token.to_span();
-        span.length = 1;
-        span.column = identifier.position.1;
-        let len = identifier.lexeme.len();
-        let diagnostic = Diagnostic::new(
-          DiagnosticCode::UnexpectedToken,
-          format!(
-            "Expected '=' or ';' after identifier, found '{}'",
-            token.lexeme
-          ),
-        )
-        .with_label(Label::primary(
-          span,
-          Some("expected '=' or ';' here".to_string()),
-        ))
-        .with_label(Label::secondary(
-          Span {
-            length: len,
-            column: identifier.position.1 - len,
-            ..token.to_span()
-          },
-          // identifier.to_span(),
-          Some("variable declared here".to_string()),
-        ));
-
-        engine.emit(diagnostic);
-        return Err(());
-      }
-    } else {
-      // This should never happen if parse_declaration routes correctly
-      self.error_unexpected_token(engine, "expected 'var' keyword");
-      return Err(());
-    }
-  }
-
-  fn parse_expr_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
-    let expr_start = self.current_token(); // Capture start
-    let expr = self.parse_expr(engine)?;
-
-    if self.is_eof() {
-      self.error_eof(engine);
-      return Err(());
-    }
-
-    if matches!(self.current_token().token_type, TokenType::SemiColon) {
-      self.advance();
-      return Ok(Stmt::Expr(expr));
-    } else {
+    // Check for identifier
+    if !matches!(self.current_token().token_type, TokenType::Identifier) {
+      let mut span = self.current_token().to_span();
+      span.line += 1;
+      span.column -= 1;
       let diagnostic = Diagnostic::new(
-        DiagnosticCode::MissingSemicolon,
-        "Expected ';' after expr".to_string(),
+        DiagnosticCode::ExpectedIdentifier,
+        "Expected identifier after 'var'".to_string(),
       )
       .with_label(Label::primary(
-        self.span_prev(),
-        Some("semicolon missing here".to_string()),
+        span.clone(),
+        Some("expected variable name here".to_string()),
       ))
       .with_label(Label::secondary(
-        expr_start.to_span(),
-        Some("expr started here".to_string()),
+        Span {
+          length: 3,
+          column: 0,
+          ..span
+        },
+        Some("'var' keyword here".to_string()),
       ));
 
       engine.emit(diagnostic);
-      Err(())
-    }
-  }
-
-  // Function that handles print stmt
-  fn parse_print_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
-    let token = self.current_token();
-
-    if self.is_eof() {
-      self.error_eof(engine);
       return Err(());
     }
 
-    match token.token_type {
-      TokenType::Print => {
-        self.advance(); // consume print token
-        let expr = self.parse_expr(engine)?;
+    let identifier = self.current_token();
 
-        if matches!(self.current_token().token_type, TokenType::SemiColon) {
-          self.advance(); // consume ; token
-          return Ok(Stmt::Print(expr));
-        } else {
-          let diagnostic = Diagnostic::new(
-            DiagnosticCode::ExpectedToken,
-            "Expected ';' after print stmt".to_string(),
-          )
-          .with_label(Label::primary(
-            self.span_prev(),
-            Some("semicolon is missing here".to_string()),
-          ));
+    self.advance(); // consume the identifier
 
-          engine.emit(diagnostic);
-          Err(())
-        }
-      },
-      _ => {
-        self.error_unexpected_token(engine, "in print stmt, expected 'print' keyword");
-        Err(())
-      },
+    if matches!(self.current_token().token_type, TokenType::SemiColon) {
+      self.advance(); // consume ;
+      return Ok(Stmt::VarDec(identifier, None));
+    } else if matches!(self.current_token().token_type, TokenType::Equal) {
+      self.advance(); // consume =
+      let expr = self.parse_expr(engine)?;
+
+      if matches!(self.current_token().token_type, TokenType::SemiColon) {
+        self.advance(); // consume ;
+        return Ok(Stmt::VarDec(identifier, Some(expr)));
+      } else {
+        // Missing semicolon diagnostic
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::MissingSemicolon,
+          "Expected ';' after variable declaration".to_string(),
+        )
+        .with_label(Label::primary(
+          self.span_prev(),
+          Some("semicolon missing here".to_string()),
+        ));
+
+        engine.emit(diagnostic);
+        return Err(());
+      }
+    } else {
+      // Expected = or ;
+      let token = self.current_token();
+      let mut span = token.to_span();
+      span.length = 1;
+      span.column = identifier.position.1;
+      let len = identifier.lexeme.len();
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::UnexpectedToken,
+        format!(
+          "Expected '=' or ';' after identifier, found '{}'",
+          token.lexeme
+        ),
+      )
+      .with_label(Label::primary(
+        span,
+        Some("expected '=' or ';' here".to_string()),
+      ))
+      .with_label(Label::secondary(
+        Span {
+          length: len,
+          column: identifier.position.1 - len,
+          ..token.to_span()
+        },
+        // identifier.to_span(),
+        Some("variable declared here".to_string()),
+      ));
+
+      engine.emit(diagnostic);
+      return Err(());
     }
   }
 
+  fn parse_for_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    self.expect(TokenType::For, engine)?;
+    self.expect(TokenType::LeftParen, engine)?;
+
+    // Parse initializer
+    let initializer = if self.matches_token(TokenType::SemiColon) {
+      self.advance();
+      None
+    } else if self.matches_token(TokenType::Var) {
+      Some(self.parse_declaration(engine)?)
+    } else {
+      Some(self.parse_expr_stmt(engine)?)
+    };
+
+    // Parse condition
+    let condition = if !self.matches_token(TokenType::SemiColon) {
+      let expr = self.parse_expr(engine)?;
+      self.expect(TokenType::SemiColon, engine)?;
+      Some(expr)
+    } else {
+      self.advance();
+      None
+    };
+
+    // Parse increment
+    let increment = if !self.matches_token(TokenType::RightParen) {
+      let expr = self.parse_expr(engine)?;
+      self.expect(TokenType::RightParen, engine)?;
+      Some(expr)
+    } else {
+      self.advance();
+      None
+    };
+
+    // Parse body
+    let mut body = self.parse_stmt(engine)?;
+
+    // Desugar: add increment to body
+    if let Some(inc) = increment {
+      body = Stmt::Block(Box::new(vec![body, Stmt::Expr(inc)]));
+    }
+
+    // Desugar: wrap in while loop
+    let condition_expr = condition.unwrap_or(Expr::Literal(Token::new(
+      TokenType::True,
+      "true".to_string(),
+      Literal::Boolean,
+      (0, 0),
+    )));
+    body = Stmt::While(Box::new(condition_expr), Box::new(body));
+
+    // Desugar: add initializer
+    if let Some(init) = initializer {
+      Ok(Stmt::Block(Box::new(vec![init, body])))
+    } else {
+      Ok(body)
+    }
+  }
+
+  fn parse_while_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    self.expect(TokenType::While, engine)?;
+    self.expect(TokenType::LeftParen, engine)?;
+    let condition = self.parse_expr(engine)?;
+    self.expect(TokenType::RightParen, engine)?;
+    let stmt = self.parse_stmt(engine)?;
+
+    Ok(Stmt::While(Box::new(condition), Box::new(stmt)))
+  }
+
+  fn parse_if_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    self.expect(TokenType::If, engine)?;
+    self.expect(TokenType::LeftParen, engine)?;
+    let expr = self.parse_expr(engine)?;
+    self.expect(TokenType::RightParen, engine)?;
+    let stmt = self.parse_stmt(engine)?;
+
+    if self.matches_token(TokenType::Else) {
+      self.advance();
+
+      // Handle else-if chain
+      let else_branch = if self.matches_token(TokenType::If) {
+        self.parse_if_stmt(engine)?
+      } else {
+        self.parse_stmt(engine)?
+      };
+
+      Ok(Stmt::If(
+        Box::new(expr),
+        Box::new(stmt),
+        Some(Box::new(else_branch)),
+      ))
+    } else {
+      Ok(Stmt::If(Box::new(expr), Box::new(stmt), None))
+    }
+  }
+
+  fn parse_block_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    self.expect(TokenType::LeftBrace, engine)?;
+    let mut declarations = Vec::new();
+
+    while !self.is_eof() && !self.matches_token(TokenType::RightBrace) {
+      declarations.push(self.parse_declaration(engine)?);
+    }
+
+    self.expect(TokenType::RightBrace, engine)?;
+    Ok(Stmt::Block(Box::new(declarations)))
+  }
+
+  fn parse_print_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    self.expect(TokenType::Print, engine)?; // Fixed: was Var, should be Print
+    let expr = self.parse_expr(engine)?;
+    self.expect(TokenType::SemiColon, engine)?;
+    Ok(Stmt::Print(expr))
+  }
+
+  fn parse_expr_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    let expr = self.parse_expr(engine)?;
+    self.expect(TokenType::SemiColon, engine)?;
+    Ok(Stmt::Expr(expr))
+  }
+
+  // Helper method to check if current token matches a type
+  fn matches_token(&self, token_type: TokenType) -> bool {
+    !self.is_eof() && self.tokens[self.current].token_type == token_type
+  }
+}
+
+impl Parser {
   /// Function that handles expr
   fn parse_expr(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     self.parse_comma(engine)
@@ -727,7 +679,7 @@ impl Parser {
       },
 
       TokenType::SemiColon => {
-        self.advance();
+        self.check_double_semicolon(engine);
         Err(())
       },
 
@@ -780,6 +732,25 @@ impl Parser {
     }
   }
 
+  fn check_double_semicolon(&mut self, engine: &mut DiagnosticEngine) {
+    if !self.is_eof() && matches!(self.current_token().token_type, TokenType::SemiColon) {
+      let mut token = self.current_token();
+      token.position.0 += 1;
+      token.position.1 -= 1;
+
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::UnexpectedToken,
+        "Unexpected extra semicolon".to_string(),
+      )
+      .with_label(Label::primary(
+        token.to_span(),
+        Some("remove this extra semicolon".to_string()),
+      ));
+      engine.emit(diagnostic);
+      self.advance(); // skip the extra semicolon
+    }
+  }
+
   fn error_unexpected_token(&mut self, engine: &mut DiagnosticEngine, context: &str) {
     let mut token = self.current_token();
     token.position.0 += 1;
@@ -820,5 +791,97 @@ impl Parser {
     } else {
       self.tokens[0].to_span()
     }
+  }
+}
+
+impl Parser {
+  /// Expects a specific token type and provides detailed error diagnostics if not found
+  fn expect(&mut self, expected: TokenType, engine: &mut DiagnosticEngine) -> Result<Token, ()> {
+    if self.is_eof() {
+      self.error_expected_token_eof(expected, engine);
+      return Err(());
+    }
+
+    let current = self.current_token();
+
+    if current.token_type == expected {
+      self.advance();
+      Ok(current)
+    } else {
+      self.error_expected_token(expected, current, engine);
+      Err(())
+    }
+  }
+
+  /// Error for when we expect a token but hit EOF
+  fn error_expected_token_eof(&mut self, expected: TokenType, engine: &mut DiagnosticEngine) {
+    let token = self.current_token();
+    let last_token = &self.tokens[self.current - 1];
+
+    let error_span = Span {
+      file: last_token.to_span().file.clone(),
+      line: token.position.0,
+      column: token.position.1,
+      length: 1,
+    };
+
+    let diagnostic = Diagnostic::new(
+      DiagnosticCode::UnexpectedEof,
+      format!(
+        "Expected '{}', but reached end of file",
+        expected.to_string()
+      ),
+    )
+    .with_label(Label::primary(
+      error_span,
+      Some(format!("expected '{}' here", expected.to_string())),
+    ))
+    .with_label(Label::secondary(
+      last_token.to_span(),
+      Some("after this token".to_string()),
+    ));
+
+    engine.emit(diagnostic);
+  }
+
+  /// Error for when we expect a token but find something else
+  fn error_expected_token(&self, expected: TokenType, found: Token, engine: &mut DiagnosticEngine) {
+    let diagnostic = Diagnostic::new(
+      DiagnosticCode::UnexpectedToken,
+      format!(
+        "Expected '{}', found '{}'",
+        &expected.to_string(),
+        found.lexeme
+      ),
+    )
+    .with_label(Label::primary(
+      found.to_span(),
+      Some(format!("expected '{}' here", &expected.to_string())),
+    ))
+    .with_help(get_token_help(&expected, &found));
+
+    engine.emit(diagnostic);
+  }
+}
+/// Helper function to convert TokenType to a readable string
+
+/// Provides contextual help based on what was expected vs found
+fn get_token_help(expected: &TokenType, found: &Token) -> String {
+  match (expected, &found.token_type) {
+    (TokenType::SemiColon, _) => "Statements must end with a semicolon".to_string(),
+    (TokenType::RightParen, TokenType::SemiColon) => {
+      "Did you forget to close the parentheses before the semicolon?".to_string()
+    },
+    (TokenType::RightBrace, TokenType::Eof) => {
+      "Did you forget to close a block with '}'?".to_string()
+    },
+    (TokenType::LeftParen, _) => {
+      "Control flow statements require parentheses around conditions".to_string()
+    },
+    (TokenType::Colon, TokenType::SemiColon) => {
+      "Ternary expressions use ':' to separate the branches".to_string()
+    },
+    (TokenType::Equal, _) => "Use '=' for assignment".to_string(),
+    _ => String::new(),
   }
 }

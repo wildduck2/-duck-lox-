@@ -53,14 +53,18 @@ impl Interpreter {
         self.eval_expr(expr, env, engine)?;
         return Ok(());
       },
-      Stmt::VarDec(identifier_token, Some(expr)) => {
-        let (expr_value, _) = self.eval_expr(expr, env, engine)?;
-        env.borrow_mut().define(identifier_token.lexeme, expr_value);
-        return Ok(());
-      },
-      Stmt::VarDec(token, None) => {
-        env.borrow_mut().define(token.lexeme, LoxValue::Nil);
-        return Ok(());
+      Stmt::VarDec(identifier_token, expr) => match expr {
+        Some(expr) => {
+          let (expr_value, _) = self.eval_expr(expr, env, engine)?;
+          env.borrow_mut().define(identifier_token.lexeme, expr_value);
+          return Ok(());
+        },
+        None => {
+          env
+            .borrow_mut()
+            .define(identifier_token.lexeme, LoxValue::Nil);
+          return Ok(());
+        },
       },
       Stmt::Block(block) => {
         self.eval_block(block, env, engine)?;
@@ -74,11 +78,27 @@ impl Interpreter {
         self.eval_while(env, *condition, *stmt, engine)?;
         return Ok(());
       },
-      Stmt::For(initializer, condition, increment, stmt) => {
-        // self.eval_for(env, *initializer, *condition, *increment, *stmt, engine)?;
-        return Ok(());
-      },
     }
+  }
+
+  fn eval_while(
+    &mut self,
+    env: &mut Rc<RefCell<Env>>,
+    condition: Expr,
+    stmt: Stmt,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<(LoxValue, Option<Token>), ()> {
+    loop {
+      let (condition_val, _) = self.eval_expr(condition.clone(), env, engine)?;
+
+      if !self.is_truthy(&condition_val) {
+        break;
+      }
+
+      self.eval_stmt(stmt.clone(), env, engine)?;
+    }
+
+    Ok((LoxValue::Nil, None))
   }
 
   fn eval_if(
@@ -127,14 +147,18 @@ impl Interpreter {
 
     for stmt in *block {
       match stmt {
-        Stmt::VarDec(token, Some(value)) => {
-          let (expr_value, _) = self.eval_expr(value, &mut enclosing_env, engine)?;
-          enclosing_env.borrow_mut().define(token.lexeme, expr_value);
-        },
-        Stmt::VarDec(token, None) => {
-          enclosing_env
-            .borrow_mut()
-            .define(token.lexeme, LoxValue::Nil);
+        Stmt::VarDec(identifier_token, expr) => match expr {
+          Some(expr) => {
+            let (expr_value, _) = self.eval_expr(expr, &mut enclosing_env, engine)?;
+            enclosing_env
+              .borrow_mut()
+              .define(identifier_token.lexeme, expr_value);
+          },
+          None => {
+            enclosing_env
+              .borrow_mut()
+              .define(identifier_token.lexeme, LoxValue::Nil);
+          },
         },
         Stmt::Expr(expr) => {
           self.eval_expr(expr, &mut enclosing_env, engine)?;
@@ -158,37 +182,7 @@ impl Interpreter {
         Stmt::While(condition, stmt) => {
           self.eval_while(&mut enclosing_env, *condition, *stmt, engine)?;
         },
-        Stmt::For(initializer, condition, increment, stmt) => {
-          // self.eval_for(
-          //   &mut enclosing_env,
-          //   *initializer,
-          //   *condition,
-          //   *increment,
-          //   *stmt,
-          //   engine,
-          // )?;
-        },
       }
-    }
-
-    Ok((LoxValue::Nil, None))
-  }
-
-  fn eval_while(
-    &mut self,
-    env: &mut Rc<RefCell<Env>>,
-    condition: Expr,
-    stmt: Stmt,
-    engine: &mut DiagnosticEngine,
-  ) -> Result<(LoxValue, Option<Token>), ()> {
-    loop {
-      let (condition_val, _) = self.eval_expr(condition.clone(), env, engine)?;
-
-      if !self.is_truthy(&condition_val) {
-        break;
-      }
-
-      self.eval_stmt(stmt.clone(), env, engine)?;
     }
 
     Ok((LoxValue::Nil, None))
