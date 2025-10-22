@@ -1,58 +1,63 @@
 /*
 *
-* program      → declaration* EOF ;
+* program        → declaration* EOF ;
 *
-* declaration  → varDec
-*               | stmt ;
+* declaration    → varDec
+*                | stmt ;
 *
-* varDec       → "var" IDENTIFIER ( "=" expr )? ";" ;
+* varDec         → "var" IDENTIFIER ( "=" expr )? ";" ;
 *
-* stmt         → expr_stmt
-*               | for_stmt ;
-*               | if_stmt;
-*               | print_stmt ;
-*               | while_stmt ;
-*               | block ;
+* stmt           → expr_stmt
+*                | for_stmt
+*                | if_stmt
+*                | print_stmt
+*                | while_stmt
+*                | block ;
 *
-* for_stmt      → "for" "(" ( varDec | exprStmt | ";" )* ";" expr? ";" expr? ")" stmt ;
+* for_stmt       → "for" "(" ( varDec | expr_stmt | ";" ) expr? ";" expr? ")" stmt ;
 *
-* while_stmt      → "while" "(" expr ")" stmt ;
+* while_stmt     → "while" "(" expr ")" stmt ;
 *
-* if_stmt      → "if" "(" expr* ")" stmt ( "else" stmt )?;
+* if_stmt        → "if" "(" expr ")" stmt ( "else" stmt )? ;
 *
-* block        → "{" declaration* "}" ;
+* block          → "{" declaration* "}" ;
 *
-* expr_stmt    → expr ";" ;
+* expr_stmt      → expr ";" ;
 *
-* print_stmt   → "print" expr ";" ;
+* print_stmt     → "print" expr ";" ;
 *
-* expr         → comma ;
+* expr           → comma ;
 *
-* comma        → assignment ( "," assignment )* ;
+* comma          → assignment ( "," assignment )* ;
 *
-* assignment   → IDENTIFIER "=" assignment
-*               | ternary ;
+* assignment     → IDENTIFIER "=" assignment
+*                | ternary ;
 *
-* ternary      → logical_or ( "?" expr ":" ternary )? ;
+* ternary        → logical_or ( "?" expr ":" ternary )? ;
 *
-* logical_or   → logical_and ( "or" logical_and )* ;
+* logical_or     → logical_and ( "or" logical_and )* ;
 *
-* logical_and  → equality ( "and" equality )* ;
+* logical_and    → equality ( "and" equality )* ;
 *
-* equality     → comparison ( ( "!=" | "==" ) comparison )* ;
+* equality       → comparison ( ( "!=" | "==" ) comparison )* ;
 *
-* comparison   → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
+* comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
 *
-* term         → factor ( ( "-" | "+" ) factor )* ;
+* term           → factor ( ( "-" | "+" ) factor )* ;
 *
-* factor       → unary ( ( "/" | "*" ) unary )* ;
+* factor         → unary ( ( "/" | "*" | "%" ) unary )* ;
 *
-* unary        → ( "!" | "-" ) unary
-*               | primary ;
+* unary          → ( "!" | "-" ) unary
+*                | call ;
 *
-* primary      → NUMBER | STRING | IDENTIFIER
-*               | "true" | "false" | "nil"
-*               | "(" expr ")" ;
+* call           → primary ( "(" arguments? ")" )* ;
+*
+* arguments      → expr ( "," expr )* ;
+*
+* primary        → NUMBER | STRING | IDENTIFIER
+*                | "true" | "false" | "nil"
+*                | "(" expr ")" ;
+*
 */
 
 use diagnostic::{
@@ -121,6 +126,7 @@ impl Parser {
 
   fn parse_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     match self.current_token().token_type {
+      // TODO: please add the break and continue statements
       TokenType::For => self.parse_for_stmt(engine),
       TokenType::If => self.parse_if_stmt(engine),
       TokenType::Print => self.parse_print_stmt(engine),
@@ -136,7 +142,7 @@ impl Parser {
       return Err(());
     }
 
-    self.expect(TokenType::Var, engine)?; // already at 'for'
+    self.expect(TokenType::Var, engine)?;
 
     // Check for identifier
     if !matches!(self.current_token().token_type, TokenType::Identifier) {
@@ -334,7 +340,7 @@ impl Parser {
   }
 
   fn parse_print_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
-    self.expect(TokenType::Print, engine)?; // Fixed: was Var, should be Print
+    self.expect(TokenType::Print, engine)?;
     let expr = self.parse_expr(engine)?;
     self.expect(TokenType::SemiColon, engine)?;
     Ok(Stmt::Print(expr))
@@ -576,7 +582,7 @@ impl Parser {
       let token = self.current_token();
 
       match token.token_type {
-        TokenType::Divide | TokenType::Multiply => {
+        TokenType::Divide | TokenType::Multiply | TokenType::Modulus => {
           self.advance();
 
           let rhs = self.parse_unary(engine)?;
@@ -594,7 +600,8 @@ impl Parser {
     Ok(lhs)
   }
 
-  /// Function that parses the unary operators (!|-)
+  /// Parse unary: ( "!" | "-" ) unary | call
+
   fn parse_unary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let token = self.current_token();
 
@@ -608,8 +615,79 @@ impl Parser {
           rhs: Box::new(rhs),
         });
       },
-      _ => self.parse_primary(engine),
+      _ => self.parse_call(engine), // Changed from parse_primary
     }
+  }
+
+  /// Parse call: primary ( "(" arguments? ")" )*
+  fn parse_call(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    // Start with a primary expression (the callee)
+    let mut callee = self.parse_primary(engine)?;
+
+    // Loop to handle chained calls: foo()()()
+    while !self.is_eof() {
+      match self.current_token().token_type {
+        TokenType::LeftParen => {
+          self.advance(); // consume '('
+
+          // Parse arguments (if any)
+          let args = if !self.matches_token(TokenType::RightParen) {
+            self.parse_arguments(engine)?
+          } else {
+            Vec::new() // No arguments
+          };
+
+          self.expect(TokenType::RightParen, engine)?;
+
+          // Wrap in a Call expression
+          callee = Expr::Call {
+            callee: Box::new(callee),
+            paren: self.current_token(), // The ')'
+            arguments: args,
+          };
+        },
+        _ => break, // No more calls
+      }
+    }
+
+    Ok(callee)
+  }
+
+  /// Parse arguments: expr ( "," expr )*
+  fn parse_arguments(&mut self, engine: &mut DiagnosticEngine) -> Result<Vec<Expr>, ()> {
+    let mut args = vec![];
+
+    // Parse first argument
+    args.push(self.parse_assignment(engine)?);
+
+    if args.len() >= 255 {
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::WrongNumberOfArguments,
+        "Too many arguments".to_string(),
+      )
+      .with_label(Label::primary(
+        self.current_token().to_span(),
+        Some("too many arguments".to_string()),
+      ));
+      engine.emit(diagnostic);
+
+      return Err(());
+    }
+
+    // Parse remaining arguments separated by commas
+    while !self.is_eof() && self.matches_token(TokenType::Comma) {
+      self.advance(); // consume ","
+
+      // Check for trailing comma: foo(1, 2, )
+      if self.matches_token(TokenType::RightParen) {
+        // Could emit a warning here about trailing comma
+        break;
+      }
+
+      args.push(self.parse_assignment(engine)?);
+    }
+
+    Ok(args)
   }
 
   // Function that parses the primary (String|Number|True|False|Nil)
@@ -648,6 +726,7 @@ impl Parser {
           let error_span = if self.is_eof() {
             let prev_token = &self.tokens[self.current - 1];
             Span {
+              // TODO: add the real file name
               file: "asdfa".to_string(),
               line: prev_token.position.0,
               column: prev_token.position.1 + prev_token.lexeme.len(),

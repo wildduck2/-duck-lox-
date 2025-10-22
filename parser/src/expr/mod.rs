@@ -15,7 +15,6 @@ pub enum Expr {
     operator: Token,
     rhs: Box<Expr>,
   },
-  Grouping(Box<Expr>),
   Assign {
     name: Token, // must be IDENTIFIER
     value: Box<Expr>,
@@ -25,6 +24,12 @@ pub enum Expr {
     then_branch: Box<Expr>,
     else_branch: Box<Expr>,
   },
+  Call {
+    callee: Box<Expr>,
+    paren: Token,
+    arguments: Vec<Expr>,
+  },
+  Grouping(Box<Expr>),
 }
 
 impl fmt::Display for Expr {
@@ -41,6 +46,16 @@ impl fmt::Display for Expr {
         then_branch,
         else_branch,
       } => write!(f, "🔀 ({} ? {} : {})", condition, then_branch, else_branch),
+      Expr::Call {
+        callee, arguments, ..
+      } => {
+        let args = arguments
+          .iter()
+          .map(|a| format!("{}", a))
+          .collect::<Vec<_>>()
+          .join(", ");
+        write!(f, "📞 {}({})", callee, args)
+      },
     }
   }
 }
@@ -97,6 +112,17 @@ impl Expr {
         condition.pretty_print_internal(indent + 2);
         then_branch.pretty_print_internal(indent + 2);
         else_branch.pretty_print_internal(indent + 2);
+      },
+      Expr::Call {
+        callee,
+        paren: _,
+        arguments,
+      } => {
+        println!("{}Call", padding);
+        callee.pretty_print_internal(indent + 2);
+        for arg in arguments {
+          arg.pretty_print_internal(indent + 2);
+        }
       },
     }
   }
@@ -179,6 +205,18 @@ impl Expr {
           ],
         )
       },
+      Expr::Call {
+        callee,
+        paren: _,
+        arguments,
+      } => {
+        let mut children: Vec<&Expr> = Vec::new();
+        children.push(callee.as_ref());
+        for arg in arguments {
+          children.push(arg);
+        }
+        ("(call)".to_string(), children)
+      },
     };
 
     // Add the current node to the output
@@ -224,6 +262,7 @@ impl Expr {
         then_branch,
         else_branch,
       } => format!("🔀 ({} ? {} : {})", condition, then_branch, else_branch),
+      Expr::Call { .. } => "📞 call".to_string(),
     };
 
     println!("{}{}{}", prefix, if is_tail { "└─ " } else { "├─ " }, label);
@@ -248,6 +287,15 @@ impl Expr {
         then_branch.as_ref(),
         else_branch.as_ref(),
       ],
+      Expr::Call {
+        callee, arguments, ..
+      } => {
+        let mut nodes = vec![callee.as_ref()];
+        for arg in arguments {
+          nodes.push(arg);
+        }
+        nodes
+      },
     };
 
     for (i, child) in children.iter().enumerate() {

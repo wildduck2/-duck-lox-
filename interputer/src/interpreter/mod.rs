@@ -1,4 +1,8 @@
-use std::{cell::RefCell, fmt, rc::Rc};
+use std::{
+  cell::RefCell,
+  fmt::{self, write},
+  rc::Rc,
+};
 
 use diagnostic::{
   diagnostic::{Diagnostic, Label},
@@ -135,7 +139,7 @@ impl Interpreter {
     }
   }
 
-  fn eval_block(
+  pub fn eval_block(
     &mut self,
     block: Box<Vec<Stmt>>,
     env: &mut Rc<RefCell<Env>>,
@@ -205,8 +209,56 @@ impl Interpreter {
         else_branch,
       } => self.eval_ternary(env, *condition, *then_branch, *else_branch, engine),
       Expr::Assign { name, value } => self.eval_assign(name, *value, env, engine),
-      Expr::Identifier(token) => self.eval_identifier(token, env, engine), // _ => Ok((LoxValue::Nil, None)),
+      Expr::Identifier(token) => self.eval_identifier(token, env, engine),
+      Expr::Call {
+        callee,
+        paren,
+        arguments,
+      } => self.eval_call(env, *callee, paren, arguments, engine),
     }
+  }
+
+  fn eval_call(
+    &mut self,
+    env: &mut Rc<RefCell<Env>>,
+    callee: Expr,
+    paren: Token,
+    arguments: Vec<Expr>,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<(LoxValue, Option<Token>), ()> {
+    let args_val = self.eval_args(env, arguments, engine)?;
+    let (callee_val, _) = self.eval_expr(callee, env, engine)?;
+
+    match callee_val {
+      // LoxValue::Function(fnc) => {
+      //   if args_val.len() != fnc.arity() {
+      //     return Err(());
+      //   }
+      //
+      //   // let result = fnc.call(self, args_val, engine)?;
+      //   // return Ok((result, Some(paren)));
+      // },
+      // LoxValue::NativeFunction(fnc) => {
+      //   // let result = fnc.call(self, args_val, engine)?;
+      //   // return Ok((result, Some(paren)));
+      // },
+      _ => Err(()),
+    }
+  }
+
+  fn eval_args(
+    &mut self,
+    env: &mut Rc<RefCell<Env>>,
+    arguments: Vec<Expr>,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Vec<(LoxValue, Option<Token>)>, ()> {
+    let mut args_val = vec![];
+    for arg in arguments {
+      let arg_val = self.eval_expr(arg, env, engine)?;
+      args_val.push(arg_val);
+    }
+
+    Ok(args_val)
   }
 
   fn eval_identifier(
@@ -218,7 +270,7 @@ impl Interpreter {
     match env.borrow().get(&token.lexeme) {
       Some(v) => Ok((v.clone(), Some(token))),
       None => {
-        // token.position.0 += 1;
+        token.position.0 += 1;
         token.position.1 -= 1;
         let diagnostic = Diagnostic::new(
           DiagnosticCode::UndeclaredVariable,
@@ -290,18 +342,19 @@ impl Interpreter {
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
     match operator.lexeme.as_str() {
-      "*" | "/" | "-" => self.eval_arithmetic(env, operator, lhs, rhs, engine),
+      "%" | "*" | "/" | "-" => self.eval_arithmetic(env, operator, lhs, rhs, engine),
       "+" => self.eval_addition(env, operator, lhs, rhs, engine),
       "==" | "!=" => self.eval_equality(env, operator, lhs, rhs, engine),
       ">" | ">=" | "<" | "<=" => self.eval_comparison(env, operator, lhs, rhs, engine),
       "||" | "&&" => self.eval_logical(env, operator, lhs, rhs, engine),
+      "," => Err(()),
       _ => self.emit_error(
         engine,
         DiagnosticCode::InvalidOperator,
         &format!("Unknown binary operator '{}'", operator.lexeme),
         &operator,
         "This operator is not supported",
-        Some("Valid operators are: +, -, *, /, ==, !=, <, <=, >, >="),
+        Some("Valid operators are: +, -, %, *, /, ==, !=, <, <=, >, >="),
       ),
     }
   }
@@ -353,6 +406,7 @@ impl Interpreter {
     match (&lhs_val, &rhs_val) {
       (LoxValue::Number(a), LoxValue::Number(b)) => {
         let result = match operator.lexeme.as_str() {
+          "%" => a % b,
           "*" => a * b,
           "/" => {
             if *b == 0.0 {
@@ -512,12 +566,7 @@ impl Interpreter {
 
     match operator.lexeme.as_str() {
       "!" => {
-        let is_truthy = match &rhs_val {
-          LoxValue::Bool(b) => *b,
-          LoxValue::Nil => false,
-          LoxValue::Number(n) => *n != 0.0,
-          LoxValue::String(s) => !s.is_empty(),
-        };
+        let is_truthy = self.is_truthy(&rhs_val);
         Ok((LoxValue::Bool(!is_truthy), Some(operator)))
       },
       "-" => match rhs_val {
@@ -581,6 +630,8 @@ impl Interpreter {
       LoxValue::Number(_) => "number",
       LoxValue::String(_) => "string",
       LoxValue::Bool(_) => "boolean",
+      LoxValue::Function(_) => "function",
+      LoxValue::NativeFunction(_) => "native function",
     }
   }
 
@@ -674,16 +725,33 @@ impl Interpreter {
       LoxValue::Nil => false,
       LoxValue::Number(n) => *n != 0.0,
       LoxValue::String(s) => !s.is_empty(),
+      LoxValue::Function(_) => false,
+      LoxValue::NativeFunction(_) => false,
     };
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum LoxValue {
   Nil,
   Number(f64),
   String(String),
   Bool(bool),
+  Function(Rc<LoxFunction>),
+  NativeFunction(Rc<dyn LoxCallable + Send + Sync>),
+}
+
+impl fmt::Debug for LoxValue {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match self {
+      LoxValue::Nil => write!(f, "Nil"),
+      LoxValue::Number(n) => write!(f, "Number({n})"),
+      LoxValue::String(s) => write!(f, "String({s:?})"),
+      LoxValue::Bool(b) => write!(f, "Bool({b})"),
+      LoxValue::Function(_) => write!(f, "Function(<fn>)"),
+      LoxValue::NativeFunction(_) => write!(f, "NativeFunction(<native>)"),
+    }
+  }
 }
 
 impl fmt::Display for LoxValue {
@@ -693,6 +761,55 @@ impl fmt::Display for LoxValue {
       LoxValue::Number(n) => write!(f, "{n}"),
       LoxValue::Bool(b) => write!(f, "{b}"),
       LoxValue::Nil => write!(f, "nil"),
+      LoxValue::Function(_) => write!(f, "<function>"),
+      LoxValue::NativeFunction(_) => write!(f, "<native function>"),
+    }
+  }
+}
+
+pub trait LoxCallable {
+  fn arity(&self) -> usize;
+  fn call(
+    &self,
+    interpreter: &mut Interpreter,
+    arguments: Vec<(LoxValue, Option<Token>)>,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<LoxValue, ()>;
+}
+
+#[derive(Debug, Clone)]
+pub struct LoxFunction {
+  params: Vec<(LoxValue, Option<Token>)>,
+  body: Vec<Stmt>,
+}
+
+impl LoxCallable for LoxFunction {
+  fn arity(&self) -> usize {
+    self.params.len()
+  }
+  fn call(
+    &self,
+    interpreter: &mut Interpreter,
+    arguments: Vec<(LoxValue, Option<Token>)>,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<LoxValue, ()> {
+    let mut enclosing_env = Rc::new(RefCell::new(
+      interpreter
+        .env
+        .borrow_mut()
+        .with_enclosing(Rc::clone(&interpreter.env)),
+    ));
+
+    // Defining the args in the function scope to be used
+    for (arg_val, token) in arguments {
+      enclosing_env
+        .borrow_mut()
+        .define(token.unwrap().lexeme, arg_val.clone());
+    }
+
+    match interpreter.eval_block(Box::new(self.body.clone()), &mut enclosing_env, engine) {
+      Ok((v, _)) => Ok(v),
+      Err(e) => Ok(LoxValue::Nil),
     }
   }
 }
