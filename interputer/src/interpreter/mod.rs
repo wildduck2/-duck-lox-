@@ -6,7 +6,7 @@ use std::{
 };
 
 use diagnostic::{
-  diagnostic::{Diagnostic, Label},
+  diagnostic::{Diagnostic, Label, Span},
   diagnostic_code::DiagnosticCode,
   DiagnosticEngine,
 };
@@ -268,11 +268,42 @@ impl Interpreter {
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), ()> {
     let args_val = self.eval_args(env, arguments, engine)?;
-    let (callee_val, _) = self.eval_expr(callee, env, engine)?;
+    let (callee_val, token) = self.eval_expr(callee, env, engine)?;
 
     match callee_val {
       LoxValue::Function(fnc) => {
+        let mut token = token.unwrap();
+        token.position.0 += 1;
+
         if args_val.len() != fnc.arity() {
+          let args_space: usize = args_val
+            .clone()
+            .into_iter()
+            .map(|(_, v)| v.unwrap().lexeme.len())
+            .sum();
+
+          let diagnostic = Diagnostic::new(
+            DiagnosticCode::WrongNumberOfArguments,
+            "Wrong number of arguments".to_string(),
+          )
+          .with_label(Label::primary(
+            token.to_span(),
+            Some(format!(
+              "wrong number of arguments, expected {} arguments but you passed {} arguments",
+              fnc.arity(),
+              args_val.len()
+            )),
+          ))
+          .with_label(Label::secondary(
+            Span {
+              length: (args_space + 2 as usize),
+              column: token.position.1 + 1,
+              ..token.to_span()
+            },
+            Some(format!("expected {} arguments here", fnc.arity())),
+          ));
+          engine.emit(diagnostic);
+
           return Err(());
         }
 

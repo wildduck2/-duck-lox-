@@ -139,7 +139,13 @@ impl Parser {
     };
 
     self.advance(); // consume the "("
-    let params = self.parse_parameters(engine)?;
+    let params = if matches!(self.current_token().token_type, TokenType::RightParen) {
+      vec![]
+    } else {
+      let params = self.parse_parameters(engine)?;
+      params
+    };
+
     self.advance(); // consume the ")"
     let body = self.parse_block_stmt(engine)?;
 
