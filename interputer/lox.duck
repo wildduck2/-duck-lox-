@@ -1,5 +1,8 @@
-fun sayHello (name) {
+var y = fun sayHello (name) {
   print("Hello mr " + name);
 }
 
-sayHello("Ahmed");
+var x = y;
+
+x("wildduck");
+

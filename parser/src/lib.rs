@@ -185,10 +185,28 @@ impl Parser {
       return Ok(Stmt::VarDec(identifier, None));
     } else if matches!(self.current_token().token_type, TokenType::Equal) {
       self.advance(); // consume =
-      let expr = self.parse_expr(engine)?;
 
-      if matches!(self.current_token().token_type, TokenType::SemiColon) {
-        self.advance(); // consume ;
+      let mut is_function = false;
+      let expr;
+
+      if matches!(self.current_token().token_type, TokenType::Fun) {
+        is_function = true;
+        let fun = self.parse_fun_stmt(engine)?;
+
+        if let Stmt::Fun(name, _, _) = &fun {
+          expr = name.clone();
+        } else {
+          return Err(());
+        }
+        self.ast.push(fun);
+      } else {
+        expr = self.parse_expr(engine)?;
+      }
+
+      if matches!(self.current_token().token_type, TokenType::SemiColon) || is_function {
+        if !is_function {
+          self.advance(); // consume ;
+        }
         return Ok(Stmt::VarDec(identifier, Some(expr)));
       } else {
         // Missing semicolon diagnostic
