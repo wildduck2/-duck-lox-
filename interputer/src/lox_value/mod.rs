@@ -1,5 +1,10 @@
 use std::{fmt, sync::Arc};
 
+pub enum InterpreterError {
+  Return(LoxValue), // This carries the return value
+  RuntimeError,     // For actual errors
+}
+
 use crate::function::{normal::LoxFunction, LoxCallable};
 
 #[derive(Clone)]

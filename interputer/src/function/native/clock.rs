@@ -3,7 +3,11 @@ use std::{
   time::{SystemTime, UNIX_EPOCH},
 };
 
-use crate::{function::LoxCallable, interpreter::Interpreter, lox_value::LoxValue};
+use crate::{
+  function::LoxCallable,
+  interpreter::Interpreter,
+  lox_value::{InterpreterError, LoxValue},
+};
 
 /// Clock native function
 pub struct ClockFunction;
@@ -27,7 +31,7 @@ impl LoxCallable for ClockFunction {
     _interpreter: &mut crate::interpreter::Interpreter,
     _arguments: Vec<(crate::lox_value::LoxValue, Option<scanner::token::Token>)>,
     _engine: &mut diagnostic::DiagnosticEngine,
-  ) -> Result<crate::lox_value::LoxValue, ()> {
+  ) -> Result<crate::lox_value::LoxValue, InterpreterError> {
     let now = SystemTime::now()
       .duration_since(UNIX_EPOCH)
       .unwrap()

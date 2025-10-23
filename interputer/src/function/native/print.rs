@@ -1,6 +1,10 @@
 use std::sync::Arc;
 
-use crate::{function::LoxCallable, interpreter::Interpreter, lox_value::LoxValue};
+use crate::{
+  function::LoxCallable,
+  interpreter::Interpreter,
+  lox_value::{InterpreterError, LoxValue},
+};
 
 /// Print native function
 pub struct PrintFunction;
@@ -24,7 +28,7 @@ impl LoxCallable for PrintFunction {
     _interpreter: &mut crate::interpreter::Interpreter,
     arguments: Vec<(crate::lox_value::LoxValue, Option<scanner::token::Token>)>,
     _engine: &mut diagnostic::DiagnosticEngine,
-  ) -> Result<crate::lox_value::LoxValue, ()> {
+  ) -> Result<crate::lox_value::LoxValue, InterpreterError> {
     // Map each (LoxValue, _) to string using Display
     let output = arguments
       .iter()

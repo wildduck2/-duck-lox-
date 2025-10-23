@@ -11,6 +11,7 @@ pub enum Stmt {
   If(Box<Expr>, Box<Stmt>, Option<Box<Stmt>>),
   While(Box<Expr>, Box<Stmt>),
   Fun(Expr, Vec<Expr>, Box<Stmt>),
+  Return(Token, Option<Expr>),
 }
 
 impl fmt::Display for Stmt {
@@ -59,6 +60,12 @@ impl fmt::Display for Stmt {
           write!(f, "{}", param)?;
         }
         write!(f, "], {})", body)
+      },
+      Stmt::Return(token, Some(value)) => {
+        write!(f, "Return({}, {})", token.lexeme, value)
+      },
+      Stmt::Return(token, None) => {
+        write!(f, "Return({})", token.lexeme)
       },
     }
   }
@@ -117,6 +124,12 @@ impl Stmt {
         println!("{}Fun({}, [{}])", padding, name, params_str);
         body.pretty_print_internal(indent + 2);
       },
+      Stmt::Return(token, None) => {
+        println!("{}Return({})", padding, token.lexeme);
+      },
+      Stmt::Return(token, Some(value)) => {
+        println!("{}Return({}, {})", padding, token.lexeme, value);
+      },
     }
   }
 
@@ -146,6 +159,7 @@ impl Stmt {
 
         format!("Fun({}, [{}])", name, args)
       },
+      Stmt::Return(_, _) => "ReturnStmt".to_string(),
     };
 
     lines.push(format!("{}{}{}", prefix, connector, label));
@@ -180,6 +194,12 @@ impl Stmt {
       },
       Stmt::Fun(_, _, body) => {
         body.build_tree(lines, &new_prefix, &new_prefix, true);
+      },
+      Stmt::Return(_, None) => {
+        lines.push(format!("{}└── <nil>", new_prefix));
+      },
+      Stmt::Return(_, Some(value)) => {
+        value.build_tree(lines, &new_prefix, &new_prefix, true);
       },
     }
   }

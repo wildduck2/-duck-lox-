@@ -117,7 +117,7 @@ impl Runner {
     }
 
     // println!("ToLongVector(value...) {:#?}", scanner.tokens);
-    println!("ToLongVector(value...)");
+    println!("ToLongVector(value..)");
     println!("\n============= SCANNED ===============\n");
 
     // Parse the tokens
@@ -129,6 +129,8 @@ impl Runner {
       engine.print_all(&source);
       return;
     }
+
+    println!("ToLongTree(value..)");
     println!("\n============== PARSED ===============\n");
 
     let mut interputer = Interpreter::new();

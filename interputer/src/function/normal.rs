@@ -4,7 +4,11 @@ use diagnostic::DiagnosticEngine;
 use parser::stmt::Stmt;
 use scanner::token::Token;
 
-use crate::{function::LoxCallable, interpreter::Interpreter, lox_value::LoxValue};
+use crate::{
+  function::LoxCallable,
+  interpreter::Interpreter,
+  lox_value::{InterpreterError, LoxValue},
+};
 
 #[derive(Debug, Clone)]
 pub struct LoxFunction {
@@ -22,7 +26,7 @@ impl LoxCallable for LoxFunction {
     interpreter: &mut Interpreter,
     arguments: Vec<(LoxValue, Option<Token>)>,
     engine: &mut DiagnosticEngine,
-  ) -> Result<LoxValue, ()> {
+  ) -> Result<LoxValue, InterpreterError> {
     let mut enclosing_env = Rc::new(RefCell::new(
       interpreter
         .env
@@ -39,7 +43,10 @@ impl LoxCallable for LoxFunction {
 
     match interpreter.eval_block(Box::new(self.body.clone()), &mut enclosing_env, engine) {
       Ok((v, _)) => Ok(v),
-      Err(e) => Ok(LoxValue::Nil),
+      Err(e) => match e {
+        InterpreterError::Return(v) => Ok(v),
+        _ => Ok(LoxValue::Nil),
+      },
     }
   }
 }

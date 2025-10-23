@@ -1,9 +1,4 @@
-use std::{
-  cell::RefCell,
-  fmt::{self, write},
-  rc::Rc,
-  sync::Arc,
-};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use diagnostic::{
   diagnostic::{Diagnostic, Label, Span},
@@ -20,7 +15,7 @@ use crate::{
     normal::LoxFunction,
     LoxCallable,
   },
-  lox_value::LoxValue,
+  lox_value::{InterpreterError, LoxValue},
 };
 
 #[derive(Debug, Clone)]
@@ -52,7 +47,7 @@ impl Interpreter {
     stmt: Stmt,
     env: &mut Rc<RefCell<Env>>,
     engine: &mut DiagnosticEngine,
-  ) -> Result<(), ()> {
+  ) -> Result<(), InterpreterError> {
     match stmt {
       Stmt::Expr(expr) => {
         self.eval_expr(expr, env, engine)?;
@@ -87,6 +82,35 @@ impl Interpreter {
         self.eval_fn(env, name, params, *body, engine)?;
         return Ok(());
       },
+      Stmt::Return(name, _) => {
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::ReturnNotInFunction,
+          "Return statement is not allowed in top-level code".to_string(),
+        )
+        .with_label(Label::primary(
+          name.to_span(),
+          Some("return statement here".to_string()),
+        ));
+
+        engine.emit(diagnostic);
+        return Ok(());
+      },
+    }
+  }
+
+  fn eval_return(
+    &mut self,
+    env: &mut Rc<RefCell<Env>>,
+    _name: Token,
+    value: Option<Expr>,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
+    match value {
+      Some(expr) => {
+        let (expr_value, _) = self.eval_expr(expr, env, engine)?;
+        Err(InterpreterError::Return(expr_value))
+      },
+      None => Err(InterpreterError::Return(LoxValue::Nil)),
     }
   }
 
@@ -96,13 +120,13 @@ impl Interpreter {
     name: Expr,
     params: Vec<Expr>,
     body: Stmt,
-    engine: &mut DiagnosticEngine,
-  ) -> Result<(LoxValue, Option<Token>), ()> {
+    _engine: &mut DiagnosticEngine,
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     let name = match name {
       Expr::Identifier(token) => token.lexeme.clone(),
       _ => {
         eprintln!("Function name must be an identifier");
-        return Err(());
+        return Err(InterpreterError::RuntimeError);
       },
     };
 
@@ -110,7 +134,7 @@ impl Interpreter {
       .into_iter()
       .map(|expr| match expr {
         Expr::Identifier(token) => Ok(token),
-        _ => Err(()),
+        _ => Err(InterpreterError::RuntimeError),
       })
       .collect::<Result<Vec<_>, _>>()?;
 
@@ -135,7 +159,7 @@ impl Interpreter {
     condition: Expr,
     stmt: Stmt,
     engine: &mut DiagnosticEngine,
-  ) -> Result<(LoxValue, Option<Token>), ()> {
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     loop {
       let (condition_val, _) = self.eval_expr(condition.clone(), env, engine)?;
 
@@ -156,7 +180,7 @@ impl Interpreter {
     then_branch: Stmt,
     else_branch: Option<Box<Stmt>>,
     engine: &mut DiagnosticEngine,
-  ) -> Result<(), ()> {
+  ) -> Result<(), InterpreterError> {
     let (expr_val, token) = self.eval_expr(condition, env, engine)?;
 
     match expr_val {
@@ -176,9 +200,9 @@ impl Interpreter {
           &token.unwrap(),
           None,
           "If condition must be a boolean",
-          &format!("Expected boolean, found {}", Self::type_name(&expr_val)),
+          &format!("Expected boolean, found {}", &expr_val.to_string()),
         )?;
-        Err(())
+        Err(InterpreterError::RuntimeError)
       },
     }
   }
@@ -188,7 +212,7 @@ impl Interpreter {
     block: Box<Vec<Stmt>>,
     env: &mut Rc<RefCell<Env>>,
     engine: &mut DiagnosticEngine,
-  ) -> Result<(LoxValue, Option<Token>), ()> {
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     let mut enclosing_env = Rc::new(RefCell::new(
       env.borrow_mut().with_enclosing(Rc::clone(env)),
     ));
@@ -226,7 +250,12 @@ impl Interpreter {
         Stmt::While(condition, stmt) => {
           self.eval_while(&mut enclosing_env, *condition, *stmt, engine)?;
         },
-        Stmt::Fun(name, params, body) => {},
+        Stmt::Fun(name, params, body) => {
+          self.eval_fn(&mut enclosing_env, name, params, *body, engine)?;
+        },
+        Stmt::Return(name, value) => {
+          self.eval_return(env, name, value, engine)?;
+        },
       }
     }
 
@@ -238,7 +267,7 @@ impl Interpreter {
     expr: Expr,
     env: &mut Rc<RefCell<Env>>,
     engine: &mut DiagnosticEngine,
-  ) -> Result<(LoxValue, Option<Token>), ()> {
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     match expr {
       Expr::Literal(token) => self.eval_literal(token, engine),
       Expr::Grouping(expr) => self.eval_grouping(env, *expr, engine),
@@ -255,7 +284,11 @@ impl Interpreter {
         callee,
         paren,
         arguments,
-      } => self.eval_call(env, *callee, paren, arguments, engine),
+      } => match self.eval_call(env, *callee, paren, arguments, engine) {
+        Ok(v) => Ok(v),
+        Err(InterpreterError::Return(v)) => Ok((v, None)),
+        _ => Err(InterpreterError::RuntimeError),
+      },
     }
   }
 
@@ -266,7 +299,7 @@ impl Interpreter {
     paren: Token,
     arguments: Vec<Expr>,
     engine: &mut DiagnosticEngine,
-  ) -> Result<(LoxValue, Option<Token>), ()> {
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     let args_val = self.eval_args(env, arguments, engine)?;
     let (callee_val, token) = self.eval_expr(callee, env, engine)?;
 
@@ -304,7 +337,7 @@ impl Interpreter {
           ));
           engine.emit(diagnostic);
 
-          return Err(());
+          return Err(InterpreterError::RuntimeError);
         }
 
         let result = fnc.call(self, args_val, engine)?;
@@ -312,13 +345,13 @@ impl Interpreter {
       },
       LoxValue::NativeFunction(fnc) => {
         if fnc.arity() != usize::MAX && args_val.len() != fnc.arity() {
-          return Err(());
+          return Err(InterpreterError::RuntimeError);
         }
 
         let result = fnc.call(self, args_val, engine)?;
         return Ok((result, Some(paren)));
       },
-      _ => Err(()),
+      _ => Err(InterpreterError::RuntimeError),
     }
   }
 
@@ -327,7 +360,7 @@ impl Interpreter {
     env: &mut Rc<RefCell<Env>>,
     arguments: Vec<Expr>,
     engine: &mut DiagnosticEngine,
-  ) -> Result<Vec<(LoxValue, Option<Token>)>, ()> {
+  ) -> Result<Vec<(LoxValue, Option<Token>)>, InterpreterError> {
     let mut args_val = vec![];
     for arg in arguments {
       let arg_val = self.eval_expr(arg, env, engine)?;
@@ -342,7 +375,7 @@ impl Interpreter {
     mut token: Token,
     env: &mut Rc<RefCell<Env>>,
     engine: &mut DiagnosticEngine,
-  ) -> Result<(LoxValue, Option<Token>), ()> {
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     match env.borrow().get(&token.lexeme) {
       Some(v) => Ok((v.clone(), Some(token))),
       None => {
@@ -359,7 +392,7 @@ impl Interpreter {
         .with_help("Use 'var' to declare variables before assigning to them".to_string());
 
         engine.emit(diagnostic);
-        Err(())
+        Err(InterpreterError::RuntimeError)
       },
     }
   }
@@ -370,7 +403,7 @@ impl Interpreter {
     value: Expr,
     env: &mut Rc<RefCell<Env>>,
     engine: &mut DiagnosticEngine,
-  ) -> Result<(LoxValue, Option<Token>), ()> {
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     let (value, token) = self.eval_expr(value, env, engine)?;
     if !env.borrow_mut().assign(&name.lexeme, value.clone()) {
       name.position.0 += 1;
@@ -386,7 +419,7 @@ impl Interpreter {
       .with_help("Use 'var' to declare variables before assigning to them".to_string());
 
       engine.emit(diagnostic);
-      return Err(());
+      return Err(InterpreterError::RuntimeError);
     }
 
     Ok((value, token))
@@ -399,7 +432,7 @@ impl Interpreter {
     then_branch: Expr,
     else_branch: Expr,
     engine: &mut DiagnosticEngine,
-  ) -> Result<(LoxValue, Option<Token>), ()> {
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     let (condition_val, _) = self.eval_expr(condition, env, engine)?;
 
     if self.is_truthy(&condition_val) {
@@ -416,14 +449,14 @@ impl Interpreter {
     operator: Token,
     rhs: Expr,
     engine: &mut DiagnosticEngine,
-  ) -> Result<(LoxValue, Option<Token>), ()> {
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     match operator.lexeme.as_str() {
       "%" | "*" | "/" | "-" => self.eval_arithmetic(env, operator, lhs, rhs, engine),
       "+" => self.eval_addition(env, operator, lhs, rhs, engine),
       "==" | "!=" => self.eval_equality(env, operator, lhs, rhs, engine),
       ">" | ">=" | "<" | "<=" => self.eval_comparison(env, operator, lhs, rhs, engine),
       "||" | "&&" => self.eval_logical(env, operator, lhs, rhs, engine),
-      "," => Err(()),
+      "," => Err(InterpreterError::RuntimeError),
       _ => self.emit_error(
         engine,
         DiagnosticCode::InvalidOperator,
@@ -442,7 +475,7 @@ impl Interpreter {
     lhs: Expr,
     rhs: Expr,
     engine: &mut DiagnosticEngine,
-  ) -> Result<(LoxValue, Option<Token>), ()> {
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     let (lhs_val, lhs_token) = self.eval_expr(lhs, env, engine)?;
 
     let is_truthy = self.is_truthy(&lhs_val);
@@ -464,7 +497,7 @@ impl Interpreter {
           self.eval_expr(rhs, env, engine)
         }
       },
-      _ => Err(()),
+      _ => Err(InterpreterError::RuntimeError),
     }
   }
 
@@ -475,7 +508,7 @@ impl Interpreter {
     lhs: Expr,
     rhs: Expr,
     engine: &mut DiagnosticEngine,
-  ) -> Result<(LoxValue, Option<Token>), ()> {
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     let (lhs_val, lhs_token) = self.eval_expr(lhs, env, engine)?;
     let (rhs_val, rhs_token) = self.eval_expr(rhs, env, engine)?;
 
@@ -516,7 +549,7 @@ impl Interpreter {
           &operator,
           bad_token.as_ref(),
           &format!("Arithmetic operations require numeric operands"),
-          &format!("Expected number, found {}", Self::type_name(&bad_value)),
+          &format!("Expected number, found {}", &bad_value.to_string()),
         )
       },
       (lhs, rhs) => self.emit_error(
@@ -524,15 +557,15 @@ impl Interpreter {
         DiagnosticCode::InvalidOperator,
         &format!(
           "Cannot perform arithmetic on {} and {}",
-          Self::type_name(&lhs),
-          Self::type_name(&rhs)
+          &lhs.to_string(),
+          &rhs.to_string()
         ),
         &operator,
         "Both operands must be numbers",
         Some(&format!(
           "Left operand is {}, right operand is {}",
-          Self::type_name(&lhs),
-          Self::type_name(&rhs)
+          &lhs.to_string(),
+          &rhs.to_string()
         )),
       ),
     }
@@ -545,7 +578,7 @@ impl Interpreter {
     lhs: Expr,
     rhs: Expr,
     engine: &mut DiagnosticEngine,
-  ) -> Result<(LoxValue, Option<Token>), ()> {
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     let (lhs_val, _) = self.eval_expr(lhs, env, engine)?;
     let (rhs_val, _) = self.eval_expr(rhs, env, engine)?;
 
@@ -563,11 +596,7 @@ impl Interpreter {
       (lhs, rhs) => self.emit_error(
         engine,
         DiagnosticCode::InvalidOperator,
-        &format!(
-          "Cannot add {} and {}",
-          Self::type_name(&lhs),
-          Self::type_name(&rhs)
-        ),
+        &format!("Cannot add {} and {}", &lhs.to_string(), &rhs.to_string()),
         &operator,
         "Operands must be two numbers or at least one string",
         Some(&format!("Try converting both operands to the same type")),
@@ -582,7 +611,7 @@ impl Interpreter {
     lhs: Expr,
     rhs: Expr,
     engine: &mut DiagnosticEngine,
-  ) -> Result<(LoxValue, Option<Token>), ()> {
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     let (lhs_val, _) = self.eval_expr(lhs, env, engine)?;
     let (rhs_val, _) = self.eval_expr(rhs, env, engine)?;
 
@@ -601,7 +630,7 @@ impl Interpreter {
     lhs: Expr,
     rhs: Expr,
     engine: &mut DiagnosticEngine,
-  ) -> Result<(LoxValue, Option<Token>), ()> {
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     let (lhs_val, _) = self.eval_expr(lhs, env, engine)?;
     let (rhs_val, _) = self.eval_expr(rhs, env, engine)?;
 
@@ -621,8 +650,8 @@ impl Interpreter {
         DiagnosticCode::InvalidOperator,
         &format!(
           "Cannot compare {} and {}",
-          Self::type_name(&lhs),
-          Self::type_name(&rhs)
+          &lhs.to_string(),
+          &rhs.to_string()
         ),
         &operator,
         "Comparison operators require numeric operands",
@@ -637,7 +666,7 @@ impl Interpreter {
     operator: Token,
     rhs: Expr,
     engine: &mut DiagnosticEngine,
-  ) -> Result<(LoxValue, Option<Token>), ()> {
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     let (rhs_val, rhs_token) = self.eval_expr(rhs, env, engine)?;
 
     match operator.lexeme.as_str() {
@@ -652,7 +681,7 @@ impl Interpreter {
           &operator,
           rhs_token.as_ref(),
           "Unary minus requires a numeric operand",
-          &format!("Expected number, found {}", Self::type_name(&rhs_val)),
+          &format!("Expected number, found {}", &rhs_val.to_string()),
         ),
       },
       _ => self.emit_error(
@@ -671,7 +700,7 @@ impl Interpreter {
     env: &mut Rc<RefCell<Env>>,
     expr: Expr,
     engine: &mut DiagnosticEngine,
-  ) -> Result<(LoxValue, Option<Token>), ()> {
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     self.eval_expr(expr, env, engine)
   }
 
@@ -679,7 +708,7 @@ impl Interpreter {
     &self,
     token: Token,
     engine: &mut DiagnosticEngine,
-  ) -> Result<(LoxValue, Option<Token>), ()> {
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     match token.literal {
       Literal::Number => match token.lexeme.parse::<f64>() {
         Ok(num) => Ok((LoxValue::Number(num), Some(token))),
@@ -699,18 +728,6 @@ impl Interpreter {
   }
 
   // Helper methods
-
-  fn type_name(value: &LoxValue) -> &'static str {
-    match value {
-      LoxValue::Nil => "nil",
-      LoxValue::Number(_) => "number",
-      LoxValue::String(_) => "string",
-      LoxValue::Bool(_) => "boolean",
-      LoxValue::Function(_) => "function",
-      LoxValue::NativeFunction(_) => "native function",
-    }
-  }
-
   fn is_equal(a: &LoxValue, b: &LoxValue) -> bool {
     match (a, b) {
       (LoxValue::Nil, LoxValue::Nil) => true,
@@ -729,7 +746,7 @@ impl Interpreter {
     token: &Token,
     label_msg: &str,
     help: Option<&str>,
-  ) -> Result<(LoxValue, Option<Token>), ()> {
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     let mut diagnostic = Diagnostic::new(code, message.to_string())
       .with_label(Label::primary(token.to_span(), Some(label_msg.to_string())));
 
@@ -738,7 +755,7 @@ impl Interpreter {
     }
 
     engine.emit(diagnostic);
-    Err(())
+    Err(InterpreterError::RuntimeError)
   }
 
   fn emit_type_error(
@@ -748,7 +765,7 @@ impl Interpreter {
     operand_token: Option<&Token>,
     message: &str,
     label_msg: &str,
-  ) -> Result<(LoxValue, Option<Token>), ()> {
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     let mut diagnostic = Diagnostic::new(DiagnosticCode::TypeError, message.to_string())
       .with_label(Label::primary(
         operator.to_span(),
@@ -763,7 +780,7 @@ impl Interpreter {
     }
 
     engine.emit(diagnostic);
-    Err(())
+    Err(InterpreterError::RuntimeError)
   }
 
   fn emit_error_with_note(
@@ -776,7 +793,7 @@ impl Interpreter {
     help: &str,
     note_token: Option<&Token>,
     note_label: &str,
-  ) -> Result<(LoxValue, Option<Token>), ()> {
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     let mut diagnostic = Diagnostic::new(code, message.to_string())
       .with_label(Label::primary(
         primary_token.to_span(),
@@ -792,7 +809,7 @@ impl Interpreter {
     }
 
     engine.emit(diagnostic);
-    Err(())
+    Err(InterpreterError::RuntimeError)
   }
 
   fn is_truthy(&self, val: &LoxValue) -> bool {

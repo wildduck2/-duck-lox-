@@ -17,9 +17,13 @@
 * stmt           → expr_stmt
 *                | for_stmt
 *                | if_stmt
+*                | return_stmt
 *                | print_stmt
 *                | while_stmt
 *                | block ;
+*
+* return_stmt    → "return" expr? ";" ;
+*
 *
 * for_stmt       → "for" "(" ( varDec | expr_stmt | ";" ) expr? ";" expr? ")" stmt ;
 *
@@ -103,7 +107,7 @@ impl Parser {
     while !self.is_eof() {
       match self.parse_program(engine) {
         Ok(stmt) => {
-          stmt.print_tree();
+          // stmt.print_tree();
           self.ast.push(stmt);
         },
         Err(_) => self.synchronize(),
@@ -234,9 +238,37 @@ impl Parser {
       TokenType::For => self.parse_for_stmt(engine),
       TokenType::If => self.parse_if_stmt(engine),
       TokenType::LeftBrace => self.parse_block_stmt(engine),
+      TokenType::Return => self.parse_return_stmt(engine),
       TokenType::While => self.parse_while_stmt(engine),
       _ => self.parse_expr_stmt(engine),
     }
+  }
+  fn parse_return_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    let token = self.current_token();
+    self.expect(TokenType::Return, engine)?;
+
+    if matches!(self.current_token().token_type, TokenType::SemiColon) {
+      return Ok(Stmt::Return(self.current_token(), None));
+    }
+
+    let value = self.parse_expr(engine)?;
+
+    if !matches!(self.current_token().token_type, TokenType::SemiColon) {
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::MissingSemicolon,
+        "Expected ';' after return value".to_string(),
+      )
+      .with_label(Label::primary(
+        self.current_token().to_span(),
+        Some("semicolon missing here".to_string()),
+      ));
+
+      engine.emit(diagnostic);
+      return Err(());
+    }
+
+    self.advance();
+    Ok(Stmt::Return(token, Some(value)))
   }
 
   fn parse_var_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
@@ -269,7 +301,6 @@ impl Parser {
     }
 
     let identifier = self.current_token();
-
     self.advance(); // consume the identifier
 
     if matches!(self.current_token().token_type, TokenType::SemiColon) {
@@ -277,11 +308,17 @@ impl Parser {
       return Ok(Stmt::VarDec(identifier, None));
     } else if matches!(self.current_token().token_type, TokenType::Equal) {
       self.advance(); // consume =
+                      // TODO: parse the caller in the declaration
 
       let mut is_function = false;
       let expr;
 
-      if matches!(self.current_token().token_type, TokenType::Fun) {
+      if matches!(self.current_token().token_type, TokenType::Identifier)
+        && self.tokens[self.current + 1].token_type == TokenType::LeftParen
+      {
+        let callee = self.parse_call(engine)?;
+        expr = callee;
+      } else if matches!(self.current_token().token_type, TokenType::Fun) {
         is_function = true;
         let fun = self.parse_fun_stmt(engine)?;
 
