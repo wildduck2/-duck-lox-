@@ -2,6 +2,7 @@ use std::{
   cell::RefCell,
   fmt::{self, write},
   rc::Rc,
+  sync::Arc,
 };
 
 use diagnostic::{
@@ -12,7 +13,15 @@ use diagnostic::{
 use parser::{expr::Expr, stmt::Stmt};
 use scanner::token::{types::Literal, Token};
 
-use crate::env::Env;
+use crate::{
+  env::Env,
+  function::{
+    native::{clock::ClockFunction, print::PrintFunction},
+    normal::LoxFunction,
+    LoxCallable,
+  },
+  lox_value::LoxValue,
+};
 
 #[derive(Debug, Clone)]
 pub struct Interpreter {
@@ -27,6 +36,10 @@ impl Interpreter {
   }
 
   pub fn run(&mut self, ast: Vec<Stmt>, engine: &mut DiagnosticEngine) {
+    PrintFunction::add(self);
+    ClockFunction::add(self);
+    // println!("{:#?}", ast);
+
     let mut env = self.env.clone();
     for stmt in ast {
       let _ = self.eval_stmt(stmt, &mut env, engine);
@@ -41,18 +54,6 @@ impl Interpreter {
     engine: &mut DiagnosticEngine,
   ) -> Result<(), ()> {
     match stmt {
-      Stmt::Print(expr) => {
-        match self.eval_expr(expr, env, engine) {
-          Ok(x) => {
-            println!("{}", x.0);
-            return Ok(());
-          },
-          Err(_) => {
-            // Error occurred, stop evaluation
-            return Ok(());
-          },
-        };
-      },
       Stmt::Expr(expr) => {
         self.eval_expr(expr, env, engine)?;
         return Ok(());
@@ -82,7 +83,50 @@ impl Interpreter {
         self.eval_while(env, *condition, *stmt, engine)?;
         return Ok(());
       },
+      Stmt::Fun(name, params, body) => {
+        self.eval_fn(env, name, params, *body, engine)?;
+        return Ok(());
+      },
     }
+  }
+
+  fn eval_fn(
+    &mut self,
+    env: &mut Rc<RefCell<Env>>,
+    name: Expr,
+    params: Vec<Expr>,
+    body: Stmt,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<(LoxValue, Option<Token>), ()> {
+    let name = match name {
+      Expr::Identifier(token) => token.lexeme.clone(),
+      _ => {
+        eprintln!("Function name must be an identifier");
+        return Err(());
+      },
+    };
+
+    let params_names = params
+      .into_iter()
+      .map(|expr| match expr {
+        Expr::Identifier(token) => Ok(token),
+        _ => Err(()),
+      })
+      .collect::<Result<Vec<_>, _>>()?;
+
+    match body {
+      Stmt::Block(body) => {
+        let function = Arc::new(LoxFunction {
+          params: params_names,
+          body: *body,
+        });
+
+        env.borrow_mut().define(name, LoxValue::Function(function));
+      },
+      _ => {},
+    };
+
+    Ok((LoxValue::Nil, None))
   }
 
   fn eval_while(
@@ -167,10 +211,6 @@ impl Interpreter {
         Stmt::Expr(expr) => {
           self.eval_expr(expr, &mut enclosing_env, engine)?;
         },
-        Stmt::Print(expr) => {
-          let (value, _) = self.eval_expr(expr, &mut enclosing_env, engine)?;
-          println!("{}", value);
-        },
         Stmt::Block(block) => {
           self.eval_block(block, &mut enclosing_env, engine)?;
         },
@@ -186,6 +226,7 @@ impl Interpreter {
         Stmt::While(condition, stmt) => {
           self.eval_while(&mut enclosing_env, *condition, *stmt, engine)?;
         },
+        Stmt::Fun(name, params, body) => {},
       }
     }
 
@@ -230,18 +271,22 @@ impl Interpreter {
     let (callee_val, _) = self.eval_expr(callee, env, engine)?;
 
     match callee_val {
-      // LoxValue::Function(fnc) => {
-      //   if args_val.len() != fnc.arity() {
-      //     return Err(());
-      //   }
-      //
-      //   // let result = fnc.call(self, args_val, engine)?;
-      //   // return Ok((result, Some(paren)));
-      // },
-      // LoxValue::NativeFunction(fnc) => {
-      //   // let result = fnc.call(self, args_val, engine)?;
-      //   // return Ok((result, Some(paren)));
-      // },
+      LoxValue::Function(fnc) => {
+        if args_val.len() != fnc.arity() {
+          return Err(());
+        }
+
+        let result = fnc.call(self, args_val, engine)?;
+        return Ok((result, Some(paren)));
+      },
+      LoxValue::NativeFunction(fnc) => {
+        if fnc.arity() != usize::MAX && args_val.len() != fnc.arity() {
+          return Err(());
+        }
+
+        let result = fnc.call(self, args_val, engine)?;
+        return Ok((result, Some(paren)));
+      },
       _ => Err(()),
     }
   }
@@ -728,88 +773,5 @@ impl Interpreter {
       LoxValue::Function(_) => false,
       LoxValue::NativeFunction(_) => false,
     };
-  }
-}
-
-#[derive(Clone)]
-pub enum LoxValue {
-  Nil,
-  Number(f64),
-  String(String),
-  Bool(bool),
-  Function(Rc<LoxFunction>),
-  NativeFunction(Rc<dyn LoxCallable + Send + Sync>),
-}
-
-impl fmt::Debug for LoxValue {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      LoxValue::Nil => write!(f, "Nil"),
-      LoxValue::Number(n) => write!(f, "Number({n})"),
-      LoxValue::String(s) => write!(f, "String({s:?})"),
-      LoxValue::Bool(b) => write!(f, "Bool({b})"),
-      LoxValue::Function(_) => write!(f, "Function(<fn>)"),
-      LoxValue::NativeFunction(_) => write!(f, "NativeFunction(<native>)"),
-    }
-  }
-}
-
-impl fmt::Display for LoxValue {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      LoxValue::String(s) => write!(f, "{s}"),
-      LoxValue::Number(n) => write!(f, "{n}"),
-      LoxValue::Bool(b) => write!(f, "{b}"),
-      LoxValue::Nil => write!(f, "nil"),
-      LoxValue::Function(_) => write!(f, "<function>"),
-      LoxValue::NativeFunction(_) => write!(f, "<native function>"),
-    }
-  }
-}
-
-pub trait LoxCallable {
-  fn arity(&self) -> usize;
-  fn call(
-    &self,
-    interpreter: &mut Interpreter,
-    arguments: Vec<(LoxValue, Option<Token>)>,
-    engine: &mut DiagnosticEngine,
-  ) -> Result<LoxValue, ()>;
-}
-
-#[derive(Debug, Clone)]
-pub struct LoxFunction {
-  params: Vec<(LoxValue, Option<Token>)>,
-  body: Vec<Stmt>,
-}
-
-impl LoxCallable for LoxFunction {
-  fn arity(&self) -> usize {
-    self.params.len()
-  }
-  fn call(
-    &self,
-    interpreter: &mut Interpreter,
-    arguments: Vec<(LoxValue, Option<Token>)>,
-    engine: &mut DiagnosticEngine,
-  ) -> Result<LoxValue, ()> {
-    let mut enclosing_env = Rc::new(RefCell::new(
-      interpreter
-        .env
-        .borrow_mut()
-        .with_enclosing(Rc::clone(&interpreter.env)),
-    ));
-
-    // Defining the args in the function scope to be used
-    for (arg_val, token) in arguments {
-      enclosing_env
-        .borrow_mut()
-        .define(token.unwrap().lexeme, arg_val.clone());
-    }
-
-    match interpreter.eval_block(Box::new(self.body.clone()), &mut enclosing_env, engine) {
-      Ok((v, _)) => Ok(v),
-      Err(e) => Ok(LoxValue::Nil),
-    }
   }
 }

@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::interpreter::LoxValue;
+use crate::lox_value::LoxValue;
 
 #[derive(Debug, Clone)]
 pub struct Env {
@@ -48,3 +48,5 @@ impl Env {
     false
   }
 }
+
+pub fn global_functions() {}

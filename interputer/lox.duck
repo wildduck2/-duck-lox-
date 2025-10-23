@@ -1,1 +1,5 @@
-SayHello("wildduck", 2 + 20, true);
+fun sayHello (name) {
+  print("Hello mr " + name);
+}
+
+sayHello("Ahmed");
