@@ -18,9 +18,15 @@
 *                | for_stmt
 *                | if_stmt
 *                | return_stmt
+*                | break_stmt
+*                | continue_stmt
 *                | print_stmt
 *                | while_stmt
 *                | block ;
+*
+* break_stmt     → "break" ";" ;
+*
+* continue_stmt  → "continue" ";" ;
 *
 * return_stmt    → "return" expr? ";" ;
 *
@@ -234,8 +240,9 @@ impl Parser {
 
   fn parse_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     match self.current_token().token_type {
-      // TODO: please add the break and continue statements
       TokenType::For => self.parse_for_stmt(engine),
+      TokenType::Break => self.parse_break_stmt(engine),
+      TokenType::Continue => self.parse_continue_stmt(engine),
       TokenType::If => self.parse_if_stmt(engine),
       TokenType::LeftBrace => self.parse_block_stmt(engine),
       TokenType::Return => self.parse_return_stmt(engine),
@@ -243,6 +250,31 @@ impl Parser {
       _ => self.parse_expr_stmt(engine),
     }
   }
+
+  fn parse_break_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    let token = self.current_token();
+    self.expect(TokenType::Break, engine)?;
+    self.expect(TokenType::SemiColon, engine)?;
+
+    // Ok(Stmt::Block(Box::new(vec![Stmt::Break(
+    //   self.current_token(),
+    // )])))
+
+    Ok(Stmt::Break(token))
+  }
+
+  fn parse_continue_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    let token = self.current_token();
+    self.expect(TokenType::Continue, engine)?;
+    self.expect(TokenType::SemiColon, engine)?;
+
+    // Ok(Stmt::Block(Box::new(vec![Stmt::Continue(
+    //   self.current_token(),
+    // )])))
+
+    Ok(Stmt::Continue(token))
+  }
+
   fn parse_return_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     let token = self.current_token();
     self.expect(TokenType::Return, engine)?;
@@ -458,26 +490,30 @@ impl Parser {
     self.expect(TokenType::LeftParen, engine)?;
     let expr = self.parse_expr(engine)?;
     self.expect(TokenType::RightParen, engine)?;
-    let stmt = self.parse_stmt(engine)?;
 
-    if self.matches_token(TokenType::Else) {
-      self.advance();
+    let stmt = match self.parse_stmt(engine)? {
+      Stmt::Block(block) => Stmt::Block(block),
+      stmt => Stmt::Block(Box::new(vec![stmt])),
+    };
 
-      // Handle else-if chain
-      let else_branch = if self.matches_token(TokenType::If) {
-        self.parse_if_stmt(engine)?
-      } else {
-        self.parse_stmt(engine)?
-      };
-
-      Ok(Stmt::If(
-        Box::new(expr),
-        Box::new(stmt),
-        Some(Box::new(else_branch)),
-      ))
-    } else {
-      Ok(Stmt::If(Box::new(expr), Box::new(stmt), None))
+    if !self.matches_token(TokenType::Else) {
+      return Ok(Stmt::If(Box::new(expr), Box::new(stmt), None));
     }
+
+    self.advance();
+
+    // Handle else-if chain
+    let else_branch = if self.matches_token(TokenType::If) {
+      self.parse_if_stmt(engine)?
+    } else {
+      self.parse_stmt(engine)?
+    };
+
+    Ok(Stmt::If(
+      Box::new(expr),
+      Box::new(stmt),
+      Some(Box::new(else_branch)),
+    ))
   }
 
   fn parse_block_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {

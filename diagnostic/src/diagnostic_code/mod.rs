@@ -22,6 +22,9 @@ pub enum DiagnosticCode {
   MissingSemicolon,
   InvalidAssignmentTarget,
   ExpectedIdentifier,
+
+  ContinueOutsideLoop,
+  BreakOutsideLoop,
   UndeclaredVariable,
   TypeMismatch,
   DuplicateDeclaration,
@@ -62,6 +65,8 @@ impl DiagnosticCode {
       Self::MissingSemicolon => "E0104".to_string(),
       Self::InvalidAssignmentTarget => "E0105".to_string(),
       Self::ExpectedIdentifier => "E0106".to_string(),
+      Self::ContinueOutsideLoop => "E0200".to_string(),
+      Self::BreakOutsideLoop => "E0201".to_string(),
       Self::UndeclaredVariable => "E0200".to_string(),
       Self::TypeMismatch => "E0201".to_string(),
       Self::DuplicateDeclaration => "E0202".to_string(),

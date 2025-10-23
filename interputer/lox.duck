@@ -1,11 +1,11 @@
-fun makeCounter() {
-  var i = 0;
-  fun count() {
-    i = i + 1;
-    print(i);
+for (var x = 1; x <= 3; x = x + 1) {
+  print("Outer loop x = " + x);
+
+
+  if (x == 2) break;
+
+  if (x == 2) {
+    break ;
   }
-  return count;
+
 }
-var counter = makeCounter();
-counter(); // "1".
-counter(); // "2".

@@ -94,6 +94,40 @@ impl Interpreter {
         engine.emit(diagnostic);
         return Ok(());
       },
+      Stmt::Break(token) => {
+        let mut token = token;
+        token.position.0 -= 1;
+        token.position.1 += 7;
+        // At top level, this is an error
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::BreakOutsideLoop,
+          "Break statement outside of loop".to_string(),
+        )
+        .with_label(Label::primary(
+          token.to_span(),
+          Some("break not allowed here".to_string()),
+        ))
+        .with_help("Break statements can only be used inside while loops".to_string());
+
+        engine.emit(diagnostic);
+        Ok(())
+      },
+
+      Stmt::Continue(token) => {
+        // At top level, this is an error
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::ContinueOutsideLoop,
+          "Continue statement outside of loop".to_string(),
+        )
+        .with_label(Label::primary(
+          token.to_span(),
+          Some("continue not allowed here".to_string()),
+        ))
+        .with_help("Continue statements can only be used inside while loops".to_string());
+
+        engine.emit(diagnostic);
+        Ok(())
+      },
     }
   }
 
@@ -168,7 +202,13 @@ impl Interpreter {
         break;
       }
 
-      self.eval_stmt(stmt.clone(), env, engine)?;
+      // Execute the body and handle break/continue
+      match self.eval_stmt(stmt.clone(), env, engine) {
+        Ok(_) => continue,                           // Normal execution, continue loop
+        Err(InterpreterError::Break) => break,       // Break out of loop
+        Err(InterpreterError::Continue) => continue, // Continue to next iteration
+        Err(e) => return Err(e),                     // Propagate other errors (like Return)
+      }
     }
 
     Ok((LoxValue::Nil, None))
@@ -187,13 +227,13 @@ impl Interpreter {
     match expr_val {
       LoxValue::Bool(v) => {
         if v {
-          self.eval_stmt(then_branch, env, engine)
+          self.eval_stmt(then_branch, env, engine)?;
         } else {
-          match else_branch {
-            Some(else_branch) => self.eval_stmt(*else_branch, env, engine),
-            None => Ok(()),
+          if let Some(else_branch) = else_branch {
+            self.eval_stmt(*else_branch, env, engine)?;
           }
         }
+        Ok(())
       },
       _ => {
         self.emit_type_error(
@@ -256,6 +296,12 @@ impl Interpreter {
         },
         Stmt::Return(name, value) => {
           self.eval_return(&mut enclosing_env, name, value, engine)?;
+        },
+        Stmt::Break(token) => {
+          return Err(InterpreterError::Break);
+        },
+        Stmt::Continue(token) => {
+          return Err(InterpreterError::Continue);
         },
       }
     }

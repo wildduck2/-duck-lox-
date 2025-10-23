@@ -12,20 +12,20 @@ pub enum Stmt {
   While(Box<Expr>, Box<Stmt>),
   Fun(Expr, Vec<Expr>, Box<Stmt>),
   Return(Token, Option<Expr>),
+  Break(Token),
+  Continue(Token),
 }
 
 impl fmt::Display for Stmt {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
       Stmt::Expr(expr) => write!(f, "ExprStmt({})", expr),
-
       Stmt::VarDec(name, Some(expr)) => {
         write!(f, "VarDec({}, {})", name.lexeme, expr)
       },
       Stmt::VarDec(name, None) => {
         write!(f, "VarDec({}, <uninitialized>)", name.lexeme)
       },
-
       Stmt::Block(stmts) => {
         write!(f, "BlockStmt([")?;
         for (i, stmt) in stmts.iter().enumerate() {
@@ -66,6 +66,12 @@ impl fmt::Display for Stmt {
       },
       Stmt::Return(token, None) => {
         write!(f, "Return({})", token.lexeme)
+      },
+      Stmt::Break(token) => {
+        write!(f, "Break({})", token.lexeme)
+      },
+      Stmt::Continue(token) => {
+        write!(f, "Continue({})", token.lexeme)
       },
     }
   }
@@ -130,6 +136,12 @@ impl Stmt {
       Stmt::Return(token, Some(value)) => {
         println!("{}Return({}, {})", padding, token.lexeme, value);
       },
+      Stmt::Break(token) => {
+        println!("{}Break({})", padding, token.lexeme);
+      },
+      Stmt::Continue(token) => {
+        println!("{}Continue({})", padding, token.lexeme);
+      },
     }
   }
 
@@ -160,6 +172,8 @@ impl Stmt {
         format!("Fun({}, [{}])", name, args)
       },
       Stmt::Return(_, _) => "ReturnStmt".to_string(),
+      Stmt::Break(_) => "BreakStmt".to_string(),
+      Stmt::Continue(_) => "ContinueStmt".to_string(),
     };
 
     lines.push(format!("{}{}{}", prefix, connector, label));
@@ -200,6 +214,12 @@ impl Stmt {
       },
       Stmt::Return(_, Some(value)) => {
         value.build_tree(lines, &new_prefix, &new_prefix, true);
+      },
+      Stmt::Break(_) => {
+        lines.push(format!("{}└── <nil>", new_prefix));
+      },
+      Stmt::Continue(_) => {
+        lines.push(format!("{}└── <nil>", new_prefix));
       },
     }
   }
