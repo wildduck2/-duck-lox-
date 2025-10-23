@@ -6,7 +6,13 @@
 *                | varDecl
 *                | stmt ;
 *
-* varDecl         → "var" IDENTIFIER ( "=" expr )? ";" ;
+* funDecl        → "fun" function;
+*
+* function       → IDENTIFIER? "(" parameters ")" block;
+*
+* parameters     → IDENTIFIER ( "," IDENTIFIER )* ;
+*
+* varDecl        → "var" IDENTIFIER ( "=" expr )? ";" ;
 *
 * stmt           → expr_stmt
 *                | for_stmt
@@ -126,14 +132,94 @@ impl Parser {
 
   fn parse_fun_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     self.expect(TokenType::Fun, engine)?;
+    let fn_name = if !matches!(self.current_token().token_type, TokenType::LeftParen) {
+      Some(self.parse_primary(engine)?)
+    } else {
+      None
+    };
 
-    let fn_name = self.parse_primary(engine)?;
     self.advance(); // consume the "("
-    let params = self.parse_arguments(engine)?;
+    let params = self.parse_parameters(engine)?;
     self.advance(); // consume the ")"
     let body = self.parse_block_stmt(engine)?;
 
-    Ok(Stmt::Fun(fn_name, params, Box::new(body)))
+    match fn_name {
+      Some(name) => Ok(Stmt::Fun(name, params, Box::new(body))),
+
+      None => {
+        let uuid = uuid::Uuid::now_v7();
+        Ok(Stmt::Fun(
+          Expr::Identifier(Token {
+            token_type: TokenType::Identifier,
+            lexeme: uuid.to_string().split_once('-').unwrap().0.to_string(),
+            literal: Literal::Nil,
+            position: (0, 0),
+          }),
+          params,
+          Box::new(body),
+        ))
+      },
+    }
+  }
+
+  fn parse_parameters(&mut self, engine: &mut DiagnosticEngine) -> Result<Vec<Expr>, ()> {
+    let mut args = vec![];
+
+    fn check_iditifer(expr: &Expr, parser: &mut Parser, engine: &mut DiagnosticEngine) -> bool {
+      let check = matches!(expr, Expr::Identifier(_));
+
+      if !check {
+        let token = parser.tokens[parser.current - 2].clone();
+        let diag = Diagnostic::new(
+          DiagnosticCode::UnexpectedToken,
+          "Unexpected parameter".to_string(),
+        )
+        .with_label(Label::primary(
+          token.to_span(),
+          Some("Unexpected Parameter".to_string()),
+        ));
+
+        engine.emit(diag);
+      }
+
+      check
+    }
+
+    // Parse first argument
+    let expr = self.parse_primary(engine)?;
+    check_iditifer(&expr, self, engine);
+    args.push(expr);
+
+    if args.len() >= 255 {
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::WrongNumberOfArguments,
+        "Too many arguments".to_string(),
+      )
+      .with_label(Label::primary(
+        self.current_token().to_span(),
+        Some("too many arguments".to_string()),
+      ));
+      engine.emit(diagnostic);
+
+      return Err(());
+    }
+
+    // Parse remaining arguments separated by commas
+    while !self.is_eof() && self.matches_token(TokenType::Comma) {
+      self.advance(); // consume ","
+
+      // Check for trailing comma: foo(1, 2, )
+      if self.matches_token(TokenType::RightParen) {
+        // Could emit a warning here about trailing comma
+        break;
+      }
+
+      let expr = self.parse_primary(engine)?;
+      check_iditifer(&expr, self, engine);
+      args.push(expr);
+    }
+
+    Ok(args)
   }
 
   fn parse_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {

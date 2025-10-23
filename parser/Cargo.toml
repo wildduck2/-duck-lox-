@@ -12,3 +12,5 @@ categories.workspace = true
 [dependencies]
 diagnostic = { path = "../diagnostic" }
 scanner = { path = "../scanner" }
+uuid = { version = "1", features = ["serde", "v7"] }
+

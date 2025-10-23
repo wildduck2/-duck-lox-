@@ -1,4 +1,4 @@
-var y = fun sayHello (name) {
+var y = fun welcome(name) {
   print("Hello mr " + name);
 }
 
