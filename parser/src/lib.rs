@@ -2,10 +2,11 @@
 *
 * program        → declaration* EOF ;
 *
-* declaration    → varDec
+* declaration    → funDecl
+*                | varDecl
 *                | stmt ;
 *
-* varDec         → "var" IDENTIFIER ( "=" expr )? ";" ;
+* varDecl         → "var" IDENTIFIER ( "=" expr )? ";" ;
 *
 * stmt           → expr_stmt
 *                | for_stmt
@@ -23,8 +24,6 @@
 * block          → "{" declaration* "}" ;
 *
 * expr_stmt      → expr ";" ;
-*
-* print_stmt     → "print" expr ";" ;
 *
 * expr           → comma ;
 *
@@ -120,8 +119,21 @@ impl Parser {
 
     match self.current_token().token_type {
       TokenType::Var => self.parse_var_stmt(engine),
+      TokenType::Fun => self.parse_fun_stmt(engine),
       _ => self.parse_stmt(engine),
     }
+  }
+
+  fn parse_fun_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    self.expect(TokenType::Fun, engine)?;
+
+    let fn_name = self.parse_primary(engine)?;
+    self.advance(); // consume the "("
+    let params = self.parse_arguments(engine)?;
+    self.advance(); // consume the ")"
+    let body = self.parse_block_stmt(engine)?;
+
+    Ok(Stmt::Fun(fn_name, params, Box::new(body)))
   }
 
   fn parse_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
@@ -129,7 +141,6 @@ impl Parser {
       // TODO: please add the break and continue statements
       TokenType::For => self.parse_for_stmt(engine),
       TokenType::If => self.parse_if_stmt(engine),
-      TokenType::Print => self.parse_print_stmt(engine),
       TokenType::LeftBrace => self.parse_block_stmt(engine),
       TokenType::While => self.parse_while_stmt(engine),
       _ => self.parse_expr_stmt(engine),
@@ -137,11 +148,6 @@ impl Parser {
   }
 
   fn parse_var_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
-    if self.is_eof() {
-      self.error_eof(engine);
-      return Err(());
-    }
-
     self.expect(TokenType::Var, engine)?;
 
     // Check for identifier
@@ -337,13 +343,6 @@ impl Parser {
 
     self.expect(TokenType::RightBrace, engine)?;
     Ok(Stmt::Block(Box::new(declarations)))
-  }
-
-  fn parse_print_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
-    self.expect(TokenType::Print, engine)?;
-    let expr = self.parse_expr(engine)?;
-    self.expect(TokenType::SemiColon, engine)?;
-    Ok(Stmt::Print(expr))
   }
 
   fn parse_expr_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
@@ -637,12 +636,13 @@ impl Parser {
             Vec::new() // No arguments
           };
 
+          let token = self.current_token();
           self.expect(TokenType::RightParen, engine)?;
 
           // Wrap in a Call expression
           callee = Expr::Call {
             callee: Box::new(callee),
-            paren: self.current_token(), // The ')'
+            paren: token, // The ')'
             arguments: args,
           };
         },
@@ -763,12 +763,14 @@ impl Parser {
       },
 
       _ => {
+        let mut token = self.current_token();
+        token.position.1 = 0;
         let diagnostic = Diagnostic::new(
           DiagnosticCode::ExpectedExpression,
           "Expected expr".to_string(),
         )
         .with_label(Label::primary(
-          self.current_token().to_span(),
+          token.to_span(),
           Some(format!("unexpected token '{}'", token.lexeme)),
         ));
         engine.emit(diagnostic);

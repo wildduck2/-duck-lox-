@@ -348,7 +348,6 @@ impl Scanner {
       "else" => TokenType::Else,
       "for" => TokenType::For,
       "while" => TokenType::While,
-      "print" => TokenType::Print,
       "break" => TokenType::Break,
       "continue" => TokenType::Continue,
       "class" => TokenType::Class,

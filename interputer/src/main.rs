@@ -4,7 +4,9 @@ use runner::Runner;
 
 mod env;
 mod error;
+mod function;
 mod interpreter;
+mod lox_value;
 mod runner;
 
 fn main() {

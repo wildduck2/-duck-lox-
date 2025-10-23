@@ -1,28 +1,3 @@
-/*
-*
-* program      → declaration* EOF ;
-* declaration  → expression_statements
-*               | print_statement;
-*
-* expression_statements → expression ";" ;
-* print_statement → "print" expression ";" ;
-*
-* expression   → comma ;
-* comma        → ternary ( "," ternary )* ;
-* ternary      → assignment ( "?" expression ":" ternary )? ;
-* assignment   → IDENTIFIER "=" assignment
-*               | equality ;
-* equality     → comparison ( ( "!=" | "==" ) comparison )* ;
-* comparison   → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
-* term         → factor ( ( "-" | "+" ) factor )* ;
-* factor       → unary ( ( "/" | "*" ) unary )* ;
-* unary        → ( "!" | "-" ) unary
-*               | primary ;
-* primary      → NUMBER | STRING | IDENTIFIER
-*               | "true" | "false" | "nil"
-*               | "(" expression ")" ;
-*/
-
 use scanner::token::Token;
 
 use crate::expr::Expr;
@@ -31,30 +6,60 @@ use std::fmt;
 #[derive(Debug, Clone)]
 pub enum Stmt {
   Expr(Expr),
-  Print(Expr),
   VarDec(Token, Option<Expr>),
   Block(Box<Vec<Stmt>>),
   If(Box<Expr>, Box<Stmt>, Option<Box<Stmt>>),
   While(Box<Expr>, Box<Stmt>),
+  Fun(Expr, Vec<Expr>, Box<Stmt>),
 }
 
 impl fmt::Display for Stmt {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
-      Stmt::Expr(expr) => write!(f, "📝 ExprStmt({})", expr),
-      Stmt::Print(expr) => write!(f, "🖨️  PrintStmt({})", expr),
-      Stmt::VarDec(name, Some(expr)) => write!(f, "📝 VarDec({}, {})", name.lexeme, expr),
-      Stmt::VarDec(name, None) => write!(f, "📝 VarDec({}, <uninitialized>)", name.lexeme),
-      Stmt::Block(stmts) => write!(f, "📝 BlockStmt({:?})", stmts),
+      Stmt::Expr(expr) => write!(f, "ExprStmt({})", expr),
+
+      Stmt::VarDec(name, Some(expr)) => {
+        write!(f, "VarDec({}, {})", name.lexeme, expr)
+      },
+      Stmt::VarDec(name, None) => {
+        write!(f, "VarDec({}, <uninitialized>)", name.lexeme)
+      },
+
+      Stmt::Block(stmts) => {
+        write!(f, "BlockStmt([")?;
+        for (i, stmt) in stmts.iter().enumerate() {
+          if i > 0 {
+            write!(f, ", ")?;
+          }
+          write!(f, "{}", stmt)?;
+        }
+        write!(f, "])")
+      },
+
       Stmt::If(condition, then_branch, Some(else_branch)) => write!(
         f,
-        "📝 IfStmt({}, {}, {})",
+        "IfStmt(cond: {}, then: {}, else: {})",
         condition, then_branch, else_branch
       ),
-      Stmt::If(condition, then_branch, None) => {
-        write!(f, "📝 IfStmt({}, {}, <nil>)", condition, then_branch)
+      Stmt::If(condition, then_branch, None) => write!(
+        f,
+        "IfStmt(cond: {}, then: {}, else: <nil>)",
+        condition, then_branch
+      ),
+
+      Stmt::While(condition, body) => {
+        write!(f, "WhileStmt(cond: {}, body: {})", condition, body)
       },
-      Stmt::While(condition, body) => write!(f, "📝 WhileStmt({}, {})", condition, body),
+      Stmt::Fun(name, params, body) => {
+        write!(f, "Fun({}, ddd[", name)?;
+        for (i, param) in params.iter().enumerate() {
+          if i > 0 {
+            write!(f, ", ")?;
+          }
+          write!(f, "{}", param)?;
+        }
+        write!(f, "], {})", body)
+      },
     }
   }
 }
@@ -70,10 +75,6 @@ impl Stmt {
     match self {
       Stmt::Expr(expr) => {
         println!("{}ExpressionStatement", padding);
-        expr.pretty_print_internal(indent + 2);
-      },
-      Stmt::Print(expr) => {
-        println!("{}PrintStatement", padding);
         expr.pretty_print_internal(indent + 2);
       },
       Stmt::VarDec(name, Some(expr)) => {
@@ -102,6 +103,20 @@ impl Stmt {
         condition.pretty_print_internal(indent + 2);
         body.pretty_print_internal(indent + 2);
       },
+      Stmt::Fun(name, params, body) => {
+        let params_str = params
+          .iter()
+          .map(|p| match p {
+            Expr::Identifier(name) => name.lexeme.clone(),
+            Expr::Literal(token) => token.lexeme.clone(),
+
+            _ => String::new(),
+          })
+          .collect::<Vec<_>>()
+          .join(", ");
+        println!("{}Fun({}, [{}])", padding, name, params_str);
+        body.pretty_print_internal(indent + 2);
+      },
     }
   }
 
@@ -118,11 +133,19 @@ impl Stmt {
     let connector = if is_last { "└── " } else { "├── " };
     let label = match self {
       Stmt::Expr(_) => "ExprStmt".to_string(),
-      Stmt::Print(_) => "PrintStmt".to_string(),
       Stmt::VarDec(name, _) => format!("VarDec({})", name.lexeme),
       Stmt::Block(_) => "BlockStmt".to_string(),
       Stmt::If(_, _, _) => "IfStmt".to_string(),
       Stmt::While(_, _) => "WhileStmt".to_string(),
+      Stmt::Fun(name, params, _) => {
+        let args = params
+          .iter()
+          .map(|a| format!("{}", a))
+          .collect::<Vec<_>>()
+          .join(", ");
+
+        format!("Fun({}, [{}])", name, args)
+      },
     };
 
     lines.push(format!("{}{}{}", prefix, connector, label));
@@ -135,29 +158,27 @@ impl Stmt {
 
     match self {
       Stmt::Expr(expr) => expr.build_tree(lines, &new_prefix, &new_prefix, true),
-      Stmt::Print(expr) => expr.build_tree(lines, &new_prefix, &new_prefix, true),
       Stmt::VarDec(_, Some(expr)) => expr.build_tree(lines, &new_prefix, &new_prefix, true),
       Stmt::VarDec(_, None) => {
         lines.push(format!("{}└── <uninitialized>", new_prefix));
       },
       Stmt::Block(stmts) => {
-        for (i, stmt) in stmts.clone().into_iter().enumerate() {
-          if i == stmts.len() - 1 {
-            stmt.build_tree(lines, &new_prefix, &new_prefix, true);
-          } else {
-            stmt.build_tree(lines, &new_prefix, &new_prefix, false);
-          }
+        for (i, stmt) in stmts.iter().enumerate() {
+          stmt.build_tree(lines, &new_prefix, &new_prefix, i == stmts.len() - 1);
         }
       },
       Stmt::If(condition, then_branch, else_branch) => {
-        condition.build_tree(lines, &new_prefix, &new_prefix, true);
-        then_branch.build_tree(lines, &new_prefix, &new_prefix, true);
+        condition.build_tree(lines, &new_prefix, &new_prefix, false);
+        then_branch.build_tree(lines, &new_prefix, &new_prefix, else_branch.is_none());
         if let Some(else_branch) = else_branch {
           else_branch.build_tree(lines, &new_prefix, &new_prefix, true);
         }
       },
       Stmt::While(condition, body) => {
-        condition.build_tree(lines, &new_prefix, &new_prefix, true);
+        condition.build_tree(lines, &new_prefix, &new_prefix, false);
+        body.build_tree(lines, &new_prefix, &new_prefix, true);
+      },
+      Stmt::Fun(_, _, body) => {
         body.build_tree(lines, &new_prefix, &new_prefix, true);
       },
     }

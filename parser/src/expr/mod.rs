@@ -35,17 +35,17 @@ pub enum Expr {
 impl fmt::Display for Expr {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
-      Expr::Literal(token) => write!(f, "📍 {}", token.lexeme),
-      Expr::Identifier(token) => write!(f, "📍 {}", token.lexeme),
-      Expr::Unary { operator, rhs } => write!(f, "🔧 ({} {})", operator.lexeme, rhs),
+      Expr::Literal(token) => write!(f, "{}", token.lexeme),
+      Expr::Identifier(token) => write!(f, "{}", token.lexeme),
+      Expr::Unary { operator, rhs } => write!(f, "({} {})", operator.lexeme, rhs),
       Expr::Binary { lhs, operator, rhs } => write!(f, "⚙️ ({} {} {})", lhs, operator.lexeme, rhs),
-      Expr::Grouping(expr) => write!(f, "📦 ({})", expr),
-      Expr::Assign { name, value } => write!(f, "🔧 ({} = {})", name.lexeme, value),
+      Expr::Grouping(expr) => write!(f, "({})", expr),
+      Expr::Assign { name, value } => write!(f, "({} = {})", name.lexeme, value),
       Expr::Ternary {
         condition,
         then_branch,
         else_branch,
-      } => write!(f, "🔀 ({} ? {} : {})", condition, then_branch, else_branch),
+      } => write!(f, "({} ? {} : {})", condition, then_branch, else_branch),
       Expr::Call {
         callee, arguments, ..
       } => {
@@ -54,7 +54,7 @@ impl fmt::Display for Expr {
           .map(|a| format!("{}", a))
           .collect::<Vec<_>>()
           .join(", ");
-        write!(f, "📞 {}({})", callee, args)
+        write!(f, "{}({})", callee, args)
       },
     }
   }
