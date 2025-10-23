@@ -107,7 +107,7 @@ impl Parser {
     while !self.is_eof() {
       match self.parse_program(engine) {
         Ok(stmt) => {
-          // stmt.print_tree();
+          stmt.print_tree();
           self.ast.push(stmt);
         },
         Err(_) => self.synchronize(),

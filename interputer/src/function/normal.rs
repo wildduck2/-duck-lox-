@@ -5,6 +5,7 @@ use parser::stmt::Stmt;
 use scanner::token::Token;
 
 use crate::{
+  env::Env,
   function::LoxCallable,
   interpreter::Interpreter,
   lox_value::{InterpreterError, LoxValue},
@@ -14,6 +15,7 @@ use crate::{
 pub struct LoxFunction {
   pub params: Vec<Token>,
   pub body: Vec<Stmt>,
+  pub closure: Rc<RefCell<Env>>,
 }
 
 impl LoxCallable for LoxFunction {
@@ -27,12 +29,9 @@ impl LoxCallable for LoxFunction {
     arguments: Vec<(LoxValue, Option<Token>)>,
     engine: &mut DiagnosticEngine,
   ) -> Result<LoxValue, InterpreterError> {
-    let mut enclosing_env = Rc::new(RefCell::new(
-      interpreter
-        .env
-        .borrow_mut()
-        .with_enclosing(Rc::clone(&interpreter.env)),
-    ));
+    let mut enclosing_env = Rc::new(RefCell::new(Env::new_with_enclosing(Rc::clone(
+      &self.closure,
+    ))));
 
     // Defining the args in the function scope to be used
     for (i, (arg_val, _)) in arguments.iter().enumerate() {

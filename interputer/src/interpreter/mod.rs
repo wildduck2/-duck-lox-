@@ -33,7 +33,6 @@ impl Interpreter {
   pub fn run(&mut self, ast: Vec<Stmt>, engine: &mut DiagnosticEngine) {
     PrintFunction::add(self);
     ClockFunction::add(self);
-    // println!("{:#?}", ast);
 
     let mut env = self.env.clone();
     for stmt in ast {
@@ -79,7 +78,7 @@ impl Interpreter {
         return Ok(());
       },
       Stmt::Fun(name, params, body) => {
-        self.eval_fn(env, name, params, *body, engine)?;
+        self.eval_fun(env, name, params, *body, engine)?;
         return Ok(());
       },
       Stmt::Return(name, _) => {
@@ -106,15 +105,16 @@ impl Interpreter {
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     match value {
-      Some(expr) => {
-        let (expr_value, _) = self.eval_expr(expr, env, engine)?;
-        Err(InterpreterError::Return(expr_value))
+      Some(expr) => match self.eval_expr(expr, env, engine) {
+        Ok((expr_value, _)) => Err(InterpreterError::Return(expr_value)),
+        Err(_) => Err(InterpreterError::Return(LoxValue::Nil)),
       },
+
       None => Err(InterpreterError::Return(LoxValue::Nil)),
     }
   }
 
-  fn eval_fn(
+  fn eval_fun(
     &mut self,
     env: &mut Rc<RefCell<Env>>,
     name: Expr,
@@ -143,6 +143,7 @@ impl Interpreter {
         let function = Arc::new(LoxFunction {
           params: params_names,
           body: *body,
+          closure: env.clone(),
         });
 
         env.borrow_mut().define(name, LoxValue::Function(function));
@@ -251,10 +252,10 @@ impl Interpreter {
           self.eval_while(&mut enclosing_env, *condition, *stmt, engine)?;
         },
         Stmt::Fun(name, params, body) => {
-          self.eval_fn(&mut enclosing_env, name, params, *body, engine)?;
+          self.eval_fun(&mut enclosing_env, name, params, *body, engine)?;
         },
         Stmt::Return(name, value) => {
-          self.eval_return(env, name, value, engine)?;
+          self.eval_return(&mut enclosing_env, name, value, engine)?;
         },
       }
     }

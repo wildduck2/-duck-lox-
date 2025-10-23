@@ -16,6 +16,13 @@ impl Env {
     }
   }
 
+  pub fn new_with_enclosing(enclosing: Rc<RefCell<Env>>) -> Self {
+    Self {
+      values: HashMap::new(),
+      enclosing: Some(enclosing),
+    }
+  }
+
   pub fn with_enclosing(&mut self, env: Rc<RefCell<Env>>) -> Self {
     Self {
       values: HashMap::new(),
