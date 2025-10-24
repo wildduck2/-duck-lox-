@@ -1,11 +1,11 @@
-for (var x = 1; x <= 3; x = x + 1) {
-  print("Outer loop x = " + x);
+var a = "global";
 
-
-  if (x == 2) break;
-
-  if (x == 2) {
-    break ;
+{
+  fun showA() {
+    print(a);
   }
 
+  showA();
+  var a = "block";
+  showA();
 }

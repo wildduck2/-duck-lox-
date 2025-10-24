@@ -4,7 +4,7 @@ members = [
   "interputer",
   "scanner",
   "parser"
-]
+, "semantic_analysis"]
 resolver = "2"
 
 [workspace.package]

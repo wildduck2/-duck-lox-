@@ -1,19 +1,11 @@
-// Nested loop test
-print("Testing nested loops:");
-
 for (var x = 1; x <= 3; x = x + 1) {
   print("Outer loop x = " + x);
 
+  print(x);
   for (var y = 1; y <= 3; y = y + 1) {
-    if (y == 2) {
-      print("  Continue inner at y = 2");
-      continue;
-    }
+    if (y == 2) break;
 
-    if (x == 2 && y == 3) {
-      print("  Break inner loop at x=2, y=3");
-      break;
-    }
+    if (x == 2 && y == 3) break;
 
     print("  Inner y = " + y);
   }
