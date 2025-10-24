@@ -69,6 +69,7 @@ dependencies = [
  "diagnostic",
  "parser",
  "scanner",
+ "semantic_analysis",
 ]
 
 [[package]]
@@ -213,6 +214,10 @@ dependencies = [
 [[package]]
 name = "semantic_analysis"
 version = "0.1.0"
+dependencies = [
+ "diagnostic",
+ "parser",
+]
 
 [[package]]
 name = "serde"

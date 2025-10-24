@@ -2,6 +2,7 @@ use crate::interpreter::Interpreter;
 use diagnostic::{diagnostic::Diagnostic, diagnostic_code::DiagnosticCode, DiagnosticEngine};
 use parser::Parser;
 use scanner::Scanner;
+use semantic_analysis;
 use std::{
   fs,
   io::{self, Write},
@@ -105,8 +106,6 @@ impl Runner {
     // Scanning the buffer of string
     let mut scanner = Scanner::new(source.clone());
 
-    println!("\n============= INITIALIZED ===========\n");
-
     // Scan the tokens
     scanner.scan(engine);
 
@@ -116,9 +115,9 @@ impl Runner {
       return;
     }
 
+    println!("\n============= SCANNED ===============\n");
     // println!("ToLongVector(value...) {:#?}", scanner.tokens);
     println!("ToLongVector(value..)");
-    println!("\n============= SCANNED ===============\n");
 
     // Parse the tokens
     let mut parser = Parser::new(scanner.tokens);
@@ -130,11 +129,21 @@ impl Runner {
       return;
     }
 
-    println!("ToLongTree(value..)");
     println!("\n============== PARSED ===============\n");
+    println!("ToLongTree(value..)");
 
-    let mut interputer = Interpreter::new();
-    interputer.run(parser.ast, engine);
+    println!("\n============== SEMANTIC ANALYSIS ===============\n");
+
+    let mut resolver = semantic_analysis::resolver::Resolver::new();
+    resolver.resolve(parser.ast, engine);
+
+    if engine.has_errors() {
+      engine.print_all(&source);
+      return;
+    }
+
+    // let mut interputer = Interpreter::new();
+    // interputer.run(parser.ast, engine);
 
     if engine.has_errors() {
       engine.print_all(&source);

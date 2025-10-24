@@ -10,3 +10,5 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
+parser = { path = "../parser" }
+diagnostic = { path = "../diagnostic" }
