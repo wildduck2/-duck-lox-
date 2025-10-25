@@ -6,7 +6,7 @@ use std::fmt;
 #[derive(Debug, Clone)]
 pub enum Stmt {
   Expr(Expr),
-  VarDec(Token, Option<Expr>),
+  VarDecl(Token, Option<Expr>),
   Block(Box<Vec<Stmt>>),
   If(Box<Expr>, Box<Stmt>, Option<Box<Stmt>>),
   While(Box<Expr>, Box<Stmt>),
@@ -20,10 +20,10 @@ impl fmt::Display for Stmt {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
       Stmt::Expr(expr) => write!(f, "ExprStmt({})", expr),
-      Stmt::VarDec(name, Some(expr)) => {
+      Stmt::VarDecl(name, Some(expr)) => {
         write!(f, "VarDec({}, {})", name.lexeme, expr)
       },
-      Stmt::VarDec(name, None) => {
+      Stmt::VarDecl(name, None) => {
         write!(f, "VarDec({}, <uninitialized>)", name.lexeme)
       },
       Stmt::Block(stmts) => {
@@ -90,11 +90,11 @@ impl Stmt {
         println!("{}ExpressionStatement", padding);
         expr.pretty_print_internal(indent + 2);
       },
-      Stmt::VarDec(name, Some(expr)) => {
+      Stmt::VarDecl(name, Some(expr)) => {
         println!("{}VarDec({}, initialized)", padding, name.lexeme);
         expr.pretty_print_internal(indent + 2);
       },
-      Stmt::VarDec(name, None) => {
+      Stmt::VarDecl(name, None) => {
         println!("{}VarDec({}, uninitialized)", padding, name.lexeme);
       },
       Stmt::Block(stmts) => {
@@ -158,7 +158,7 @@ impl Stmt {
     let connector = if is_last { "└── " } else { "├── " };
     let label = match self {
       Stmt::Expr(_) => "ExprStmt".to_string(),
-      Stmt::VarDec(name, _) => format!("VarDec({})", name.lexeme),
+      Stmt::VarDecl(name, _) => format!("VarDec({})", name.lexeme),
       Stmt::Block(_) => "BlockStmt".to_string(),
       Stmt::If(_, _, _) => "IfStmt".to_string(),
       Stmt::While(_, _) => "WhileStmt".to_string(),
@@ -186,8 +186,8 @@ impl Stmt {
 
     match self {
       Stmt::Expr(expr) => expr.build_tree(lines, &new_prefix, &new_prefix, true),
-      Stmt::VarDec(_, Some(expr)) => expr.build_tree(lines, &new_prefix, &new_prefix, true),
-      Stmt::VarDec(_, None) => {
+      Stmt::VarDecl(_, Some(expr)) => expr.build_tree(lines, &new_prefix, &new_prefix, true),
+      Stmt::VarDecl(_, None) => {
         lines.push(format!("{}└── <uninitialized>", new_prefix));
       },
       Stmt::Block(stmts) => {

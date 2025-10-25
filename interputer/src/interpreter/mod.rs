@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
 
 use diagnostic::{
   diagnostic::{Diagnostic, Label, Span},
@@ -21,18 +21,26 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct Interpreter {
   pub env: Rc<RefCell<Env>>,
+  pub locals: HashMap<String, usize>,
 }
 
 impl Interpreter {
   pub fn new() -> Self {
     Self {
       env: Rc::new(RefCell::new(Env::new())),
+      locals: HashMap::new(),
     }
   }
 
-  pub fn run(&mut self, ast: Vec<Stmt>, engine: &mut DiagnosticEngine) {
+  pub fn run(
+    &mut self,
+    ast: Vec<Stmt>,
+    locals: HashMap<String, usize>,
+    engine: &mut DiagnosticEngine,
+  ) {
     PrintFunction::add(self);
     ClockFunction::add(self);
+    self.locals = locals;
 
     let mut env = self.env.clone();
     for stmt in ast {
@@ -52,7 +60,7 @@ impl Interpreter {
         self.eval_expr(expr, env, engine)?;
         return Ok(());
       },
-      Stmt::VarDec(identifier_token, expr) => match expr {
+      Stmt::VarDecl(identifier_token, expr) => match expr {
         Some(expr) => {
           let (expr_value, _) = self.eval_expr(expr, env, engine)?;
           env.borrow_mut().define(identifier_token.lexeme, expr_value);
@@ -177,7 +185,7 @@ impl Interpreter {
         let function = Arc::new(LoxFunction {
           params: params_names,
           body: *body,
-          closure: env.clone(),
+          closure: env.borrow().enclosing.clone().unwrap_or(env.clone()),
         });
 
         env.borrow_mut().define(name, LoxValue::Function(function));
@@ -260,7 +268,7 @@ impl Interpreter {
 
     for stmt in *block {
       match stmt {
-        Stmt::VarDec(identifier_token, expr) => match expr {
+        Stmt::VarDecl(identifier_token, expr) => match expr {
           Some(expr) => {
             let (expr_value, _) = self.eval_expr(expr, &mut enclosing_env, engine)?;
             enclosing_env
@@ -423,6 +431,19 @@ impl Interpreter {
     env: &mut Rc<RefCell<Env>>,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
+    if let Some(&depth) = self.locals.get(&token.lexeme) {
+      match env.borrow_mut().get_at(depth, &token.lexeme.as_str()) {
+        Some(v) => return Ok((v.clone(), Some(token))),
+        None => {
+          eprintln!(
+            "INTERNAL ERROR: Resolved variable '{}' not found at depth {}",
+            token.lexeme, depth
+          );
+          return Err(InterpreterError::RuntimeError);
+        },
+      }
+    }
+
     match env.borrow().get(&token.lexeme) {
       Some(v) => Ok((v.clone(), Some(token))),
       None => {
@@ -452,6 +473,17 @@ impl Interpreter {
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     let (value, token) = self.eval_expr(value, env, engine)?;
+
+    // Check if we have a resolved depth
+    if let Some(&depth) = self.locals.get(&name.lexeme) {
+      if env
+        .borrow_mut()
+        .assign_at(depth, &name.lexeme, value.clone())
+      {
+        return Ok((value, token));
+      }
+    }
+
     if !env.borrow_mut().assign(&name.lexeme, value.clone()) {
       name.position.0 += 1;
       name.position.1 -= 1;

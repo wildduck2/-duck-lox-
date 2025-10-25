@@ -22,7 +22,7 @@ pub enum DiagnosticCode {
   MissingSemicolon,
   InvalidAssignmentTarget,
   ExpectedIdentifier,
-
+  VariableAlreadyDeclared,
   ContinueOutsideLoop,
   BreakOutsideLoop,
   UndeclaredVariable,
@@ -58,6 +58,7 @@ impl DiagnosticCode {
       Self::InvalidCharacter => "E0002".to_string(),
       Self::InvalidNumber => "E0003".to_string(),
       Self::UnexpectedEof => "E0004".to_string(),
+      Self::VariableAlreadyDeclared => "E0005".to_string(),
       Self::UnexpectedToken => "E0100".to_string(),
       Self::ExpectedExpression => "E0101".to_string(),
       Self::MissingClosingBrace => "E0102".to_string(),

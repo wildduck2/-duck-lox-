@@ -1,19 +1,217 @@
-use diagnostic::DiagnosticEngine;
-use parser::stmt::Stmt;
+use diagnostic::{
+  diagnostic::{Diagnostic, Label},
+  diagnostic_code::DiagnosticCode,
+  DiagnosticEngine,
+};
+use parser::{expr::Expr, stmt::Stmt};
+use scanner::token::Token;
+use std::collections::HashMap;
 
-pub struct Resolver {}
+pub struct Resolver {
+  scopes: Vec<HashMap<String, bool>>,
+  locals: HashMap<String, usize>,
+}
 
 impl Resolver {
   pub fn new() -> Self {
-    Self {}
+    Self {
+      scopes: vec![],
+      locals: HashMap::new(),
+    }
   }
 
-  pub fn resolve(&mut self, ast: Vec<Stmt>, engine: &mut DiagnosticEngine) {
-    // let mut env = self.env.clone();
-    for stmt in ast {
-      println!("{:?}", stmt);
-      // let _ = self.eval_stmt(stmt, &mut env, engine);
+  pub fn run(&mut self, ast: &Vec<Stmt>, engine: &mut DiagnosticEngine) {
+    self.resolve_statements(ast, engine);
+  }
+
+  /// Entry points
+  pub fn resolve_statements(&mut self, stmts: &Vec<Stmt>, engine: &mut DiagnosticEngine) {
+    for s in stmts {
+      self.resolve_stmt(&s, engine);
     }
-    // self.env = env;
+  }
+
+  fn resolve_stmt(&mut self, stmt: &Stmt, engine: &mut DiagnosticEngine) {
+    match stmt {
+      Stmt::Block(block) => {
+        self.begin_scope();
+        self.resolve_statements(block, engine);
+        self.end_scope();
+      },
+      Stmt::VarDecl(token, value) => {
+        if self.scopes.is_empty() {
+          if let Some(value) = value {
+            self.resolve_expr(value, engine);
+          }
+        } else {
+          self.declare(token.lexeme.clone(), token, engine);
+          if let Some(value) = value {
+            self.resolve_expr(value, engine);
+          }
+          self.define(token.lexeme.clone());
+        }
+      },
+      Stmt::Expr(expr) => self.resolve_expr(expr, engine),
+      Stmt::If(condition, then_branch, else_branch) => {
+        self.resolve_expr(condition, engine);
+        self.resolve_stmt(then_branch, engine);
+        if let Some(else_branch) = else_branch {
+          self.resolve_stmt(else_branch, engine);
+        }
+      },
+      Stmt::While(condition, body) => {
+        self.resolve_expr(condition, engine);
+        self.resolve_stmt(body, engine);
+      },
+      Stmt::Fun(name, params, body) => {
+        if let Expr::Identifier(name) = name {
+          if !self.scopes.is_empty() {
+            self.declare(name.lexeme.clone(), name, engine);
+            self.define(name.lexeme.clone());
+          }
+        }
+
+        self.resolve_function(params, body, engine);
+      },
+      Stmt::Return(_, value) => {
+        if let Some(value) = value {
+          self.resolve_expr(value, engine);
+        }
+      },
+
+      Stmt::Break(_) | Stmt::Continue(_) => {},
+    }
+  }
+
+  fn resolve_expr(&mut self, expr: &Expr, engine: &mut DiagnosticEngine) {
+    match expr {
+      Expr::Identifier(token) => {
+        if let Some(scope) = self.scopes.last() {
+          if let Some(is_defined) = scope.get(&token.lexeme) {
+            if !is_defined {
+              eprintln!(
+                "Can't read local variable '{}' in its own initializer",
+                token.lexeme
+              )
+            }
+          }
+        }
+        self.resolve_local(&token.lexeme);
+      },
+      Expr::Call {
+        callee,
+        paren,
+        arguments,
+      } => {
+        self.resolve_expr(callee, engine);
+        for argument in arguments {
+          self.resolve_expr(argument, engine);
+        }
+      },
+      Expr::Unary { operator, rhs } => {
+        self.resolve_expr(rhs, engine);
+      },
+      Expr::Binary { lhs, operator, rhs } => {
+        self.resolve_expr(lhs, engine);
+        self.resolve_expr(rhs, engine);
+      },
+      Expr::Grouping(expr) => {
+        self.resolve_expr(expr, engine);
+      },
+      Expr::Ternary {
+        condition,
+        then_branch,
+        else_branch,
+      } => {
+        self.resolve_expr(condition, engine);
+        self.resolve_expr(then_branch, engine);
+        self.resolve_expr(else_branch, engine);
+      },
+      Expr::Assign { name, value } => {
+        self.resolve_expr(value, engine);
+        self.resolve_local(&name.lexeme);
+      },
+      Expr::Literal(_) => {},
+    }
+  }
+
+  fn resolve_function(&mut self, params: &[Expr], body: &Stmt, engine: &mut DiagnosticEngine) {
+    self.begin_scope();
+
+    for param in params {
+      if let Expr::Identifier(param) = param {
+        if !self.scopes.is_empty() {
+          self.declare(param.lexeme.clone(), param, engine);
+          self.define(param.lexeme.clone());
+        }
+      }
+    }
+
+    self.resolve_stmt(body, engine);
+    self.end_scope();
+  }
+
+  fn resolve_local(&mut self, name: &str) {
+    // Iterate from INNERMOST (last) to OUTERMOST (first)
+    for (i, scope) in self.scopes.iter().rev().enumerate() {
+      if scope.contains_key(name) {
+        self.locals.insert(name.to_string(), i);
+        return;
+      }
+    }
+    // Not found in any local scope = global variable
+  }
+
+  // Helpers
+  fn begin_scope(&mut self) {
+    self.scopes.push(HashMap::new());
+  }
+
+  fn end_scope(&mut self) {
+    self.scopes.pop();
+  }
+
+  /// Returns true if successful, false if already declared
+  fn declare(&mut self, name: String, token: &Token, engine: &mut DiagnosticEngine) -> bool {
+    if self.scopes.is_empty() {
+      return true; // global scope, always allow
+    }
+
+    let scope = self.scopes.last_mut().unwrap();
+
+    // Check for duplicate declaration in same scope
+    if scope.contains_key(&name) {
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::VariableAlreadyDeclared,
+        format!("Variable '{}' is already declared in this scope", name),
+      )
+      .with_label(Label::primary(
+        token.to_span(),
+        Some("already declared here".to_string()),
+      ))
+      .with_help(
+        "Did you mean to assign to the existing variable? Remove 'var' to assign.".to_string(),
+      );
+
+      engine.emit(diagnostic);
+      return false;
+    }
+
+    // Mark as declared but not yet defined
+    scope.insert(name, false);
+    true
+  }
+
+  /// Mark variable as defined / ready to use.
+  fn define(&mut self, name: String) {
+    if self.scopes.is_empty() {
+      return; // global, we do not track in local scope
+    }
+    let scope = self.scopes.last_mut().unwrap();
+    scope.insert(name.to_string(), true);
+  }
+
+  pub fn get_locals(&self) -> &HashMap<String, usize> {
+    &self.locals
   }
 }

@@ -67,7 +67,7 @@ impl Runner {
         continue;
       }
 
-      interputer.run(parser.ast, engine);
+      // interputer.run(parser.ast, engine);
 
       if engine.has_errors() {
         engine.print_all(&input);
@@ -117,7 +117,7 @@ impl Runner {
 
     println!("\n============= SCANNED ===============\n");
     // println!("ToLongVector(value...) {:#?}", scanner.tokens);
-    println!("ToLongVector(value..)");
+    println!("ToLongVector(value..)\n");
 
     // Parse the tokens
     let mut parser = Parser::new(scanner.tokens);
@@ -132,18 +132,19 @@ impl Runner {
     println!("\n============== PARSED ===============\n");
     println!("ToLongTree(value..)");
 
-    println!("\n============== SEMANTIC ANALYSIS ===============\n");
+    println!("\n======== SEMANTIC ANALYSIS ==========\n");
 
     let mut resolver = semantic_analysis::resolver::Resolver::new();
-    resolver.resolve(parser.ast, engine);
+    resolver.run(&parser.ast, engine);
 
     if engine.has_errors() {
       engine.print_all(&source);
       return;
     }
 
-    // let mut interputer = Interpreter::new();
-    // interputer.run(parser.ast, engine);
+    let locals = resolver.get_locals().clone();
+    let mut interputer = Interpreter::new();
+    interputer.run(parser.ast, locals, engine);
 
     if engine.has_errors() {
       engine.print_all(&source);

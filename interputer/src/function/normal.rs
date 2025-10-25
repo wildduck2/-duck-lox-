@@ -29,9 +29,12 @@ impl LoxCallable for LoxFunction {
     arguments: Vec<(LoxValue, Option<Token>)>,
     engine: &mut DiagnosticEngine,
   ) -> Result<LoxValue, InterpreterError> {
-    let mut enclosing_env = Rc::new(RefCell::new(Env::new_with_enclosing(Rc::clone(
-      &self.closure,
-    ))));
+    let mut enclosing_env = Rc::new(RefCell::new(
+      self
+        .closure
+        .borrow_mut()
+        .with_enclosing(Rc::clone(&self.closure)),
+    ));
 
     // Defining the args in the function scope to be used
     for (i, (arg_val, _)) in arguments.iter().enumerate() {

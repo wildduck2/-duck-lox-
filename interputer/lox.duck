@@ -9,3 +9,9 @@ var a = "global";
   var a = "block";
   showA();
 }
+
+{
+  var a = "global";
+  var a = "global";
+}
+

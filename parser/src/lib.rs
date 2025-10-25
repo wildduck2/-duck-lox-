@@ -337,7 +337,7 @@ impl Parser {
 
     if matches!(self.current_token().token_type, TokenType::SemiColon) {
       self.advance(); // consume ;
-      return Ok(Stmt::VarDec(identifier, None));
+      return Ok(Stmt::VarDecl(identifier, None));
     } else if matches!(self.current_token().token_type, TokenType::Equal) {
       self.advance(); // consume =
                       // TODO: parse the caller in the declaration
@@ -368,7 +368,7 @@ impl Parser {
         if !is_function {
           self.advance(); // consume ;
         }
-        return Ok(Stmt::VarDec(identifier, Some(expr)));
+        return Ok(Stmt::VarDecl(identifier, Some(expr)));
       } else {
         // Missing semicolon diagnostic
         let diagnostic = Diagnostic::new(
