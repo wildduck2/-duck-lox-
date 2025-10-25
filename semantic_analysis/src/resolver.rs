@@ -1,6 +1,6 @@
 use diagnostic::{
-  diagnostic::{Diagnostic, Label},
-  diagnostic_code::DiagnosticCode,
+  diagnostic::{Diagnostic, Label, Span},
+  diagnostic_code::{DiagnosticCode, Severity},
   DiagnosticEngine,
 };
 use parser::{expr::Expr, stmt::Stmt};
@@ -8,8 +8,15 @@ use scanner::token::Token;
 use std::collections::HashMap;
 
 pub struct Resolver {
-  scopes: Vec<HashMap<String, bool>>,
+  scopes: Vec<HashMap<String, VariableState>>,
   locals: HashMap<String, usize>,
+}
+
+#[derive(Debug, Clone)]
+struct VariableState {
+  defined: bool,
+  used: bool,
+  line: usize,
 }
 
 impl Resolver {
@@ -36,7 +43,7 @@ impl Resolver {
       Stmt::Block(block) => {
         self.begin_scope();
         self.resolve_statements(block, engine);
-        self.end_scope();
+        self.end_scope(engine);
       },
       Stmt::VarDecl(token, value) => {
         if self.scopes.is_empty() {
@@ -44,11 +51,11 @@ impl Resolver {
             self.resolve_expr(value, engine);
           }
         } else {
-          self.declare(token.lexeme.clone(), token, engine);
+          self.declare(token, engine);
           if let Some(value) = value {
             self.resolve_expr(value, engine);
           }
-          self.define(token.lexeme.clone());
+          self.define(token);
         }
       },
       Stmt::Expr(expr) => self.resolve_expr(expr, engine),
@@ -66,8 +73,8 @@ impl Resolver {
       Stmt::Fun(name, params, body) => {
         if let Expr::Identifier(name) = name {
           if !self.scopes.is_empty() {
-            self.declare(name.lexeme.clone(), name, engine);
-            self.define(name.lexeme.clone());
+            self.declare(name, engine);
+            self.define(name);
           }
         }
 
@@ -88,7 +95,7 @@ impl Resolver {
       Expr::Identifier(token) => {
         if let Some(scope) = self.scopes.last() {
           if let Some(is_defined) = scope.get(&token.lexeme) {
-            if !is_defined {
+            if !is_defined.defined {
               eprintln!(
                 "Can't read local variable '{}' in its own initializer",
                 token.lexeme
@@ -141,20 +148,21 @@ impl Resolver {
     for param in params {
       if let Expr::Identifier(param) = param {
         if !self.scopes.is_empty() {
-          self.declare(param.lexeme.clone(), param, engine);
-          self.define(param.lexeme.clone());
+          self.declare(param, engine);
+          self.define(param);
         }
       }
     }
 
     self.resolve_stmt(body, engine);
-    self.end_scope();
+    self.end_scope(engine);
   }
 
   fn resolve_local(&mut self, name: &str) {
     // Iterate from INNERMOST (last) to OUTERMOST (first)
-    for (i, scope) in self.scopes.iter().rev().enumerate() {
-      if scope.contains_key(name) {
+    for (i, scope) in self.scopes.iter_mut().rev().enumerate() {
+      if let Some(local) = scope.get_mut(name) {
+        local.used = true;
         self.locals.insert(name.to_string(), i);
         return;
       }
@@ -167,12 +175,33 @@ impl Resolver {
     self.scopes.push(HashMap::new());
   }
 
-  fn end_scope(&mut self) {
-    self.scopes.pop();
+  fn end_scope(&mut self, engine: &mut DiagnosticEngine) {
+    if let Some(scope) = self.scopes.pop() {
+      for (name, state) in scope {
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::UnusedVariable,
+          format!("Variable '{}' is never used", name),
+        )
+        .with_label(Label::primary(
+          Span {
+            line: state.line + 1,
+            column: 0,
+            length: 25,
+            file: "".to_string(),
+          },
+          Some("never used".to_string()),
+        ))
+        .with_help("Did you forget to use it?".to_string())
+        .with_note("Unused variables are a common source of bugs.".to_string());
+
+        engine.emit(diagnostic);
+        if state.defined && !state.used {}
+      }
+    }
   }
 
   /// Returns true if successful, false if already declared
-  fn declare(&mut self, name: String, token: &Token, engine: &mut DiagnosticEngine) -> bool {
+  fn declare(&mut self, name: &Token, engine: &mut DiagnosticEngine) -> bool {
     if self.scopes.is_empty() {
       return true; // global scope, always allow
     }
@@ -180,13 +209,16 @@ impl Resolver {
     let scope = self.scopes.last_mut().unwrap();
 
     // Check for duplicate declaration in same scope
-    if scope.contains_key(&name) {
+    if scope.contains_key(&name.lexeme) {
       let diagnostic = Diagnostic::new(
         DiagnosticCode::VariableAlreadyDeclared,
-        format!("Variable '{}' is already declared in this scope", name),
+        format!(
+          "Variable '{}' is already declared in this scope",
+          name.lexeme
+        ),
       )
       .with_label(Label::primary(
-        token.to_span(),
+        name.to_span(),
         Some("already declared here".to_string()),
       ))
       .with_help(
@@ -198,17 +230,26 @@ impl Resolver {
     }
 
     // Mark as declared but not yet defined
-    scope.insert(name, false);
+    scope.insert(
+      name.lexeme.clone(),
+      VariableState {
+        defined: false,
+        used: false,
+        line: name.position.0,
+      },
+    );
     true
   }
 
   /// Mark variable as defined / ready to use.
-  fn define(&mut self, name: String) {
+  fn define(&mut self, name: &Token) {
     if self.scopes.is_empty() {
       return; // global, we do not track in local scope
     }
     let scope = self.scopes.last_mut().unwrap();
-    scope.insert(name.to_string(), true);
+    if let Some(local) = scope.get_mut(&name.lexeme) {
+      local.defined = true;
+    }
   }
 
   pub fn get_locals(&self) -> &HashMap<String, usize> {
