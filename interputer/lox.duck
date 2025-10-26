@@ -1,4 +1,6 @@
-{
-  var a = "global";
+class Breakfast {
+  cook(name) {
+  }
 }
 
+Breakfast().cook(123);

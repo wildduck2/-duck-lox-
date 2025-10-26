@@ -1,6 +1,9 @@
-use std::{fmt, sync::Arc};
+use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc, sync::Arc};
 
-use crate::function::{normal::LoxFunction, LoxCallable};
+use crate::{
+  class::{LoxClass, LoxClassInstance},
+  function::{normal::LoxFunction, LoxCallable},
+};
 
 #[derive(Debug)]
 pub enum InterpreterError {
@@ -18,6 +21,8 @@ pub enum LoxValue {
   Bool(bool),
   Function(Arc<LoxFunction>),
   NativeFunction(Arc<dyn LoxCallable + Send + Sync>),
+  Class(Arc<LoxClass>),
+  Instance(Rc<RefCell<LoxClassInstance>>),
 }
 
 impl fmt::Debug for LoxValue {
@@ -29,6 +34,8 @@ impl fmt::Debug for LoxValue {
       LoxValue::Bool(b) => write!(f, "Bool({b})"),
       LoxValue::Function(_) => write!(f, "Function(<fn>)"),
       LoxValue::NativeFunction(_) => write!(f, "NativeFunction(<native>)"),
+      LoxValue::Class(c) => write!(f, "Class({c:?})"),
+      LoxValue::Instance(i) => write!(f, "Instance({i:?})"),
     }
   }
 }
@@ -42,6 +49,8 @@ impl fmt::Display for LoxValue {
       LoxValue::Nil => write!(f, "nil"),
       LoxValue::Function(_) => write!(f, "<function>"),
       LoxValue::NativeFunction(_) => write!(f, "<native function>"),
+      LoxValue::Class(c) => write!(f, "{c:?}"),
+      LoxValue::Instance(i) => write!(f, "{i:?}"),
     }
   }
 }

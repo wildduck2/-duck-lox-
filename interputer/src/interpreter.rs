@@ -9,6 +9,7 @@ use parser::{expr::Expr, stmt::Stmt};
 use scanner::token::{types::Literal, Token};
 
 use crate::{
+  class::LoxClass,
   env::Env,
   function::{
     native::{clock::ClockFunction, print::PrintFunction},
@@ -136,7 +137,58 @@ impl Interpreter {
         engine.emit(diagnostic);
         Ok(())
       },
+      Stmt::Class(name, methods) => {
+        self.eval_class(env, name, *methods, engine)?;
+        Ok(())
+      },
     }
+  }
+
+  fn eval_class(
+    &mut self,
+    env: &mut Rc<RefCell<Env>>,
+    name: Expr,
+    methods: Vec<Stmt>,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
+    let name = match name {
+      Expr::Identifier(token) => token.lexeme.clone(),
+      _ => {
+        eprintln!("Class name must be an identifier got {:?}", name);
+        return Err(InterpreterError::RuntimeError);
+      },
+    };
+
+    for method in methods {
+      println!("{:#?}", method);
+      match method {
+        Stmt::Fun(name, params, body) => {
+          let fnn = self.eval_fun(env, name, params, *body, engine)?;
+        },
+        _ => {
+          println!("not handled");
+        },
+      }
+    }
+    println!("{:?}", env);
+
+    env.borrow_mut().define(
+      name.clone(),
+      LoxValue::Class(Arc::new(LoxClass {
+        name: name.clone(),
+        methods: HashMap::new(),
+        instance: None,
+      })),
+    );
+
+    // println!("{:?}\n\n\n\n", methods);
+
+    // for method in methods {
+    //   self.eval_stmt(method, env, engine)?;
+    //   // println!("{:?}\n", method);
+    // }
+
+    Ok((LoxValue::Nil, None))
   }
 
   fn eval_return(
@@ -311,6 +363,9 @@ impl Interpreter {
         Stmt::Continue(token) => {
           return Err(InterpreterError::Continue);
         },
+        Stmt::Class(name, methods) => {
+          self.eval_class(env, name, *methods, engine)?;
+        },
       }
     }
 
@@ -344,7 +399,54 @@ impl Interpreter {
         Err(InterpreterError::Return(v)) => Ok((v, None)),
         _ => Err(InterpreterError::RuntimeError),
       },
+
+      Expr::Get { object, name } => match self.eval_get(env, *object, name, engine) {
+        Ok(v) => Ok(v),
+        Err(InterpreterError::Return(v)) => Ok((v, None)),
+        _ => Err(InterpreterError::RuntimeError),
+      },
+
+      Expr::Set {
+        object,
+        name,
+        value,
+      } => match self.eval_set(env, *object, name, *value, engine) {
+        Ok(v) => Ok(v),
+        Err(InterpreterError::Return(v)) => Ok((v, None)),
+        _ => Err(InterpreterError::RuntimeError),
+      },
     }
+  }
+
+  fn eval_get(
+    &mut self,
+    env: &mut Rc<RefCell<Env>>,
+    object: Expr,
+    name: Token,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
+    let (object_val, object_token) = self.eval_expr(object, env, engine)?;
+
+    if let LoxValue::Instance(instance) = object_val {
+      if let Some(field) = instance.borrow().fields.get(&name.lexeme) {
+        return Ok((field.clone(), Some(name)));
+      }
+    }
+
+    eprintln!("Cannot read property '{}' of non-instance", name.lexeme);
+
+    return Err(InterpreterError::RuntimeError);
+  }
+
+  fn eval_set(
+    &mut self,
+    env: &mut Rc<RefCell<Env>>,
+    object: Expr,
+    name: Token,
+    value: Expr,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
+    Err(InterpreterError::RuntimeError)
   }
 
   fn eval_call(
@@ -404,6 +506,12 @@ impl Interpreter {
         }
 
         let result = fnc.call(self, args_val, engine)?;
+        return Ok((result, Some(paren)));
+      },
+      LoxValue::Class(class) => {
+        // TODO: check the arity
+        println!("Class: {:#?}", env);
+        let result = class.call(self, args_val, engine)?;
         return Ok((result, Some(paren)));
       },
       _ => Err(InterpreterError::RuntimeError),
@@ -899,6 +1007,8 @@ impl Interpreter {
       LoxValue::String(s) => !s.is_empty(),
       LoxValue::Function(_) => false,
       LoxValue::NativeFunction(_) => false,
+      LoxValue::Class(_) => false,
+      LoxValue::Instance(_) => false,
     };
   }
 }
