@@ -17,6 +17,7 @@ pub enum DiagnosticCode {
   UnexpectedEof,
   UnexpectedToken,
   ExpectedExpression,
+  InvalidThis,
   MissingClosingBrace,
   MissingClosingParen,
   MissingSemicolon,
@@ -85,6 +86,7 @@ impl DiagnosticCode {
       Self::InvalidArguments => "E0401".to_string(),
       Self::IoError => "E0402".to_string(),
       Self::InvalidUnaryOperator => "E0403".to_string(),
+      Self::InvalidThis => "E0404".to_string(),
       Self::ExpectedToken => "E0105".to_string(), // assign a unique code or reuse MissingSemicolon code if appropriate
 
       // Warnings

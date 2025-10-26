@@ -1,10 +1,11 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use diagnostic::DiagnosticEngine;
 use parser::stmt::Stmt;
 use scanner::token::Token;
 
 use crate::{
+  class::LoxClassInstance,
   env::Env,
   function::LoxCallable,
   interpreter::Interpreter,
@@ -50,5 +51,20 @@ impl LoxCallable for LoxFunction {
         _ => Ok(LoxValue::Nil),
       },
     }
+  }
+}
+
+impl LoxFunction {
+  pub fn bind(&self, instance: Rc<RefCell<LoxClassInstance>>) -> Arc<LoxFunction> {
+    // Create a new environment with "this" bound to the instance
+    let mut environment = Env::new();
+    environment.enclosing = Some(self.closure.clone());
+    environment.define("this".to_string(), LoxValue::Instance(instance));
+
+    Arc::new(LoxFunction {
+      params: self.params.clone(),
+      body: self.body.clone(),
+      closure: Rc::new(RefCell::new(environment)),
+    })
   }
 }

@@ -967,6 +967,11 @@ impl Parser {
         return Ok(Expr::Literal(token));
       },
 
+      TokenType::This => {
+        self.advance();
+        return Ok(Expr::This(token));
+      },
+
       TokenType::Identifier => {
         self.advance();
         return Ok(Expr::Identifier(token));

@@ -137,7 +137,7 @@ impl Runner {
     let mut resolver = semantic_analysis::resolver::Resolver::new();
     resolver.run(&parser.ast, engine);
 
-    // engine.print_all(&source);
+    engine.print_all(&source);
     if engine.has_errors() {
       return;
     }

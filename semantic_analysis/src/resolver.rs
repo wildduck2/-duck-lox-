@@ -10,6 +10,14 @@ use std::collections::HashMap;
 pub struct Resolver {
   scopes: Vec<HashMap<String, VariableState>>,
   locals: HashMap<String, usize>,
+  current_class: ClassType,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ClassType {
+  None,
+  Class,
+  Instance,
 }
 
 #[derive(Debug, Clone)]
@@ -24,6 +32,7 @@ impl Resolver {
     Self {
       scopes: vec![],
       locals: HashMap::new(),
+      current_class: ClassType::None,
     }
   }
 
@@ -86,7 +95,12 @@ impl Resolver {
         }
       },
       Stmt::Class(name, methods) => {
-        match name {
+        // Save the previous class context
+        let enclosing_class = self.current_class;
+        self.current_class = ClassType::Class; // ← ADD THIS LINE!
+
+        match &name {
+          // Use &name to borrow
           Expr::Identifier(token) => {
             self.declare(token, engine);
             self.define(token);
@@ -97,10 +111,32 @@ impl Resolver {
           },
         };
 
-        self.resolve_expr(name, engine);
+        // REMOVE THIS LINE:
+        // self.resolve_expr(name, engine);
+
+        self.begin_scope();
+        self.scopes.last_mut().unwrap().insert(
+          "this".to_string(),
+          VariableState {
+            defined: true,
+            used: false,
+            line: if let Expr::Identifier(token) = &name {
+              // Use &name
+              token.position.0
+            } else {
+              0
+            },
+          },
+        );
+
         for method in methods.iter() {
           self.resolve_stmt(method, engine);
         }
+
+        self.end_scope(engine);
+
+        // Restore the previous class context
+        self.current_class = enclosing_class; // ← ADD THIS LINE!
       },
       Stmt::Break(_) | Stmt::Continue(_) => {},
     }
@@ -169,6 +205,22 @@ impl Resolver {
       } => {
         self.resolve_expr(value, engine);
         self.resolve_expr(object, engine);
+      },
+      Expr::This(keyword) => {
+        if self.current_class == ClassType::None {
+          let diagnostic = Diagnostic::new(
+            DiagnosticCode::InvalidThis,
+            "Can't use 'this' outside of a class".to_string(),
+          )
+          .with_label(Label::primary(
+            keyword.to_span(),
+            Some("'this' not allowed here".to_string()),
+          ));
+          engine.emit(diagnostic);
+          return;
+        }
+
+        self.resolve_local(&keyword.lexeme);
       },
     }
   }

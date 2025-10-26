@@ -1,8 +1,8 @@
 class Breakfast {
   cook() {
-    print("Eggs!");
+    print(this);
   }
 }
 
 var breakfast = Breakfast();
-print(breakfast);  
+breakfast.cook();  // Prints the instance

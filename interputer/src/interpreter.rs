@@ -421,6 +421,7 @@ impl Interpreter {
         name,
         value,
       } => self.eval_set(env, *object, name, *value, engine),
+      Expr::This(token) => self.eval_identifier(token, env, engine),
     }
   }
 
@@ -431,14 +432,18 @@ impl Interpreter {
     name: Token,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
-    let (object_val, object_token) = self.eval_expr(object, env, engine)?;
+    let (object_val, _) = self.eval_expr(object, env, engine)?;
 
     if let LoxValue::Instance(instance) = object_val {
+      // Check fields first
       if let Some(field) = instance.borrow().fields.get(&name.lexeme) {
         return Ok((field.clone(), Some(name)));
       }
+
+      // Check methods and bind 'this'
       if let Some(method) = instance.borrow().class.methods.get(&name.lexeme) {
-        return Ok((LoxValue::Function(method.clone()), Some(name)));
+        let bound_method = method.bind(instance.clone());
+        return Ok((LoxValue::Function(bound_method), Some(name)));
       }
 
       eprintln!("Undefined property '{}'", name.lexeme);
@@ -446,7 +451,6 @@ impl Interpreter {
     }
 
     eprintln!("Cannot read property '{}' of non-instance", name.lexeme);
-
     return Err(InterpreterError::RuntimeError);
   }
 

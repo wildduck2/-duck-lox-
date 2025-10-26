@@ -39,6 +39,7 @@ pub enum Expr {
     name: Token,
     value: Box<Expr>,
   },
+  This(Token),
 }
 
 impl fmt::Display for Expr {
@@ -75,6 +76,9 @@ impl fmt::Display for Expr {
         value,
       } => {
         write!(f, "({}.{} = {})", object, name.lexeme, value)
+      },
+      Expr::This(token) => {
+        write!(f, "this")
       },
     }
   }
@@ -174,6 +178,9 @@ impl Expr {
 
         println!("{}└── value:", new_prefix);
         value.build_tree(&format!("{}    ", new_prefix), true);
+      },
+      Expr::This(token) => {
+        println!("{}{}This", prefix, connector);
       },
     }
   }
