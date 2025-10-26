@@ -30,6 +30,15 @@ pub enum Expr {
     arguments: Vec<Expr>,
   },
   Grouping(Box<Expr>),
+  Get {
+    object: Box<Expr>,
+    name: Token,
+  },
+  Set {
+    object: Box<Expr>,
+    name: Token,
+    value: Box<Expr>,
+  },
 }
 
 impl fmt::Display for Expr {
@@ -56,253 +65,116 @@ impl fmt::Display for Expr {
           .join(", ");
         write!(f, "{}({})", callee, args)
       },
+      Expr::Get { object, name } => {
+        write!(f, "({}.{})", object, name.lexeme)
+      },
+
+      Expr::Set {
+        object,
+        name,
+        value,
+      } => {
+        write!(f, "({}.{} = {})", object, name.lexeme, value)
+      },
     }
   }
 }
 
+// In expr.rs
 impl Expr {
-  /// Simple version: prints the tree with indentation
-  /// Each level gets indented by 4 spaces
-  pub fn pretty_print(&self) {
-    self.pretty_print_internal(0);
-  }
+  pub(crate) fn build_tree(&self, prefix: &str, is_last: bool) {
+    let connector = if is_last { "└── " } else { "├── " };
+    let extension = if is_last { "    " } else { "│   " };
 
-  pub fn pretty_print_internal(&self, indent: usize) {
-    let padding = " ".repeat(indent);
     match self {
       Expr::Literal(token) => {
-        println!("{}Literal({})", padding, token.lexeme);
+        println!("{}{}Literal({})", prefix, connector, token.lexeme);
       },
+
       Expr::Identifier(token) => {
-        println!("{}Identifier({})", padding, token.lexeme);
+        println!("{}{}Identifier({})", prefix, connector, token.lexeme);
       },
-      Expr::Unary {
-        operator,
-        rhs: right,
-      } => {
-        println!("{}Unary({})", padding, operator.lexeme);
-        right.pretty_print_internal(indent + 2);
+
+      Expr::Binary { lhs, operator, rhs } => {
+        println!("{}{}Binary({})", prefix, connector, operator.lexeme);
+        let new_prefix = format!("{}{}", prefix, extension);
+        lhs.build_tree(&new_prefix, false);
+        rhs.build_tree(&new_prefix, true);
       },
-      Expr::Binary {
-        lhs: left,
-        operator,
-        rhs: right,
-      } => {
-        println!("{}Binary({})", padding, operator.lexeme);
-        left.pretty_print_internal(indent + 2);
-        right.pretty_print_internal(indent + 2);
+
+      Expr::Unary { operator, rhs } => {
+        println!("{}{}Unary({})", prefix, connector, operator.lexeme);
+        rhs.build_tree(&format!("{}{}", prefix, extension), true);
       },
+
       Expr::Grouping(expr) => {
-        println!("{}Grouping", padding);
-        expr.pretty_print_internal(indent + 2);
+        println!("{}{}Grouping", prefix, connector);
+        expr.build_tree(&format!("{}{}", prefix, extension), true);
       },
-      Expr::Assign {
-        name: operator,
-        value: rhs,
-      } => {
-        println!("{}Assign({})", padding, operator.lexeme);
-        rhs.pretty_print_internal(indent + 2);
+
+      Expr::Assign { name, value } => {
+        println!("{}{}Assign({})", prefix, connector, name.lexeme);
+        value.build_tree(&format!("{}{}", prefix, extension), true);
       },
-      Expr::Ternary {
-        condition,
-        then_branch,
-        else_branch,
-      } => {
-        println!("{}Ternary", padding);
-        condition.pretty_print_internal(indent + 2);
-        then_branch.pretty_print_internal(indent + 2);
-        else_branch.pretty_print_internal(indent + 2);
-      },
+
       Expr::Call {
         callee,
         paren: _,
         arguments,
       } => {
-        println!("{}Call", padding);
-        callee.pretty_print_internal(indent + 2);
-        for arg in arguments {
-          arg.pretty_print_internal(indent + 2);
+        println!("{}{}Call", prefix, connector);
+        let new_prefix = format!("{}{}", prefix, extension);
+
+        println!("{}├── callee:", new_prefix);
+        callee.build_tree(&format!("{}│   ", new_prefix), true);
+
+        if !arguments.is_empty() {
+          println!("{}└── arguments:", new_prefix);
+          let arg_prefix = format!("{}    ", new_prefix);
+          for (i, arg) in arguments.iter().enumerate() {
+            arg.build_tree(&arg_prefix, i == arguments.len() - 1);
+          }
         }
       },
-    }
-  }
 
-  /// Advanced version: prints a beautiful ASCII tree like this:
-  ///          (-)
-  ///         /   \
-  ///      (+)     (2)
-  ///     /   \
-  ///   (8)   (*)
-  ///         / \
-  ///       (5) (6)
-  pub fn print_tree(&self) {
-    let mut lines = Vec::new();
-    self.build_tree(&mut lines, "", "", true);
-    for line in lines {
-      println!("{}", line);
-    }
-  }
-
-  /// Recursively builds the tree representation
-  /// This is the core algorithm that constructs the ASCII art
-  pub fn build_tree(
-    &self,
-    lines: &mut Vec<String>,
-    prefix: &str,
-    child_prefix: &str,
-    is_last: bool,
-  ) {
-    let (node_label, children) = match self {
-      Expr::Literal(token) => {
-        // Literals are leaf nodes - they have no children
-        (format!("({})", token.lexeme), vec![])
-      },
-      Expr::Identifier(token) => {
-        // Literals are leaf nodes - they have no children
-        (format!("({})", token.lexeme), vec![])
-      },
-      Expr::Unary {
-        operator,
-        rhs: right,
-      } => {
-        // Unary has one child on the right
-        (format!("({})", operator.lexeme), vec![right.as_ref()])
-      },
-      Expr::Binary {
-        lhs: left,
-        operator,
-        rhs: right,
-      } => {
-        // Binary has two children: left and right
-        (
-          format!("({})", operator.lexeme),
-          vec![left.as_ref(), right.as_ref()],
-        )
-      },
-      Expr::Grouping(expr) => {
-        // Grouping has one child
-        ("(group)".to_string(), vec![expr.as_ref()])
-      },
-      Expr::Assign {
-        name: operator,
-        value: rhs,
-      } => {
-        // Grouping has one child
-        (format!("({})", operator.lexeme), vec![rhs.as_ref()])
-      },
       Expr::Ternary {
         condition,
         then_branch,
         else_branch,
       } => {
-        // Grouping has one child
-        (
-          "(?:)".to_string(),
-          vec![
-            condition.as_ref(),
-            then_branch.as_ref(),
-            else_branch.as_ref(),
-          ],
-        )
+        println!("{}{}Ternary", prefix, connector);
+        let new_prefix = format!("{}{}", prefix, extension);
+
+        println!("{}├── condition:", new_prefix);
+        condition.build_tree(&format!("{}│   ", new_prefix), true);
+
+        println!("{}├── then:", new_prefix);
+        then_branch.build_tree(&format!("{}│   ", new_prefix), true);
+
+        println!("{}└── else:", new_prefix);
+        else_branch.build_tree(&format!("{}    ", new_prefix), true);
       },
-      Expr::Call {
-        callee,
-        paren: _,
-        arguments,
+      Expr::Get { object, name } => {
+        println!("{}{}Get({})", prefix, connector, name.lexeme);
+        let new_prefix = format!("{}{}", prefix, extension);
+        println!("{}└── object:", new_prefix);
+        object.build_tree(&format!("{}    ", new_prefix), true);
+      },
+
+      Expr::Set {
+        object,
+        name,
+        value,
       } => {
-        let mut children: Vec<&Expr> = Vec::new();
-        children.push(callee.as_ref());
-        for arg in arguments {
-          children.push(arg);
-        }
-        ("(call)".to_string(), children)
+        println!("{}{}Set({})", prefix, connector, name.lexeme);
+        let new_prefix = format!("{}{}", prefix, extension);
+
+        println!("{}├── object:", new_prefix);
+        object.build_tree(&format!("{}│   ", new_prefix), true);
+
+        println!("{}└── value:", new_prefix);
+        value.build_tree(&format!("{}    ", new_prefix), true);
       },
-    };
-
-    // Add the current node to the output
-    // The connector is either "└── " (last child) or "├── " (not last child)
-    let connector = if is_last { "└── " } else { "├── " };
-    lines.push(format!("{}{}{}", prefix, connector, node_label));
-
-    // Process children
-    for (index, child) in children.iter().enumerate() {
-      let is_last_child = index == children.len() - 1;
-
-      // Calculate the new prefix for the child
-      // If current node is last, use spaces; otherwise use vertical bar
-      let new_prefix = if is_last {
-        format!("{}    ", child_prefix)
-      } else {
-        format!("{}│   ", child_prefix)
-      };
-
-      // Recursively print the child
-      child.build_tree(lines, &new_prefix, &new_prefix, is_last_child);
-    }
-  }
-
-  /// Even fancier version with branch lines connecting parent to children
-  /// This shows the actual "tree" structure more clearly
-  pub fn print_fancy_tree(&self) {
-    println!();
-    self.print_node(String::new(), String::new(), true);
-    println!();
-  }
-
-  pub fn print_node(&self, prefix: String, child_prefix: String, is_tail: bool) {
-    let label = match self {
-      Expr::Literal(token) => format!("📍 {}", token.lexeme),
-      Expr::Identifier(token) => format!("📍 {}", token.lexeme),
-      Expr::Unary { operator, .. } => format!("🔧 {}", operator.lexeme),
-      Expr::Binary { operator, .. } => format!("⚙️  {}", operator.lexeme),
-      Expr::Grouping(_) => "📦 group".to_string(),
-      Expr::Assign { name: operator, .. } => format!("🔧 {}", operator.lexeme),
-      Expr::Ternary {
-        condition,
-        then_branch,
-        else_branch,
-      } => format!("🔀 ({} ? {} : {})", condition, then_branch, else_branch),
-      Expr::Call { .. } => "📞 call".to_string(),
-    };
-
-    println!("{}{}{}", prefix, if is_tail { "└─ " } else { "├─ " }, label);
-
-    let children = match self {
-      Expr::Literal(_) => vec![],
-      Expr::Identifier(_) => vec![],
-      Expr::Unary { rhs: right, .. } => vec![right.as_ref()],
-      Expr::Binary {
-        lhs: left,
-        rhs: right,
-        ..
-      } => vec![left.as_ref(), right.as_ref()],
-      Expr::Grouping(expr) => vec![expr.as_ref()],
-      Expr::Assign { value: right, .. } => vec![right.as_ref()],
-      Expr::Ternary {
-        condition,
-        then_branch,
-        else_branch,
-      } => vec![
-        condition.as_ref(),
-        then_branch.as_ref(),
-        else_branch.as_ref(),
-      ],
-      Expr::Call {
-        callee, arguments, ..
-      } => {
-        let mut nodes = vec![callee.as_ref()];
-        for arg in arguments {
-          nodes.push(arg);
-        }
-        nodes
-      },
-    };
-
-    for (i, child) in children.iter().enumerate() {
-      let is_last = i == children.len() - 1;
-      let new_prefix = format!("{}{}", child_prefix, if is_tail { "   " } else { "│  " });
-      let new_child_prefix = format!("{}{}", child_prefix, if is_tail { "   " } else { "│  " });
-      child.print_node(new_prefix, new_child_prefix, is_last);
     }
   }
 }

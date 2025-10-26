@@ -2,6 +2,7 @@ use colored::*;
 use diagnostic::{diagnostic::Diagnostic, diagnostic_code::DiagnosticCode, DiagnosticEngine};
 use runner::Runner;
 
+mod class;
 mod env;
 mod error;
 mod function;

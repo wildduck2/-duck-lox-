@@ -2,9 +2,12 @@
 *
 * program        → declaration* EOF ;
 *
-* declaration    → funDecl
+* declaration    → classDecl
+*                | funDecl
 *                | varDecl
 *                | stmt ;
+*
+* classDecl      → "class" IDENTIFIER "{" declaration* "}" ;
 *
 * funDecl        → "fun" function;
 *
@@ -65,7 +68,7 @@
 * unary          → ( "!" | "-" ) unary
 *                | call ;
 *
-* call           → primary ( "(" arguments? ")" )* ;
+* call           → primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
 *
 * arguments      → expr ( "," expr )* ;
 *
@@ -136,8 +139,42 @@ impl Parser {
     match self.current_token().token_type {
       TokenType::Var => self.parse_var_stmt(engine),
       TokenType::Fun => self.parse_fun_stmt(engine),
+      TokenType::Class => self.parse_class_stmt(engine),
       _ => self.parse_stmt(engine),
     }
+  }
+
+  fn parse_class_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    self.expect(TokenType::Class, engine)?;
+    let name = self.parse_primary(engine)?;
+
+    self.expect(TokenType::LeftBrace, engine)?;
+
+    let mut methods = vec![];
+
+    while !self.is_eof() && !matches!(self.current_token().token_type, TokenType::RightBrace) {
+      let method_name = self.parse_primary(engine)?;
+
+      if !matches!(self.current_token().token_type, TokenType::LeftParen) {
+        break;
+      }
+      self.advance(); // consume the "("
+
+      let params = if matches!(self.current_token().token_type, TokenType::RightParen) {
+        vec![]
+      } else {
+        self.parse_parameters(engine)?
+      };
+      self.advance(); // consume the ")"
+
+      let body = self.parse_block_stmt(engine)?;
+
+      let method = Stmt::Fun(method_name, params, Box::new(body));
+      methods.push(method);
+    }
+    self.expect(TokenType::RightBrace, engine)?;
+
+    Ok(Stmt::Class(name, Box::new(methods)))
   }
 
   fn parse_fun_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
@@ -586,6 +623,12 @@ impl Parser {
           name: name,
           value: Box::new(rhs),
         });
+      } else if let Expr::Get { object, name } = lhs {
+        return Ok(Expr::Set {
+          name,
+          object,
+          value: Box::new(rhs),
+        });
       } else {
         self.error_unexpected_token(engine, "in assignment, left side must be an identifier");
         return Err(());
@@ -804,36 +847,69 @@ impl Parser {
   /// Parse call: primary ( "(" arguments? ")" )*
   fn parse_call(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     // Start with a primary expression (the callee)
-    let mut callee = self.parse_primary(engine)?;
+    let mut expr = self.parse_primary(engine)?;
 
     // Loop to handle chained calls: foo()()()
     while !self.is_eof() {
       match self.current_token().token_type {
+        // TokenType::LeftParen => {
+        //   self.advance(); // consume '('
+        //
+        //   // Parse arguments (if any)
+        //   let args = if !self.matches_token(TokenType::RightParen) {
+        //     self.parse_arguments(engine)?
+        //   } else {
+        //     Vec::new() // No arguments
+        //   };
+        //
+        //   let token = self.current_token();
+        //   self.expect(TokenType::RightParen, engine)?;
+        //
+        //   // Wrap in a Call expression
+        //   callee = Expr::Call {
+        //     callee: Box::new(callee),
+        //     paren: token, // The ')'
+        //     arguments: args,
+        //   };
+        // },
         TokenType::LeftParen => {
+          // Handle function/method call: foo(), foo.bar(), etc.
           self.advance(); // consume '('
 
-          // Parse arguments (if any)
-          let args = if !self.matches_token(TokenType::RightParen) {
-            self.parse_arguments(engine)?
-          } else {
-            Vec::new() // No arguments
-          };
+          let mut args = Vec::new();
+          if !matches!(self.current_token().token_type, TokenType::RightParen) {
+            args = self.parse_arguments(engine)?;
+          }
 
-          let token = self.current_token();
+          let paren = self.current_token(); // For error tracking
           self.expect(TokenType::RightParen, engine)?;
 
-          // Wrap in a Call expression
-          callee = Expr::Call {
-            callee: Box::new(callee),
-            paren: token, // The ')'
+          expr = Expr::Call {
+            callee: Box::new(expr),
+            paren,
             arguments: args,
+          };
+        },
+
+        TokenType::Dot => {
+          self.advance(); // consume the "."
+          let name = self.current_token();
+          if name.token_type != TokenType::Identifier {
+            eprintln!("Expected property name after '.'");
+            return Err(());
+          }
+          self.advance(); // consume identifier
+
+          expr = Expr::Get {
+            object: Box::new(expr),
+            name: name,
           };
         },
         _ => break, // No more calls
       }
     }
 
-    Ok(callee)
+    Ok(expr)
   }
 
   /// Parse arguments: expr ( "," expr )*
@@ -943,6 +1019,23 @@ impl Parser {
       TokenType::SemiColon => {
         self.check_double_semicolon(engine);
         Err(())
+      },
+
+      TokenType::Fun => {
+        let fun = self.parse_fun_stmt(engine)?;
+        let token;
+        if let Stmt::Fun(name, _, _) = &fun {
+          token = name.clone();
+        } else {
+          return Err(());
+        }
+
+        self.ast.push(fun);
+        if let Expr::Identifier(name) = token {
+          return Ok(Expr::Identifier(name));
+        } else {
+          return Err(());
+        }
       },
 
       _ => {

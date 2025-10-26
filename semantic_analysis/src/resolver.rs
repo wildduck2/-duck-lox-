@@ -1,6 +1,6 @@
 use diagnostic::{
   diagnostic::{Diagnostic, Label, Span},
-  diagnostic_code::{DiagnosticCode, Severity},
+  diagnostic_code::DiagnosticCode,
   DiagnosticEngine,
 };
 use parser::{expr::Expr, stmt::Stmt};
@@ -85,7 +85,23 @@ impl Resolver {
           self.resolve_expr(value, engine);
         }
       },
+      Stmt::Class(name, methods) => {
+        match name {
+          Expr::Identifier(token) => {
+            self.declare(token, engine);
+            self.define(token);
+          },
+          _ => {
+            eprintln!("Class name must be an identifier got {:?}", name);
+            return;
+          },
+        };
 
+        self.resolve_expr(name, engine);
+        for method in methods.iter() {
+          self.resolve_stmt(method, engine);
+        }
+      },
       Stmt::Break(_) | Stmt::Continue(_) => {},
     }
   }
@@ -139,6 +155,21 @@ impl Resolver {
         self.resolve_local(&name.lexeme);
       },
       Expr::Literal(_) => {},
+
+      Expr::Get { object, name: _ } => {
+        // Only resolve the object, not the property name
+        // (property names are resolved at runtime)
+        self.resolve_expr(object, engine);
+      },
+
+      Expr::Set {
+        object,
+        name: _,
+        value,
+      } => {
+        self.resolve_expr(value, engine);
+        self.resolve_expr(object, engine);
+      },
     }
   }
 
@@ -178,24 +209,25 @@ impl Resolver {
   fn end_scope(&mut self, engine: &mut DiagnosticEngine) {
     if let Some(scope) = self.scopes.pop() {
       for (name, state) in scope {
-        let diagnostic = Diagnostic::new(
-          DiagnosticCode::UnusedVariable,
-          format!("Variable '{}' is never used", name),
-        )
-        .with_label(Label::primary(
-          Span {
-            line: state.line + 1,
-            column: 0,
-            length: 25,
-            file: "".to_string(),
-          },
-          Some("never used".to_string()),
-        ))
-        .with_help("Did you forget to use it?".to_string())
-        .with_note("Unused variables are a common source of bugs.".to_string());
+        if state.defined && !state.used {
+          let diagnostic = Diagnostic::new(
+            DiagnosticCode::UnusedVariable,
+            format!("Variable '{}' is never used", name),
+          )
+          .with_label(Label::primary(
+            Span {
+              line: state.line + 1,
+              column: 0,
+              length: 25,
+              file: "".to_string(),
+            },
+            Some("never used".to_string()),
+          ))
+          .with_help("Did you forget to use it?".to_string())
+          .with_note("Unused variables are a common source of bugs.".to_string());
 
-        engine.emit(diagnostic);
-        if state.defined && !state.used {}
+          engine.emit(diagnostic);
+        }
       }
     }
   }
