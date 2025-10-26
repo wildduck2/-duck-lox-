@@ -1,6 +1,8 @@
 class Breakfast {
-  cook(name) {
+  cook() {
+    print("Eggs!");
   }
 }
 
-Breakfast().cook(123);
+var breakfast = Breakfast();
+print(breakfast);  

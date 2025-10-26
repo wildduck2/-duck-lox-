@@ -9,7 +9,7 @@ use parser::{expr::Expr, stmt::Stmt};
 use scanner::token::{types::Literal, Token};
 
 use crate::{
-  class::LoxClass,
+  class::{LoxClass, LoxClassInstance},
   env::Env,
   function::{
     native::{clock::ClockFunction, print::PrintFunction},
@@ -151,42 +151,58 @@ impl Interpreter {
     methods: Vec<Stmt>,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
-    let name = match name {
+    let class_name = match name {
       Expr::Identifier(token) => token.lexeme.clone(),
       _ => {
-        eprintln!("Class name must be an identifier got {:?}", name);
+        eprintln!("Class name must be an identifier");
         return Err(InterpreterError::RuntimeError);
       },
     };
 
+    let mut methods_map = HashMap::new();
+
     for method in methods {
-      println!("{:#?}", method);
       match method {
         Stmt::Fun(name, params, body) => {
-          let fnn = self.eval_fun(env, name, params, *body, engine)?;
+          // Extract method name
+          let method_name = match name {
+            Expr::Identifier(token) => token.lexeme.clone(),
+            _ => continue,
+          };
+
+          // Extract parameters
+          let params_names: Vec<Token> = params
+            .into_iter()
+            .filter_map(|expr| match expr {
+              Expr::Identifier(token) => Some(token),
+              _ => None,
+            })
+            .collect();
+
+          // Create LoxFunction for this method
+          let function = Arc::new(LoxFunction {
+            params: params_names,
+            body: match *body {
+              Stmt::Block(stmts) => *stmts,
+              _ => vec![],
+            },
+            closure: env.clone(), // Capture current environment
+          });
+
+          methods_map.insert(method_name, function);
         },
         _ => {
           println!("not handled");
         },
       }
     }
-    println!("{:?}", env);
 
-    env.borrow_mut().define(
-      name.clone(),
-      LoxValue::Class(Arc::new(LoxClass {
-        name: name.clone(),
-        methods: HashMap::new(),
-        instance: None,
-      })),
-    );
+    let class = Arc::new(LoxClass {
+      name: class_name.clone(),
+      methods: methods_map,
+    });
 
-    // println!("{:?}\n\n\n\n", methods);
-
-    // for method in methods {
-    //   self.eval_stmt(method, env, engine)?;
-    //   // println!("{:?}\n", method);
-    // }
+    env.borrow_mut().define(class_name, LoxValue::Class(class));
 
     Ok((LoxValue::Nil, None))
   }
@@ -399,22 +415,12 @@ impl Interpreter {
         Err(InterpreterError::Return(v)) => Ok((v, None)),
         _ => Err(InterpreterError::RuntimeError),
       },
-
-      Expr::Get { object, name } => match self.eval_get(env, *object, name, engine) {
-        Ok(v) => Ok(v),
-        Err(InterpreterError::Return(v)) => Ok((v, None)),
-        _ => Err(InterpreterError::RuntimeError),
-      },
-
+      Expr::Get { object, name } => self.eval_get(env, *object, name, engine),
       Expr::Set {
         object,
         name,
         value,
-      } => match self.eval_set(env, *object, name, *value, engine) {
-        Ok(v) => Ok(v),
-        Err(InterpreterError::Return(v)) => Ok((v, None)),
-        _ => Err(InterpreterError::RuntimeError),
-      },
+      } => self.eval_set(env, *object, name, *value, engine),
     }
   }
 
@@ -431,6 +437,12 @@ impl Interpreter {
       if let Some(field) = instance.borrow().fields.get(&name.lexeme) {
         return Ok((field.clone(), Some(name)));
       }
+      if let Some(method) = instance.borrow().class.methods.get(&name.lexeme) {
+        return Ok((LoxValue::Function(method.clone()), Some(name)));
+      }
+
+      eprintln!("Undefined property '{}'", name.lexeme);
+      return Err(InterpreterError::RuntimeError);
     }
 
     eprintln!("Cannot read property '{}' of non-instance", name.lexeme);
@@ -446,6 +458,21 @@ impl Interpreter {
     value: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
+    let (object_val, _) = self.eval_expr(object, env, engine)?;
+
+    if let LoxValue::Instance(instance) = object_val {
+      let (value_result, _) = self.eval_expr(value, env, engine)?;
+
+      // Set the field
+      instance
+        .borrow_mut()
+        .fields
+        .insert(name.lexeme.clone(), value_result.clone());
+
+      return Ok((value_result, Some(name)));
+    }
+
+    eprintln!("Only instances have fields");
     Err(InterpreterError::RuntimeError)
   }
 
@@ -509,8 +536,11 @@ impl Interpreter {
         return Ok((result, Some(paren)));
       },
       LoxValue::Class(class) => {
-        // TODO: check the arity
-        println!("Class: {:#?}", env);
+        if class.arity() != usize::MAX && args_val.len() != class.arity() {
+          eprintln!("Class takes no arguments");
+          return Err(InterpreterError::RuntimeError);
+        }
+
         let result = class.call(self, args_val, engine)?;
         return Ok((result, Some(paren)));
       },

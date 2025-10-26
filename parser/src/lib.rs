@@ -48,7 +48,7 @@
 *
 * comma          → assignment ( "," assignment )* ;
 *
-* assignment     → IDENTIFIER "=" assignment
+* assignment     → (call ".")? IDENTIFIER "=" assignment
 *                | ternary ;
 *
 * ternary        → logical_or ( "?" expr ":" ternary )? ;
