@@ -34,8 +34,8 @@ impl fmt::Debug for LoxValue {
       LoxValue::Bool(b) => write!(f, "Bool({b})"),
       LoxValue::Function(_) => write!(f, "Function(<fn>)"),
       LoxValue::NativeFunction(_) => write!(f, "NativeFunction(<native>)"),
-      LoxValue::Class(c) => write!(f, "Class({c:?})"),
-      LoxValue::Instance(i) => write!(f, "Instance({i:?})"),
+      LoxValue::Class(c) => write!(f, "Class({})", c.name),
+      LoxValue::Instance(i) => write!(f, "Instance({})", i.borrow().class.name),
     }
   }
 }

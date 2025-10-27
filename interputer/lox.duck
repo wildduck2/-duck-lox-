@@ -1,14 +1,19 @@
-class Dog {
-  init(name, breed) {
-    this.name = name;
-    this.breed = breed;
-    print("Creating dog: " + name);
-  }
-  
-  static bark(name) {
-    print(name + " says woof!");
+
+class Animal {
+  weight() {
+    print("Animal weight is 0");
   }
 }
 
-var dog = Dog("Buddy", "Golden Retriever");
-Dog.bark("Buddy");
+class Dog < Animal {
+  init() {
+  }
+
+  weight() {
+    super.weight();
+    print("Dog weight is 10");
+  }
+}
+
+var dog = Dog();
+dog.weight();

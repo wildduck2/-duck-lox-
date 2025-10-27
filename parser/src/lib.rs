@@ -7,7 +7,7 @@
 *                | varDecl
 *                | stmt ;
 *
-* classDecl      → "class" IDENTIFIER "{" declaration* "}" ;
+* classDecl      → "class" IDENTIFIER ( "<" IDENTIFIER )?  "{" declaration* "}" ;
 *
 * funDecl        → "fun" function;
 *
@@ -73,7 +73,7 @@
 * arguments      → expr ( "," expr )* ;
 *
 * primary        → NUMBER | STRING | IDENTIFIER
-*                | "true" | "false" | "nil"
+*                | "true" | "false" | "nil" | "this" | ( "super" "." IDENTIFIER )
 *                | "(" expr ")" ;
 *
 */
@@ -148,6 +148,13 @@ impl Parser {
     self.expect(TokenType::Class, engine)?;
     let name = self.parse_primary(engine)?;
 
+    let superclass = if !self.matches_token(TokenType::Less) {
+      None
+    } else {
+      self.advance();
+      Some(self.parse_primary(engine)?)
+    };
+
     self.expect(TokenType::LeftBrace, engine)?;
 
     let mut methods = vec![];
@@ -186,6 +193,7 @@ impl Parser {
 
     Ok(Stmt::Class(
       name,
+      superclass,
       Box::new(methods),
       Box::new(static_methods),
     ))
@@ -986,6 +994,16 @@ impl Parser {
         return Ok(Expr::This(token));
       },
 
+      TokenType::Super => {
+        self.advance();
+        self.expect(TokenType::Dot, engine)?;
+        let method = self.parse_primary(engine)?;
+        if let Expr::Identifier(name) = method {
+          return Ok(Expr::Super(token, name));
+        } else {
+          return Err(());
+        }
+      },
       TokenType::Identifier => {
         self.advance();
         return Ok(Expr::Identifier(token));

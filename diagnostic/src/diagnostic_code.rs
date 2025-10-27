@@ -13,6 +13,7 @@ pub enum DiagnosticCode {
   // Errors
   UnterminatedString,
   InvalidCharacter,
+  InvalidSuperclass,
   InvalidNumber,
   UnexpectedEof,
   UnexpectedToken,
@@ -63,6 +64,7 @@ impl DiagnosticCode {
       Self::UnexpectedToken => "E0100".to_string(),
       Self::ExpectedExpression => "E0101".to_string(),
       Self::MissingClosingBrace => "E0102".to_string(),
+      Self::InvalidSuperclass => "E0103".to_string(),
       Self::MissingClosingParen => "E0103".to_string(),
       Self::MissingSemicolon => "E0104".to_string(),
       Self::InvalidAssignmentTarget => "E0105".to_string(),

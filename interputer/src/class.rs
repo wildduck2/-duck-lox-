@@ -2,12 +2,13 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
 
 use crate::{
   function::{normal::LoxFunction, LoxCallable},
-  lox_value::InterpreterError,
+  lox_value::{InterpreterError, LoxValue},
 };
 
 #[derive(Debug, Clone)]
 pub struct LoxClass {
   pub name: String,
+  pub superclass: LoxValue,
   pub methods: HashMap<String, Arc<LoxFunction>>,
   pub static_methods: HashMap<String, Arc<LoxFunction>>,
 }
@@ -75,6 +76,17 @@ impl LoxCallable for LoxClass {
 
 impl LoxClass {
   pub fn find_method(&self, name: &str) -> Option<&Arc<LoxFunction>> {
-    self.methods.get(name)
+    if let Some(method) = self.methods.get(name) {
+      return Some(&method);
+    }
+
+    if let LoxValue::Class(superclass_arc) = &self.superclass {
+      // Recursively call find_method on the superclass's LoxClass
+      // Note: We need to check if the superclass is actually a class before calling find_method
+      let superclass_loxclass: &LoxClass = &superclass_arc;
+      return superclass_loxclass.find_method(name);
+    }
+
+    None
   }
 }

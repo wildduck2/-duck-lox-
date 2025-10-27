@@ -11,14 +11,16 @@ pub struct Resolver {
   scopes: Vec<HashMap<String, VariableState>>,
   locals: HashMap<String, usize>,
   current_class: ClassType,
+  current_superclass: ClassType,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum ClassType {
   None,
   Class,
-  Instance,
-  StaticMethod, // ADD THIS
+  // Instance,
+  Subclass,
+  StaticMethod,
 }
 
 #[derive(Debug, Clone)]
@@ -34,6 +36,7 @@ impl Resolver {
       scopes: vec![],
       locals: HashMap::new(),
       current_class: ClassType::None,
+      current_superclass: ClassType::None,
     }
   }
 
@@ -95,14 +98,15 @@ impl Resolver {
           self.resolve_expr(value, engine);
         }
       },
-      Stmt::Class(name, methods, static_methods) => {
+      Stmt::Class(name, superclass_expr, methods, static_methods) => {
         let enclosing_class = self.current_class;
-        self.current_class = ClassType::Class;
+        let enclosing_superclass = self.current_superclass; // Store previous state
 
-        match &name {
+        let name_token = match &name {
           Expr::Identifier(token) => {
             self.declare(token, engine);
             self.define(token);
+            token
           },
           _ => {
             eprintln!("Class name must be an identifier got {:?}", name);
@@ -110,38 +114,86 @@ impl Resolver {
           },
         };
 
-        // Resolve INSTANCE methods with 'this' in scope
-        self.begin_scope();
+        // 1. Resolve Superclass Expression (if present)
+        if let Some(superclass) = superclass_expr {
+          // Check for illegal inheritance (Class A inherits A)
+          if let Expr::Identifier(token) = superclass {
+            if token.lexeme == name_token.lexeme {
+              // ... (Keep your existing self-inheritance diagnostic code here) ...
+              let diagnostic = Diagnostic::new(
+                DiagnosticCode::InvalidSuperclass,
+                "A class cannot inherit from itself.".to_string(),
+              )
+              .with_label(Label::primary(
+                token.to_span(),
+                Some("self-inheritance here".to_string()),
+              ))
+              .with_help("Change the superclass name to a different class.".to_string());
+              engine.emit(diagnostic);
+              return;
+            }
+          }
+          self.resolve_expr(superclass, engine);
+          self.current_superclass = ClassType::Subclass; // Set superclass flag
+        };
+
+        // Determine current class type
+        self.current_class = if superclass_expr.is_some() {
+          ClassType::Subclass
+        } else {
+          ClassType::Class
+        };
+
+        // 2. Begin Scope for 'super' (if superclass exists)
+        if superclass_expr.is_some() {
+          self.begin_scope();
+          // Define 'super' in the scope so it can be resolved.
+          // This scope will be one level "outside" the 'this' scope.
+          self.scopes.last_mut().unwrap().insert(
+            "super".to_string(),
+            VariableState {
+              defined: true,
+              used: false,
+              line: name_token.position.0,
+            },
+          );
+        }
+
+        // 3. Resolve INSTANCE methods (with 'this' in scope)
+        self.begin_scope(); // Scope for 'this'
         self.scopes.last_mut().unwrap().insert(
           "this".to_string(),
           VariableState {
             defined: true,
             used: false,
-            line: if let Expr::Identifier(token) = &name {
-              token.position.0
-            } else {
-              0
-            },
+            line: name_token.position.0,
           },
         );
 
         for method in methods.iter() {
+          // NOTE: A more complete implementation would check if the method is 'init'
+          // and disallow 'super' access within it, as per the Lox language design.
           self.resolve_stmt(method, engine);
         }
 
-        self.end_scope(engine);
+        self.end_scope(engine); // End 'this' scope
 
-        // Resolve STATIC methods WITHOUT 'this' in scope
+        // 4. End 'super' scope (if one was created)
+        if superclass_expr.is_some() {
+          self.end_scope(engine);
+        }
+
+        // 5. Resolve STATIC methods (without 'this' in scope)
         let prev_class = self.current_class;
-        self.current_class = ClassType::StaticMethod; // Mark as static context
+        self.current_class = ClassType::StaticMethod;
 
         for method in static_methods.iter() {
           self.resolve_stmt(method, engine);
         }
 
-        self.current_class = prev_class; // Restore context
-
+        // 6. Restore context
         self.current_class = enclosing_class;
+        self.current_superclass = enclosing_superclass;
       },
 
       Stmt::Break(_) | Stmt::Continue(_) => {},
@@ -216,14 +268,15 @@ impl Resolver {
         // Check if we're in a static method
         if self.current_class == ClassType::StaticMethod {
           let diagnostic = Diagnostic::new(
-      DiagnosticCode::InvalidThis,
-      "Can't use 'this' in static methods".to_string(),
-    )
-    .with_label(Label::primary(
-      keyword.to_span(),
-      Some("'this' not allowed in static context".to_string()),
-    ))
-    .with_help("Static methods don't have access to instance data. Remove 'static' or use instance methods instead.".to_string());
+            DiagnosticCode::InvalidThis,
+            "Can't use 'this' in static methods".to_string(),
+          )  
+            .with_label(Label::primary(
+            keyword.to_span(),
+            Some("'this' not allowed in static context".to_string()),
+            ))
+            .with_help("Static methods don't have access to instance data. Remove 'static' or use instance methods instead.".to_string());
+
           engine.emit(diagnostic);
           return;
         }
@@ -242,6 +295,55 @@ impl Resolver {
           return;
         }
 
+        self.resolve_local(&keyword.lexeme);
+      },
+
+      Expr::Super(keyword, method_name) => {
+        // Check 1: Must be inside a class
+        if self.current_class == ClassType::None {
+          let diagnostic = Diagnostic::new(
+            DiagnosticCode::InvalidThis,
+            "Can't use 'super' outside of a class method".to_string(),
+          )
+          .with_label(Label::primary(
+            keyword.to_span(),
+            Some("'super' not allowed here".to_string()),
+          ));
+          engine.emit(diagnostic);
+          return;
+        }
+
+        // heck 2: Must be in a subclass (i.e., class with a superclass)
+        if self.current_superclass != ClassType::Subclass {
+          let diagnostic = Diagnostic::new(
+            DiagnosticCode::InvalidThis,
+            "Can't use 'super' in a class that doesn't inherit from another class".to_string(),
+          )
+          .with_label(Label::primary(
+            keyword.to_span(),
+            Some("'super' not allowed without a superclass".to_string()),
+          ));
+          engine.emit(diagnostic);
+          return;
+        }
+
+        // Check 3: Disallow 'super' in static methods
+        if self.current_class == ClassType::StaticMethod {
+          let diagnostic = Diagnostic::new(
+            DiagnosticCode::InvalidThis,
+                "Can't use 'super' in static methods".to_string(),
+            )
+            .with_label(Label::primary(
+                keyword.to_span(),
+                Some("'super' not allowed in static context".to_string()),
+            ))
+            .with_help("Superclass methods are instance methods. Remove 'static' or use instance methods instead.".to_string());
+          engine.emit(diagnostic);
+          return;
+        }
+
+        // Resolve 'super' keyword. This finds the environment where the superclass
+        // reference is stored, and records the depth in `self.locals`.
         self.resolve_local(&keyword.lexeme);
       },
     }

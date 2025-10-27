@@ -137,8 +137,8 @@ impl Interpreter {
         engine.emit(diagnostic);
         Ok(())
       },
-      Stmt::Class(name, methods, static_methods) => {
-        self.eval_class(env, name, *methods, *static_methods, engine)?;
+      Stmt::Class(name, superclass, methods, static_methods) => {
+        self.eval_class(env, name, superclass, *methods, *static_methods, engine)?;
         Ok(())
       },
     }
@@ -148,6 +148,7 @@ impl Interpreter {
     &mut self,
     env: &mut Rc<RefCell<Env>>,
     name: Expr,
+    superclass: Option<Expr>,
     methods: Vec<Stmt>,
     static_methods: Vec<Stmt>,
     engine: &mut DiagnosticEngine,
@@ -160,18 +161,64 @@ impl Interpreter {
       },
     };
 
+    // Define the class name in the environment first (allows recursion/self-reference)
+    env.borrow_mut().define(class_name.clone(), LoxValue::Nil);
+
+    let mut super_class_val = LoxValue::Nil;
+    let mut class_env = env.clone();
+
+    if let Some(superclass_expr) = superclass {
+      let (superclass_val, token) = self.eval_expr(superclass_expr, env, engine)?;
+      if let LoxValue::Class(_) = superclass_val {
+        super_class_val = superclass_val.clone();
+
+        // **INHERITANCE ENVIRONMENT STEP:**
+        // Create a new environment nested *inside* the current environment
+        // to hold the 'super' binding.
+        let super_env = Rc::new(RefCell::new(
+          class_env.borrow_mut().with_enclosing(Rc::clone(&class_env)),
+        ));
+        // Define 'super' in this new environment.
+        super_env
+          .borrow_mut()
+          .define("super".to_string(), super_class_val.clone());
+
+        // All methods will now capture this 'super_env' as their closure.
+        class_env = super_env;
+      } else {
+        // ... (Error handling for invalid superclass, kept as is)
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::InvalidSuperclass,
+          "Superclass must be a class".to_string(),
+        )
+        .with_label(Label::primary(
+          token.unwrap().to_span(),
+          Some("superclass name here".to_string()),
+        ))
+        .with_help("Superclass must be a class".to_string());
+
+        engine.emit(diagnostic);
+        return Err(InterpreterError::RuntimeError);
+      }
+    };
+
     let mut methods_map = HashMap::new();
     let mut static_methods_map = HashMap::new();
-    self.eval_method_map(env, methods, &mut methods_map, engine);
+
+    // Pass the potentially new `class_env` (which contains 'super' if a superclass exists)
+    self.eval_method_map(&mut class_env, methods, &mut methods_map, engine);
+    // Static methods are resolved outside the super environment (use the original `env` or its enclosing)
     self.eval_method_map(env, static_methods, &mut static_methods_map, engine);
 
     let class = Arc::new(LoxClass {
       name: class_name.clone(),
+      superclass: super_class_val,
       methods: methods_map,
       static_methods: static_methods_map,
     });
 
-    env.borrow_mut().define(class_name, LoxValue::Class(class));
+    // Assign the actual class object to the name we defined earlier (overwriting LoxValue::Nil)
+    env.borrow_mut().assign(&class_name, LoxValue::Class(class));
 
     Ok((LoxValue::Nil, None))
   }
@@ -395,8 +442,8 @@ impl Interpreter {
         Stmt::Continue(token) => {
           return Err(InterpreterError::Continue);
         },
-        Stmt::Class(name, methods, static_methods) => {
-          self.eval_class(env, name, *methods, *static_methods, engine)?;
+        Stmt::Class(name, superclass, methods, static_methods) => {
+          self.eval_class(env, name, superclass, *methods, *static_methods, engine)?;
         },
       }
     }
@@ -438,7 +485,58 @@ impl Interpreter {
         value,
       } => self.eval_set(env, *object, name, *value, engine),
       Expr::This(token) => self.eval_identifier(token, env, engine),
+      Expr::Super(token, name) => self.eval_super_expr(token, name, env),
     }
+  }
+
+  fn eval_super_expr(
+    &mut self,
+    keyword: Token,
+    name: Token,
+    env: &mut Rc<RefCell<Env>>,
+  ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
+    // The Resolver guaranteed this is in `self.locals`.
+    let &distance = self
+      .locals
+      .get(&keyword.lexeme)
+      .ok_or(InterpreterError::RuntimeError)?; // Should not fail if resolved
+
+    // 1. Look up "super" (the superclass object) at the resolved distance.
+    let superclass_val = env
+      .borrow_mut()
+      .get_at(distance, "super")
+      .ok_or(InterpreterError::RuntimeError)?
+      .clone();
+
+    let superclass = match superclass_val {
+      LoxValue::Class(c) => c,
+      _ => return Err(InterpreterError::RuntimeError), // Should be a class
+    };
+
+    // 2. Look up "this" (the instance object) one environment closer.
+    // 'this' is always defined one scope inside 'super'.
+    let instance_val = env
+      .borrow_mut()
+      .get_at(distance - 1, "this")
+      .ok_or(InterpreterError::RuntimeError)?
+      .clone();
+
+    let instance = match instance_val {
+      LoxValue::Instance(i) => i,
+      _ => return Err(InterpreterError::RuntimeError), // Should be an instance
+    };
+
+    // 3. Find the method starting from the superclass.
+    // Use the LoxClass::find_method which recursively searches superclasses.
+    let method = superclass.find_method(&name.lexeme).ok_or_else(|| {
+      eprintln!("Undefined property '{}'", name.lexeme);
+      InterpreterError::RuntimeError
+    })?;
+
+    // 4. Bind the method to the current instance (`this`).
+    let bound_method = method.bind(instance.clone());
+
+    Ok((LoxValue::Function(bound_method), Some(name)))
   }
 
   fn eval_get(
@@ -463,9 +561,14 @@ impl Interpreter {
     }
 
     if let LoxValue::Instance(instance) = object_val {
-      // Check fields first
       if let Some(field) = instance.borrow().fields.get(&name.lexeme) {
         return Ok((field.clone(), Some(name)));
+      }
+
+      if let Some(method) = instance.borrow().class.find_method(&name.lexeme) {
+        // Bind 'this' to the instance, regardless of which class defined the method
+        let bound_method = method.bind(instance.clone());
+        return Ok((LoxValue::Function(bound_method), Some(name)));
       }
 
       // Check methods and bind 'this'

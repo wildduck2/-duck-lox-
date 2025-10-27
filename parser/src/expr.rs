@@ -40,6 +40,7 @@ pub enum Expr {
     value: Box<Expr>,
   },
   This(Token),
+  Super(Token, Token),
 }
 
 impl fmt::Display for Expr {
@@ -79,6 +80,9 @@ impl fmt::Display for Expr {
       },
       Expr::This(token) => {
         write!(f, "this")
+      },
+      Expr::Super(token, name) => {
+        write!(f, "super.{}", name.lexeme)
       },
     }
   }
@@ -181,6 +185,9 @@ impl Expr {
       },
       Expr::This(token) => {
         println!("{}{}This", prefix, connector);
+      },
+      Expr::Super(token, name) => {
+        println!("{}{}Super", prefix, connector);
       },
     }
   }
