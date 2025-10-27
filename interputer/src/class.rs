@@ -1,11 +1,15 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
 
-use crate::function::{normal::LoxFunction, LoxCallable};
+use crate::{
+  function::{normal::LoxFunction, LoxCallable},
+  lox_value::InterpreterError,
+};
 
 #[derive(Debug, Clone)]
 pub struct LoxClass {
   pub name: String,
   pub methods: HashMap<String, Arc<LoxFunction>>,
+  pub static_methods: HashMap<String, Arc<LoxFunction>>,
 }
 
 pub struct LoxClassInstance {
@@ -25,7 +29,11 @@ impl std::fmt::Debug for LoxClassInstance {
 
 impl LoxCallable for LoxClass {
   fn arity(&self) -> usize {
-    0
+    if let Some(initializer) = self.methods.get("init") {
+      initializer.arity()
+    } else {
+      0
+    }
   }
 
   fn call(
@@ -34,11 +42,39 @@ impl LoxCallable for LoxClass {
     arguments: Vec<(crate::lox_value::LoxValue, Option<scanner::token::Token>)>,
     engine: &mut diagnostic::DiagnosticEngine,
   ) -> Result<crate::lox_value::LoxValue, crate::lox_value::InterpreterError> {
+    // STEP 1: Create the instance
     let instance = Rc::new(RefCell::new(LoxClassInstance {
       class: Arc::new(self.clone()),
       fields: HashMap::new(),
     }));
 
+    // STEP 2: Look for init() method
+    if let Some(initializer) = self.find_method("init") {
+      // Bind 'this' to the instance
+      let bound_init = initializer.bind(instance.clone());
+
+      // Check arity (already checked in eval_call, but double-check here)
+      if arguments.len() != bound_init.arity() {
+        return Err(InterpreterError::RuntimeError);
+      }
+
+      // Call init() with arguments
+      // Pass the interpreter, not self!
+      bound_init.call(interpreter, arguments, engine)?;
+    } else {
+      // No init() - must have 0 arguments
+      if !arguments.is_empty() {
+        return Err(InterpreterError::RuntimeError);
+      }
+    }
+
+    // STEP 3: Return the instance
     Ok(crate::lox_value::LoxValue::Instance(instance))
+  }
+}
+
+impl LoxClass {
+  pub fn find_method(&self, name: &str) -> Option<&Arc<LoxFunction>> {
+    self.methods.get(name)
   }
 }

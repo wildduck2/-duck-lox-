@@ -17,6 +17,7 @@ pub struct LoxFunction {
   pub params: Vec<Token>,
   pub body: Vec<Stmt>,
   pub closure: Rc<RefCell<Env>>,
+  pub is_initializer: bool,
 }
 
 impl LoxCallable for LoxFunction {
@@ -45,9 +46,20 @@ impl LoxCallable for LoxFunction {
     }
 
     match interpreter.eval_block(Box::new(self.body.clone()), &mut enclosing_env, engine) {
-      Ok((v, _)) => Ok(v),
+      Ok((v, _)) => {
+        if self.is_initializer {
+          return Ok(enclosing_env.borrow().get_at(1, "this").unwrap());
+        }
+        Ok(v)
+      },
       Err(e) => match e {
-        InterpreterError::Return(v) => Ok(v),
+        InterpreterError::Return(v) => {
+          // If this is an initializer, always return 'this'
+          if self.is_initializer {
+            return Ok(enclosing_env.borrow().get_at(1, "this").unwrap());
+          }
+          return Ok(v);
+        },
         _ => Ok(LoxValue::Nil),
       },
     }
@@ -65,6 +77,7 @@ impl LoxFunction {
       params: self.params.clone(),
       body: self.body.clone(),
       closure: Rc::new(RefCell::new(environment)),
+      is_initializer: self.is_initializer,
     })
   }
 }

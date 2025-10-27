@@ -151,8 +151,14 @@ impl Parser {
     self.expect(TokenType::LeftBrace, engine)?;
 
     let mut methods = vec![];
+    let mut static_methods = vec![];
 
     while !self.is_eof() && !matches!(self.current_token().token_type, TokenType::RightBrace) {
+      let is_static = self.current_token().lexeme == "static";
+      if is_static {
+        self.advance();
+      }
+
       let method_name = self.parse_primary(engine)?;
 
       if !matches!(self.current_token().token_type, TokenType::LeftParen) {
@@ -170,11 +176,19 @@ impl Parser {
       let body = self.parse_block_stmt(engine)?;
 
       let method = Stmt::Fun(method_name, params, Box::new(body));
-      methods.push(method);
+      if is_static {
+        static_methods.push(method);
+      } else {
+        methods.push(method);
+      }
     }
     self.expect(TokenType::RightBrace, engine)?;
 
-    Ok(Stmt::Class(name, Box::new(methods)))
+    Ok(Stmt::Class(
+      name,
+      Box::new(methods),
+      Box::new(static_methods),
+    ))
   }
 
   fn parse_fun_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {

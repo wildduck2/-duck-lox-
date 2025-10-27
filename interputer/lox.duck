@@ -1,8 +1,14 @@
-class Breakfast {
-  cook() {
-    print(this);
+class Dog {
+  init(name, breed) {
+    this.name = name;
+    this.breed = breed;
+    print("Creating dog: " + name);
+  }
+  
+  static bark(name) {
+    print(name + " says woof!");
   }
 }
 
-var breakfast = Breakfast();
-breakfast.cook();  // Prints the instance
+var dog = Dog("Buddy", "Golden Retriever");
+Dog.bark("Buddy");

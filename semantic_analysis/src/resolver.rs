@@ -18,6 +18,7 @@ enum ClassType {
   None,
   Class,
   Instance,
+  StaticMethod, // ADD THIS
 }
 
 #[derive(Debug, Clone)]
@@ -94,13 +95,11 @@ impl Resolver {
           self.resolve_expr(value, engine);
         }
       },
-      Stmt::Class(name, methods) => {
-        // Save the previous class context
+      Stmt::Class(name, methods, static_methods) => {
         let enclosing_class = self.current_class;
-        self.current_class = ClassType::Class; // ← ADD THIS LINE!
+        self.current_class = ClassType::Class;
 
         match &name {
-          // Use &name to borrow
           Expr::Identifier(token) => {
             self.declare(token, engine);
             self.define(token);
@@ -111,9 +110,7 @@ impl Resolver {
           },
         };
 
-        // REMOVE THIS LINE:
-        // self.resolve_expr(name, engine);
-
+        // Resolve INSTANCE methods with 'this' in scope
         self.begin_scope();
         self.scopes.last_mut().unwrap().insert(
           "this".to_string(),
@@ -121,7 +118,6 @@ impl Resolver {
             defined: true,
             used: false,
             line: if let Expr::Identifier(token) = &name {
-              // Use &name
               token.position.0
             } else {
               0
@@ -135,9 +131,19 @@ impl Resolver {
 
         self.end_scope(engine);
 
-        // Restore the previous class context
-        self.current_class = enclosing_class; // ← ADD THIS LINE!
+        // Resolve STATIC methods WITHOUT 'this' in scope
+        let prev_class = self.current_class;
+        self.current_class = ClassType::StaticMethod; // Mark as static context
+
+        for method in static_methods.iter() {
+          self.resolve_stmt(method, engine);
+        }
+
+        self.current_class = prev_class; // Restore context
+
+        self.current_class = enclosing_class;
       },
+
       Stmt::Break(_) | Stmt::Continue(_) => {},
     }
   }
@@ -207,6 +213,22 @@ impl Resolver {
         self.resolve_expr(object, engine);
       },
       Expr::This(keyword) => {
+        // Check if we're in a static method
+        if self.current_class == ClassType::StaticMethod {
+          let diagnostic = Diagnostic::new(
+      DiagnosticCode::InvalidThis,
+      "Can't use 'this' in static methods".to_string(),
+    )
+    .with_label(Label::primary(
+      keyword.to_span(),
+      Some("'this' not allowed in static context".to_string()),
+    ))
+    .with_help("Static methods don't have access to instance data. Remove 'static' or use instance methods instead.".to_string());
+          engine.emit(diagnostic);
+          return;
+        }
+
+        // Check if we're outside any class
         if self.current_class == ClassType::None {
           let diagnostic = Diagnostic::new(
             DiagnosticCode::InvalidThis,

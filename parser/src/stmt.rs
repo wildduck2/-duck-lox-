@@ -10,7 +10,7 @@ pub enum Stmt {
   If(Box<Expr>, Box<Stmt>, Option<Box<Stmt>>),
   While(Box<Expr>, Box<Stmt>),
   Fun(Expr, Vec<Expr>, Box<Stmt>),
-  Class(Expr, Box<Vec<Stmt>>),
+  Class(Expr, Box<Vec<Stmt>>, Box<Vec<Stmt>>),
   Return(Token, Option<Expr>),
   Break(Token),
   Continue(Token),
@@ -71,7 +71,7 @@ impl fmt::Display for Stmt {
       Stmt::Continue(token) => {
         write!(f, "Continue({})", token.lexeme)
       },
-      Stmt::Class(name, stmts) => {
+      Stmt::Class(name, stmts, static_methods) => {
         write!(f, "Class({}, [...])", name)
       },
     }
@@ -182,7 +182,7 @@ impl Stmt {
         println!("{}{}Continue", prefix, connector);
       },
 
-      Stmt::Class(name, methods) => {
+      Stmt::Class(name, methods, static_methods) => {
         println!("{}{}Class({})", prefix, connector, name);
         let new_prefix = format!("{}{}", prefix, extension);
         for (i, method) in methods.iter().enumerate() {

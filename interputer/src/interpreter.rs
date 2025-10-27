@@ -50,7 +50,7 @@ impl Interpreter {
     self.env = env;
   }
 
-  fn eval_stmt(
+  pub fn eval_stmt(
     &mut self,
     stmt: Stmt,
     env: &mut Rc<RefCell<Env>>,
@@ -137,8 +137,8 @@ impl Interpreter {
         engine.emit(diagnostic);
         Ok(())
       },
-      Stmt::Class(name, methods) => {
-        self.eval_class(env, name, *methods, engine)?;
+      Stmt::Class(name, methods, static_methods) => {
+        self.eval_class(env, name, *methods, *static_methods, engine)?;
         Ok(())
       },
     }
@@ -149,6 +149,7 @@ impl Interpreter {
     env: &mut Rc<RefCell<Env>>,
     name: Expr,
     methods: Vec<Stmt>,
+    static_methods: Vec<Stmt>,
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     let class_name = match name {
@@ -160,46 +161,14 @@ impl Interpreter {
     };
 
     let mut methods_map = HashMap::new();
-
-    for method in methods {
-      match method {
-        Stmt::Fun(name, params, body) => {
-          // Extract method name
-          let method_name = match name {
-            Expr::Identifier(token) => token.lexeme.clone(),
-            _ => continue,
-          };
-
-          // Extract parameters
-          let params_names: Vec<Token> = params
-            .into_iter()
-            .filter_map(|expr| match expr {
-              Expr::Identifier(token) => Some(token),
-              _ => None,
-            })
-            .collect();
-
-          // Create LoxFunction for this method
-          let function = Arc::new(LoxFunction {
-            params: params_names,
-            body: match *body {
-              Stmt::Block(stmts) => *stmts,
-              _ => vec![],
-            },
-            closure: env.clone(), // Capture current environment
-          });
-
-          methods_map.insert(method_name, function);
-        },
-        _ => {
-          println!("not handled");
-        },
-      }
-    }
+    let mut static_methods_map = HashMap::new();
+    self.eval_method_map(env, methods, &mut methods_map, engine);
+    self.eval_method_map(env, static_methods, &mut static_methods_map, engine);
 
     let class = Arc::new(LoxClass {
       name: class_name.clone(),
       methods: methods_map,
+      static_methods: static_methods_map,
     });
 
     env.borrow_mut().define(class_name, LoxValue::Class(class));
@@ -221,6 +190,52 @@ impl Interpreter {
       },
 
       None => Err(InterpreterError::Return(LoxValue::Nil)),
+    }
+  }
+
+  fn eval_method_map(
+    &mut self,
+    env: &mut Rc<RefCell<Env>>,
+    methods: Vec<Stmt>,
+    methods_map: &mut HashMap<String, Arc<LoxFunction>>,
+    engine: &mut DiagnosticEngine,
+  ) {
+    for method in methods {
+      match method {
+        Stmt::Fun(name, params, body) => {
+          // Extract method name
+          let method_name = match name {
+            Expr::Identifier(token) => token.lexeme.clone(),
+            _ => continue,
+          };
+
+          // Extract parameters
+          let params_names: Vec<Token> = params
+            .into_iter()
+            .filter_map(|expr| match expr {
+              Expr::Identifier(token) => Some(token),
+              _ => None,
+            })
+            .collect();
+          let is_initializer = method_name == "init";
+
+          // Create LoxFunction for this method
+          let function = Arc::new(LoxFunction {
+            params: params_names,
+            body: match *body {
+              Stmt::Block(stmts) => *stmts,
+              _ => vec![],
+            },
+            closure: env.clone(), // Capture current environment
+            is_initializer,
+          });
+
+          methods_map.insert(method_name, function);
+        },
+        _ => {
+          println!("not handled");
+        },
+      }
     }
   }
 
@@ -254,6 +269,7 @@ impl Interpreter {
           params: params_names,
           body: *body,
           closure: env.borrow().enclosing.clone().unwrap_or(env.clone()),
+          is_initializer: false,
         });
 
         env.borrow_mut().define(name, LoxValue::Function(function));
@@ -379,8 +395,8 @@ impl Interpreter {
         Stmt::Continue(token) => {
           return Err(InterpreterError::Continue);
         },
-        Stmt::Class(name, methods) => {
-          self.eval_class(env, name, *methods, engine)?;
+        Stmt::Class(name, methods, static_methods) => {
+          self.eval_class(env, name, *methods, *static_methods, engine)?;
         },
       }
     }
@@ -433,6 +449,18 @@ impl Interpreter {
     engine: &mut DiagnosticEngine,
   ) -> Result<(LoxValue, Option<Token>), InterpreterError> {
     let (object_val, _) = self.eval_expr(object, env, engine)?;
+
+    // ADD THIS HERE - Check if accessing a class (for static methods)
+    if let LoxValue::Class(class) = object_val {
+      // Accessing static method: MyClass.staticMethod()
+      if let Some(static_method) = class.static_methods.get(&name.lexeme) {
+        // Don't bind 'this' - static methods have no instance context
+        return Ok((LoxValue::Function(static_method.clone()), Some(name)));
+      }
+
+      eprintln!("Undefined static method '{}'", name.lexeme);
+      return Err(InterpreterError::RuntimeError);
+    }
 
     if let LoxValue::Instance(instance) = object_val {
       // Check fields first
@@ -540,12 +568,31 @@ impl Interpreter {
         return Ok((result, Some(paren)));
       },
       LoxValue::Class(class) => {
-        if class.arity() != usize::MAX && args_val.len() != class.arity() {
-          eprintln!("Class takes no arguments");
+        // Check arity
+        if args_val.len() != class.arity() {
+          let mut token_copy = paren.clone();
+          token_copy.position.0 += 1;
+
+          let diagnostic = Diagnostic::new(
+            DiagnosticCode::WrongNumberOfArguments,
+            "Wrong number of arguments".to_string(),
+          )
+          .with_label(Label::primary(
+            token_copy.to_span(),
+            Some(format!(
+              "Expected {} arguments but got {}",
+              class.arity(),
+              args_val.len()
+            )),
+          ));
+          engine.emit(diagnostic);
+
           return Err(InterpreterError::RuntimeError);
         }
 
+        // Call the class (which handles init() internally)
         let result = class.call(self, args_val, engine)?;
+
         return Ok((result, Some(paren)));
       },
       _ => Err(InterpreterError::RuntimeError),

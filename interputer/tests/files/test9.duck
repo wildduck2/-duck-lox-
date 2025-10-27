@@ -1,0 +1,6 @@
+class Dog {
+  init(name) {
+    this.name = name;
+    // No return statement
+  }
+}
