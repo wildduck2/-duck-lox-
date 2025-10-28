@@ -1,0 +1,23 @@
+[package]
+name = "compiler"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+# Core dependencies
+colored = { workspace = true }
+diagnostic = { path = "../diagnostic" }
+scanner = { path = "../scanner" }
+parser = { path = "../parser" }
+semantic_analysis = { path = "../semantic_analysis" }
+
+[dev-dependencies]
+
+
+

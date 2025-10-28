@@ -1,0 +1,597 @@
+================================================================================
+                        DIAGNOSTIC ENGINE DOCUMENTATION
+================================================================================
+
+                          Language Compiler Project
+                                Version 1.0
+                         
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+1. Overview
+2. Architecture
+3. Quick Start Guide
+4. API Reference
+5. Common Patterns
+6. Error Codes Reference
+7. Scanner Integration
+8. Parser Integration
+9. Best Practices
+10. Troubleshooting
+
+
+================================================================================
+1. OVERVIEW
+================================================================================
+
+The Diagnostic Engine provides a robust error reporting system for the compiler.
+It supports rich, colorized error messages similar to the Rust compiler, with
+precise source location tracking and helpful contextual information.
+
+Key Features:
+  - Multi-level diagnostics (Error, Warning, Note, Help)
+  - Precise source location tracking with spans
+  - Multiple label support (Primary and Secondary)
+  - Colorized terminal output
+  - Plain text output for logging
+  - Error recovery and synchronization
+
+
+================================================================================
+2. ARCHITECTURE
+================================================================================
+
+The diagnostic system consists of four main components:
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                       DiagnosticEngine                          │
+  │                                                                 │
+  │  • Collects all diagnostics during compilation                 │
+  │  • Tracks error and warning counts                             │
+  │  • Manages emission and formatting                             │
+  └─────────────────────────────────────────────────────────────────┘
+                                 │
+                                 │ emits
+                                 ▼
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                         Diagnostic                              │
+  │                                                                 │
+  │  • Contains error code and severity                            │
+  │  • Holds message and labels                                    │
+  │  • Supports notes and help text                                │
+  └─────────────────────────────────────────────────────────────────┘
+                                 │
+                                 │ contains
+                                 ▼
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                           Label                                 │
+  │                                                                 │
+  │  • Primary: Red ^^^ - main error location                      │
+  │  • Secondary: Cyan --- - related context                       │
+  └─────────────────────────────────────────────────────────────────┘
+                                 │
+                                 │ points to
+                                 ▼
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                            Span                                 │
+  │                                                                 │
+  │  • file: Source file name                                      │
+  │  • line: Line number (1-indexed for display)                   │
+  │  • column: Column number (0-indexed internally)                │
+  │  • length: Length of the highlighted region                    │
+  └─────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+3. QUICK START GUIDE
+================================================================================
+
+Basic Usage in Parser:
+----------------------
+
+  // 1. Save any relevant tokens for context
+  let opening_paren = self.current_token();
+  
+  // 2. Continue parsing...
+  self.advance();
+  let expr = self.parse_expression(engine)?;
+  
+  // 3. Check for error condition
+  if self.is_eof() || self.current_token().token_type != TokenType::RightParen {
+    let current = self.current_token();
+    
+    // 4. Create span for error location
+    let error_span = Span {
+      file: "input.duck".to_string(),
+      line: current.position.0,
+      column: current.position.1,
+      length: current.lexeme.len(),
+    };
+    
+    // 5. Build the diagnostic
+    let diagnostic = Diagnostic::new(
+      DiagnosticCode::MissingClosingParen,
+      "Expected ')' after expression".to_string(),
+    )
+    .with_label(Label::primary(
+      error_span,
+      Some("expected ')' here".to_string()),
+    ))
+    .with_label(Label::secondary(
+      Span {
+        file: "input.duck".to_string(),
+        line: opening_paren.position.0,
+        column: opening_paren.position.1,
+        length: opening_paren.lexeme.len(),
+      },
+      Some("to match this '('".to_string()),
+    ));
+    
+    // 6. Emit and stop parsing
+    engine.emit(diagnostic);
+    return Err(());
+  }
+
+
+Output Example:
+---------------
+
+  error: [E0103]: Expected ')' after expression
+    --> input.duck:1:11
+     |
+   1 | x = (5  * 5
+     |            ^ expected ')' here
+     |      - to match this '('
+     |
+  
+  error: could not compile due to 1 previous error
+
+
+================================================================================
+4. API REFERENCE
+================================================================================
+
+4.1 DiagnosticEngine
+--------------------
+
+  new() -> Self
+    Creates a new diagnostic engine instance.
+    
+  emit(&mut self, diagnostic: Diagnostic)
+    Adds a diagnostic to the collection and updates counters.
+    
+  has_errors(&self) -> bool
+    Returns true if any errors have been emitted.
+    
+  error_count(&self) -> usize
+    Returns the number of errors emitted.
+    
+  warning_count(&self) -> usize
+    Returns the number of warnings emitted.
+    
+  print_all(&self, source_code: &str)
+    Prints all diagnostics with colors to stdout.
+    
+  format_all_plain(&self, source_code: &str) -> String
+    Returns all diagnostics formatted as plain text (no colors).
+    
+  get_diagnostics(&self) -> &[Diagnostic]
+    Returns a slice of all diagnostics.
+
+
+4.2 Diagnostic
+--------------
+
+  new(code: DiagnosticCode, message: String) -> Self
+    Creates a new diagnostic with the given code and message.
+    Severity is automatically determined from the code.
+    
+  with_label(self, label: Label) -> Self
+    Adds a label to the diagnostic. Can be chained.
+    
+  with_note(self, note: String) -> Self
+    Adds a note to the diagnostic. Can be chained.
+    
+  with_help(self, help: String) -> Self
+    Sets the help text for the diagnostic. Can be chained.
+
+
+4.3 Label
+---------
+
+  primary(span: Span, message: Option<String>) -> Self
+    Creates a primary label (red ^^^).
+    
+  secondary(span: Span, message: Option<String>) -> Self
+    Creates a secondary label (cyan ---).
+
+
+4.4 Span
+--------
+
+  Span {
+    file: String,      // Source file name
+    line: usize,       // Line number (1-indexed for display)
+    column: usize,     // Column number (0-indexed internally)
+    length: usize,     // Length of highlighted region
+  }
+
+
+================================================================================
+5. COMMON PATTERNS
+================================================================================
+
+5.1 Missing Token Error
+------------------------
+
+  Use Case: Expected a closing delimiter but found something else
+  
+  let error = Diagnostic::new(
+    DiagnosticCode::MissingClosingParen,
+    "Expected ')' after expression".to_string(),
+  )
+  .with_label(Label::primary(
+    current_span,
+    Some("expected ')' here".to_string()),
+  ))
+  .with_label(Label::secondary(
+    opening_paren_span,
+    Some("to match this '('".to_string()),
+  ));
+
+
+5.2 Invalid Syntax Error
+-------------------------
+
+  Use Case: User wrote something that isn't allowed
+  
+  let error = Diagnostic::new(
+    DiagnosticCode::InvalidAssignmentTarget,
+    "Invalid assignment target".to_string(),
+  )
+  .with_label(Label::primary(
+    equal_token_span,
+    Some("cannot assign to this expression".to_string()),
+  ))
+  .with_help("Only variables can be assigned to".to_string());
+
+
+5.3 Unexpected Token Error
+---------------------------
+
+  Use Case: Found a token that doesn't fit the grammar
+  
+  let error = Diagnostic::new(
+    DiagnosticCode::UnexpectedToken,
+    format!("Expected ':' but found '{}'", token.lexeme),
+  )
+  .with_label(Label::primary(
+    token_span,
+    Some("expected ':' before this token".to_string()),
+  ))
+  .with_label(Label::secondary(
+    question_mark_span,
+    Some("ternary started here".to_string()),
+  ))
+  .with_help("Ternary format: condition ? then_value : else_value".to_string());
+
+
+5.4 Unexpected EOF Error
+-------------------------
+
+  Use Case: Reached end of file while parsing
+  
+  let prev_token = &self.tokens[self.current - 1];
+  let eof_span = Span {
+    file: "input.duck".to_string(),
+    line: prev_token.position.0,
+    column: prev_token.position.1 + prev_token.lexeme.len(),
+    length: 1,
+  };
+  
+  let error = Diagnostic::new(
+    DiagnosticCode::UnexpectedEof,
+    "Unexpected end of file".to_string(),
+  )
+  .with_label(Label::primary(
+    eof_span,
+    Some("expected expression".to_string()),
+  ));
+
+
+================================================================================
+6. ERROR CODES REFERENCE
+================================================================================
+
+Scanner Errors (E0001-E0099):
+------------------------------
+  E0001  UnterminatedString       - String not closed before newline/EOF
+  E0002  InvalidCharacter         - Unrecognized character in source
+  E0003  InvalidNumber            - Malformed number literal
+  E0004  UnexpectedEof            - Unexpected end of file
+
+Parser Errors (E0100-E0199):
+----------------------------
+  E0100  UnexpectedToken          - Token doesn't fit grammar
+  E0101  ExpectedExpression       - Expected an expression
+  E0102  MissingClosingBrace      - Missing }
+  E0103  MissingClosingParen      - Missing )
+  E0104  MissingSemicolon         - Missing ;
+  E0105  InvalidAssignmentTarget  - Cannot assign to this
+  E0106  ExpectedIdentifier       - Expected variable name
+
+Semantic Errors (E0200-E0299):
+-------------------------------
+  E0200  UndeclaredVariable       - Variable used but not declared
+  E0201  TypeMismatch             - Type error in expression
+  E0202  DuplicateDeclaration     - Variable declared twice
+  E0203  InvalidAssignment        - Assignment not allowed here
+  E0204  InvalidOperator          - Operator cannot be used here
+  E0205  InvalidFunctionCall      - Cannot call this as function
+  E0206  WrongNumberOfArguments   - Incorrect argument count
+
+Type Errors (E0300-E0399):
+--------------------------
+  E0300  CannotInferType          - Type inference failed
+  E0301  RecursiveType            - Recursive type definition
+
+System Errors (E0400-E0499):
+----------------------------
+  E0400  FileNotFound             - Source file not found
+  E0401  InvalidArguments         - Invalid command line arguments
+  E0402  IoError                  - I/O operation failed
+
+Warnings (W0001-W9999):
+-----------------------
+  W0001  UnusedVariable           - Variable declared but never used
+  W0002  UnreachableCode          - Code that can never execute
+  W0003  ImplicitConversion       - Implicit type conversion
+
+
+================================================================================
+7. SCANNER INTEGRATION
+================================================================================
+
+CRITICAL: Token Position Tracking
+----------------------------------
+
+In your scanner's add_token() function, you MUST use:
+
+  ✓ CORRECT:
+  
+    self.tokens.push(Token {
+      token_type,
+      lexeme,
+      literal,
+      position: (self.line, self.start),  // Use self.start!
+    });
+
+  ✗ WRONG:
+  
+    self.tokens.push(Token {
+      token_type,
+      lexeme,
+      literal,
+      position: (self.line, self.column),  // This points to END of token!
+    });
+
+
+Why self.start?
+---------------
+  • self.start = column where token STARTS
+  • self.column = column where scanner IS NOW (after token)
+  
+  Example: For token "20" starting at column 15:
+    • self.start = 15  ← This is what we want!
+    • self.column = 17 ← This is AFTER the token
+
+
+EOF Token Position:
+-------------------
+
+  self.tokens.push(Token {
+    token_type: TokenType::Eof,
+    lexeme: String::from(""),
+    literal: Literal::Nil,
+    position: (self.line, self.start),  // Not self.column!
+  });
+
+
+================================================================================
+8. PARSER INTEGRATION
+================================================================================
+
+Parser Function Signature:
+--------------------------
+
+  All parse functions should return Result<Expr, ()>:
+  
+  fn parse_expression(&mut self, engine: &mut DiagnosticEngine) 
+    -> Result<Expr, ()>
+  {
+    // Parse code here...
+  }
+
+
+Error Propagation:
+------------------
+
+  Use the ? operator to propagate errors up the call stack:
+  
+  fn parse_binary(&mut self, engine: &mut DiagnosticEngine) 
+    -> Result<Expr, ()> 
+  {
+    let lhs = self.parse_term(engine)?;  // Propagate error if it occurs
+    // ... rest of code
+  }
+
+
+Handling EOF:
+-------------
+
+  When dealing with EOF, use the PREVIOUS token for span:
+  
+  if self.is_eof() {
+    let prev_token = &self.tokens[self.current - 1];
+    let span = Span {
+      file: "input.duck".to_string(),
+      line: prev_token.position.0,
+      column: prev_token.position.1 + prev_token.lexeme.len(),
+      length: 1,
+    };
+    // ... create diagnostic
+  }
+
+
+Error Recovery:
+---------------
+
+  Implement synchronization to continue parsing after errors:
+  
+  fn synchronize(&mut self) {
+    self.advance();
+    
+    while !self.is_eof() {
+      let token = self.get_current_token();
+      
+      // Stop at statement boundaries
+      match token.token_type {
+        TokenType::Semicolon => {
+          self.advance();
+          return;
+        }
+        TokenType::If | TokenType::For | TokenType::While | 
+        TokenType::Fun | TokenType::Var | TokenType::Return => {
+          return;
+        }
+        _ => {
+          self.advance();
+        }
+      }
+    }
+  }
+  
+  // Usage in parse loop:
+  while !self.is_eof() {
+    match self.try_parse_expression(engine) {
+      Ok(expr) => self.ast.push(expr),
+      Err(_) => {
+        self.synchronize();  // Skip to next statement
+      }
+    }
+  }
+
+
+================================================================================
+9. BEST PRACTICES
+================================================================================
+
+1. Token Position Tracking
+   -------------------------
+   ✓ Always use self.start in scanner's add_token()
+   ✓ Store opening delimiters before advancing
+   ✓ Calculate EOF positions from previous token
+
+2. Error Messages
+   --------------
+   ✓ Be specific about what was expected
+   ✓ Show what was actually found
+   ✓ Provide actionable help text
+   ✗ Don't use vague messages like "syntax error"
+
+3. Label Usage
+   -----------
+   ✓ Primary label: The main problem location
+   ✓ Secondary labels: Related context (where things started)
+   ✓ Use multiple labels to show relationships
+   ✗ Don't overuse labels - keep it focused
+
+4. Return Values
+   -------------
+   ✓ Return Err(()) after emitting diagnostic
+   ✓ Use ? operator to propagate errors
+   ✓ Implement proper error recovery
+   ✗ Don't panic!() - use diagnostics instead
+
+5. Span Accuracy
+   -------------
+   ✓ Point exactly at the problematic token
+   ✓ Use correct length for multi-character tokens
+   ✓ Handle EOF cases specially
+   ✗ Don't point past the end of source code
+
+
+================================================================================
+10. TROUBLESHOOTING
+================================================================================
+
+Problem: Underlines appear in wrong position
+---------------------------------------------
+  Solution: Check that scanner uses self.start, not self.column
+  
+  In scanner's add_token():
+    position: (self.line, self.start)  ✓
+
+
+Problem: EOF errors show at column 0
+-------------------------------------
+  Solution: Calculate EOF position from previous token
+  
+  let prev_token = &self.tokens[self.current - 1];
+  let span = Span {
+    line: prev_token.position.0,
+    column: prev_token.position.1 + prev_token.lexeme.len(),
+    length: 1,
+  };
+
+
+Problem: Secondary label not showing
+-------------------------------------
+  Solution: Ensure both labels are on the same line
+  
+  The formatter only shows labels that match the primary label's line.
+  If your opening delimiter is on a different line, it won't show.
+
+
+Problem: Parser panics instead of showing error
+------------------------------------------------
+  Solution: Replace panic!() calls with diagnostics
+  
+  Replace:
+    panic!("Expected ')'");
+  
+  With:
+    let diagnostic = Diagnostic::new(...);
+    engine.emit(diagnostic);
+    return Err(());
+
+
+Problem: Colors not showing in terminal
+----------------------------------------
+  Solution: Use print_all() for colored output
+  
+  engine.print_all(&source_code);  ✓ Colors
+  
+  Not:
+    println!("{}", engine.format_all_plain(&source_code));  ✗ No colors
+
+
+Problem: Multiple errors for same location
+-------------------------------------------
+  Solution: Return Err(()) after first diagnostic
+  
+  Don't continue parsing after error - return immediately to prevent
+  cascading errors.
+
+
+================================================================================
+                              END OF DOCUMENTATION
+================================================================================
+
+For more information, see the source code comments or contact the maintainer.
+
+Version: 1.0
+Last Updated: 2025
+License: MIT
+================================================================================

@@ -1,0 +1,6 @@
+@duck-lox(rs)
+============
+
+This is the rust static typed language implementation of lox.
+
+There is a [plan](./plan.md) for this language, so do not worry.

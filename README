@@ -2,26 +2,11 @@
 ============
 
 There are several implementations of the "Lox" programming language, 
-These implementations can be different than this implementation,
-But you figure out how it works by checking the guide i will create 
-after i get done with this.
-
-
-In order to build use ``cargo build`` or
-``cargo build --release``.  
-
-There will be a documentation of this language after i get done, so do not worry.
-
-Stages i am following : 
-  - [x] diagnostic
-  - [x] scanner
-  - [x] parser
-  - [x] interputer
+These implementations can vary in their features,
+But you figure out how it works by checking the guide that will be provided after the implementation.
 
 
 NOTE: [93] 
 NOTE: [118] 
 INFO: [148]
 TODO: [198]
-
-
