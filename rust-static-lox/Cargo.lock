@@ -15,7 +15,9 @@ dependencies = [
 name = "core"
 version = "0.1.0"
 dependencies = [
+ "colored",
  "diagnostic",
+ "lexer",
 ]
 
 [[package]]
@@ -23,6 +25,13 @@ name = "diagnostic"
 version = "0.1.0"
 dependencies = [
  "colored",
+]
+
+[[package]]
+name = "lexer"
+version = "0.1.0"
+dependencies = [
+ "diagnostic",
 ]
 
 [[package]]

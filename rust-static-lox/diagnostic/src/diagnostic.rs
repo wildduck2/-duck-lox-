@@ -18,7 +18,7 @@ pub enum LabelStyle {
 #[derive(Debug)]
 pub struct Diagnostic<'a> {
   pub code: DiagnosticCode,
-  pub message: &'a str,
+  pub message: String,
   pub file_path: &'a str,
   pub labels: Vec<Label<'a>>,
   pub context_lines: Vec<(usize, &'a str)>,
@@ -27,7 +27,7 @@ pub struct Diagnostic<'a> {
 }
 
 impl<'a> Diagnostic<'a> {
-  pub fn new(code: DiagnosticCode, message: &'a str, file_path: &'a str) -> Self {
+  pub fn new(code: DiagnosticCode, message: String, file_path: &'a str) -> Self {
     Self {
       code,
       message,
@@ -206,4 +206,14 @@ pub struct Span {
   pub line: usize,
   pub start: usize,
   pub end: usize,
+}
+
+impl Span {
+  pub fn new(start: usize, end: usize) -> Self {
+    Self {
+      line: 1,
+      start,
+      end,
+    }
+  }
 }

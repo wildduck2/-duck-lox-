@@ -41,4 +41,11 @@ impl<'a> DiagnosticEngine<'a> {
   pub fn warning_count(&self) -> usize {
     self.warning_count
   }
+
+  pub fn has_errors(&self) -> bool {
+    self.error_count > 0
+  }
+  pub fn has_warnings(&self) -> bool {
+    self.warning_count > 0
+  }
 }

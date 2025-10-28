@@ -13,7 +13,7 @@ mod tests {
 
     let diagnostic = Diagnostic::new(
       DiagnosticCode::Error(DiagnosticError::UndefinedVariable),
-      "cannot find value `counter` in this scope",
+      "cannot find value `counter` in this scope".to_string(),
       "src/main.rs",
     )
     .with_context_line(5, r#"    println!("Count: {}", counter);"#)
@@ -37,7 +37,7 @@ mod tests {
 
     let diagnostic = Diagnostic::new(
       DiagnosticCode::Error(DiagnosticError::MismatchedTypes),
-      "mismatched types",
+      "mismatched types".to_string(),
       "src/lib.rs",
     )
     .with_context_line(12, r#"fn process_data(value: i32) -> String {"#)
@@ -74,7 +74,7 @@ mod tests {
 
     let diagnostic = Diagnostic::new(
       DiagnosticCode::Error(DiagnosticError::TraitNotSatisfied),
-      "the trait bound `&str: std::ops::Add<i32>` is not satisfied",
+      "the trait bound `&str: std::ops::Add<i32>` is not satisfied".to_string(),
       "src/calculator.rs",
     )
     .with_context_line(1, r#"fn calculate_sum(a: &str, b: i32) -> i32 {"#)
@@ -120,7 +120,7 @@ mod tests {
 
     let diagnostic = Diagnostic::new(
       DiagnosticCode::Error(DiagnosticError::BorrowCheckerViolation),
-      "cannot borrow `data` as mutable because it is also borrowed as immutable",
+      "cannot borrow `data` as mutable because it is also borrowed as immutable".to_string(),
       "src/collections.rs",
     )
     .with_context_line(18, r#"fn update_collection(data: &mut Vec<i32>) {"#)

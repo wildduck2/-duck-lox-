@@ -7,6 +7,8 @@ pub enum DiagnosticError {
   MismatchedTypes,
   UndefinedVariable,
   BorrowCheckerViolation,
+  InvalidCharacter,
+  InvalidArguments,
 }
 
 impl DiagnosticError {
@@ -17,6 +19,8 @@ impl DiagnosticError {
       Self::MismatchedTypes => "E0308",
       Self::UndefinedVariable => "E0425",
       Self::BorrowCheckerViolation => "E0502",
+      Self::InvalidCharacter => "E0601",
+      Self::InvalidArguments => "E0602",
     }
   }
 
