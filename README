@@ -1,4 +1,4 @@
-@duck-lox(rs)
+@duck-lox
 ============
 
 There are several implementations of the "Lox" programming language, 
