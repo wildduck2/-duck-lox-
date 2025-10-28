@@ -6,6 +6,12 @@ These implementations can vary in their features,
 But you figure out how it works by checking the guide that will be provided after the implementation.
 
 
+> NOTE: the purpose of this repository is to provide a full implementation of the Lox programming
+language in many different paths.
+> These languages at the moment are not for any production use, or even for learning purposes, thus 
+there is not docs for it right now.
+> INFO: later one will be added.
+
 NOTE: [93] 
 NOTE: [118] 
 INFO: [148]
