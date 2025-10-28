@@ -1,7 +1,0 @@
-fun welcome(name) {
-  print("Hello mr " + name);
-  return true;
-}
-
-var h = welcome("wildduck");
-print(h);

@@ -1,9 +1,0 @@
-var y = fun welcome(name) {
-  print("Hello mr " + name);
-
-  return true;
-}
-
-var x = y;
-x("wildduck");
-
