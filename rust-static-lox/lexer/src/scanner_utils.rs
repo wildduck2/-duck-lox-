@@ -27,6 +27,7 @@ impl<'a> Lexer<'a> {
       ',' => Some(TokenKind::Comma),
       '.' => Some(TokenKind::Dot),
       ':' => Some(TokenKind::Colon),
+      '?' => Some(TokenKind::Question),
       '/' => self.lex_divide(),
       '=' => self.lex_equal(),
       '!' => self.lex_bang(),
@@ -40,13 +41,7 @@ impl<'a> Lexer<'a> {
         None
       },
 
-      '?' => Some(TokenKind::Question),
-      '\r' | '\t' | ' ' => {
-        self.current += 1;
-        self.column += 1;
-        None
-      },
-
+      '\r' | '\t' | ' ' => None,
       '"' | '\'' | '`' => self.lex_string(engine),
       'A'..='Z' | 'a'..='z' | '_' => self.lex_keywords(),
       '0'..='9' => self.lex_number(),
@@ -85,8 +80,6 @@ impl<'a> Lexer<'a> {
 
   /// Consumes a single-line `//` comment and returns its token.
   fn lex_line_comment(&mut self) -> Option<TokenKind> {
-    self.advance(); // consumethe "/"
-
     while !self.is_eof() {
       self.advance(); // consume the current char
       if self.match_char(self.peek(), '\n') {
@@ -99,8 +92,6 @@ impl<'a> Lexer<'a> {
 
   /// Consumes a block `/* ... */` comment and returns its token.
   fn lex_multi_line_comment(&mut self) -> Option<TokenKind> {
-    self.advance(); // consumethe "*"
-
     while !self.is_eof() {
       self.advance(); // consume the current char
       if self.match_char(self.peek(), '*') && self.match_char(self.peek(), '/') {
@@ -115,8 +106,6 @@ impl<'a> Lexer<'a> {
 
   /// Lexes `!` and `!=` tokens.
   fn lex_bang(&mut self) -> Option<TokenKind> {
-    self.advance(); // consumethe "!"
-
     if self.match_char(self.peek(), '=') {
       self.advance(); // consume the '='
       return Some(TokenKind::BangEqual);
@@ -127,8 +116,6 @@ impl<'a> Lexer<'a> {
 
   /// Lexes greater-than comparators, upgrading to `>=` when an equals sign follows.
   fn lex_greater(&mut self) -> Option<TokenKind> {
-    self.advance(); // consumethe ">"
-
     if self.match_char(self.peek(), '=') {
       self.advance(); // consume the '='
       return Some(TokenKind::GreaterEqual);
@@ -139,8 +126,6 @@ impl<'a> Lexer<'a> {
 
   /// Lexes less-than comparators, upgrading to `<=` when an equals sign follows.
   fn lex_less(&mut self) -> Option<TokenKind> {
-    self.advance(); // consumethe "<"
-
     if self.match_char(self.peek(), '=') {
       self.advance(); // consume the '='
       return Some(TokenKind::LessEqual);
@@ -151,8 +136,6 @@ impl<'a> Lexer<'a> {
 
   /// Lexes `=` and `==` tokens.
   fn lex_equal(&mut self) -> Option<TokenKind> {
-    self.advance(); // consumethe "="
-
     if self.match_char(self.peek(), '=') {
       self.advance(); // consume the '='
       return Some(TokenKind::EqualEqual);
@@ -163,8 +146,6 @@ impl<'a> Lexer<'a> {
 
   /// Lexes `&&`, emitting a diagnostic when a second `&` is missing.
   fn lex_and(&mut self, engine: &mut DiagnosticEngine<'a>) -> Option<TokenKind> {
-    self.advance(); // consumethe "&"
-
     if self.match_char(self.peek(), '&') {
       self.advance(); // consume the '='
       return Some(TokenKind::And);
@@ -176,8 +157,6 @@ impl<'a> Lexer<'a> {
 
   /// Lexes `||`, emitting a diagnostic when a second `|` is missing.
   fn lex_or(&mut self, engine: &mut DiagnosticEngine<'a>) -> Option<TokenKind> {
-    self.advance(); // consumethe "|"
-
     if self.match_char(self.peek(), '|') {
       self.advance(); // consume the '='
       return Some(TokenKind::Or);
@@ -189,8 +168,6 @@ impl<'a> Lexer<'a> {
 
   /// Consumes an identifier or keyword, returning the proper token kind.
   fn lex_keywords(&mut self) -> Option<TokenKind> {
-    self.advance(); // consume the current char
-
     while let Some(char) = self.peek() {
       if !char.is_ascii_alphabetic() || char == '_' {
         break;
@@ -210,8 +187,6 @@ impl<'a> Lexer<'a> {
 
   /// Parses an integer or floating-point literal.
   fn lex_number(&mut self) -> Option<TokenKind> {
-    self.advance(); // consume the current number
-
     while let Some(char) = self.peek() {
       if !char.is_ascii_digit() {
         break;

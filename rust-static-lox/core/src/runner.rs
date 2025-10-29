@@ -2,6 +2,7 @@ use std::fs;
 
 use diagnostic::DiagnosticEngine;
 use lexer::Lexer;
+use parser::Parser;
 
 pub struct Runner {
   pub source: String,
@@ -22,13 +23,14 @@ impl Runner {
     engine: &mut DiagnosticEngine<'a>,
   ) -> Result<(), std::io::Error> {
     println!("\n============== READ =================\n");
+
     self.source = fs::read_to_string(&path)?;
-    println!("{}", self.source);
+    println!("{:?}", self.source);
+
     println!("\n============= SCANNED ===============\n");
 
     let mut lexer = Lexer::new(&self.source);
     lexer.scan_tokens(engine);
-    println!("{:?}", lexer.tokens);
 
     if engine.has_errors() {
       engine.print_diagnostics();
@@ -37,6 +39,22 @@ impl Runner {
         "lexing error",
       ));
     }
+
+    println!("{:?}", lexer.tokens);
+
+    println!("\n============= PARSED ===============\n");
+
+    let mut parser = Parser::new();
+    parser.parse();
+
+    if engine.has_errors() {
+      engine.print_diagnostics();
+      return Err(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        "parsing error",
+      ));
+    }
+
     Ok(())
   }
 }

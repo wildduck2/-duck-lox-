@@ -1,5 +1,5 @@
 [package]
-name = "core"
+name = "parser"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -10,7 +10,5 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-colored.workspace = true
 diagnostic = { path = "../diagnostic" }
 lexer = { path = "../lexer" }
-parser = { path = "../parser" }
