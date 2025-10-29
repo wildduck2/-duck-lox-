@@ -37,7 +37,7 @@ impl<'a> Lexer<'a> {
   pub fn scan_tokens(&mut self, engine: &mut DiagnosticEngine<'a>) {
     while !self.is_eof() {
       self.start = self.current;
-      let c = self.advance(1);
+      let c = self.advance();
 
       let token = self.lex_tokens(c, engine);
 
@@ -71,10 +71,16 @@ impl<'a> Lexer<'a> {
   /// Function that returns the next char without advancing the pointer.
   fn peek(&self) -> Option<char> {
     if self.is_eof() {
+      println!("EOF");
       return None;
     }
 
-    self.source[(self.current as usize)..].chars().next()
+    let char = self.source[(self.current as usize)..]
+      .chars()
+      .next()
+      .unwrap();
+
+    Some(char)
   }
 
   /// Function that returns the (next + 1) char and shift the current and column count to this char.
@@ -87,14 +93,11 @@ impl<'a> Lexer<'a> {
   }
 
   /// Function that returns the next char without advancing the pointer.
-  fn advance(&mut self, n: u32) -> char {
-    let mut char: Option<char> = None;
+  fn advance(&mut self) -> char {
+    let char = self.peek();
 
-    for _i in 0..n {
-      char = self.peek();
-      self.current += 1;
-      self.column += 1;
-    }
+    self.current += 1;
+    self.column += 1;
 
     match char {
       Some(c) => c,

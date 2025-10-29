@@ -9,6 +9,7 @@ pub enum DiagnosticError {
   BorrowCheckerViolation,
   InvalidCharacter,
   InvalidArguments,
+  UnterminatedString,
 }
 
 impl DiagnosticError {
@@ -21,6 +22,7 @@ impl DiagnosticError {
       Self::BorrowCheckerViolation => "E0502",
       Self::InvalidCharacter => "E0601",
       Self::InvalidArguments => "E0602",
+      Self::UnterminatedString => "E0603",
     }
   }
 

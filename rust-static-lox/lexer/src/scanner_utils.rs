@@ -8,15 +8,75 @@ use diagnostic::{
 use crate::{token::TokenKind, Lexer};
 
 impl<'a> Lexer<'a> {
-  fn lex_string(&mut self) -> Option<TokenKind> {
-    let current = self.advance(1); // consume the current "\""
+  fn lex_string(&mut self, engine: &mut DiagnosticEngine<'a>) -> Option<TokenKind> {
+    // The opening quote is already in the lexeme at position self.start
+    let first_char = self.source.chars().nth(self.start).unwrap();
 
     while let Some(char) = self.peek() {
-      if char == '"' && current == '"' {
-        self.advance(1); // consume the current "\""
+      if self.is_eof() {
+        let line_content = self.get_line(self.line);
+
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::UnterminatedString),
+          "unterminated string".to_string(),
+          "demo.lox",
+        )
+        .with_context_line(self.line, line_content)
+        .with_label(
+          Span::new(self.line, 1, 1),
+          Some("unterminated string"),
+          LabelStyle::Primary,
+        );
+
+        engine.add(diagnostic);
+
         break;
       }
-      self.advance(1);
+
+      if char == '\n' && first_char != '`' {
+        let line_content = self.get_line(self.line);
+
+        if self.peek() == Some('\n') {
+          let diagnostic = Diagnostic::new(
+            DiagnosticCode::Error(DiagnosticError::UnterminatedString),
+            "unterminated string".to_string(),
+            "demo.lox",
+          )
+          .with_context_line(self.line, line_content)
+          .with_label(
+            Span::new(self.line, 1, line_content.len() + 1),
+            Some("unterminated string"),
+            LabelStyle::Primary,
+          );
+          engine.add(diagnostic);
+          break;
+        }
+
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::UnterminatedString),
+          "unterminated string".to_string(),
+          "demo.lox",
+        )
+        .with_context_line(self.line, line_content)
+        .with_label(
+          Span::new(self.line, self.start + 1, self.current + 1),
+          Some("unterminated string"),
+          LabelStyle::Primary,
+        );
+
+        engine.add(diagnostic);
+
+        break;
+      }
+
+      if (first_char == '\'' && char == '\'')
+        || (first_char == '"' && char == '"')
+        || (first_char == '`' && char == '`')
+      {
+        self.advance(); // consume the closing quote
+        break;
+      }
+      self.advance();
     }
 
     Some(TokenKind::StringLiteral)
@@ -48,18 +108,20 @@ impl<'a> Lexer<'a> {
       '>' => self.lex_greater(),
       '&' => self.lex_and(engine),
       '|' => self.lex_or(engine),
-      '"' | '\'' | '`' => self.lex_string(),
+      '\n' => {
+        self.line += 1;
+        self.column = 0;
+        None
+      },
 
       '?' => Some(TokenKind::Question),
       '\r' | '\t' | ' ' => {
+        self.current += 1;
         self.column += 1;
         None
       },
-      '\n' => {
-        self.line += 1;
-        self.column = 1;
-        None
-      },
+
+      '"' | '\'' | '`' => self.lex_string(engine),
       'A'..='Z' | 'a'..='z' | '_' => self.lex_keywords(),
       '0'..='9' => self.lex_number(),
 
@@ -79,7 +141,7 @@ impl<'a> Lexer<'a> {
         );
 
         engine.add(diagnostic);
-        None // Don't emit a token, just error
+        None
       },
     }
   }
@@ -95,24 +157,25 @@ impl<'a> Lexer<'a> {
   }
 
   fn lex_line_comment(&mut self) -> Option<TokenKind> {
-    self.advance(1); // consumethe "/"
+    self.advance(); // consumethe "/"
 
     while !self.is_eof() {
-      self.advance(1); // consume the current char
+      self.advance(); // consume the current char
       if self.match_char(self.peek(), '\n') {
-        self.advance(1); // consume the '\n'
+        self.advance(); // consume the '\n'
         break;
       }
     }
     Some(TokenKind::SingleLineComment)
   }
   fn lex_multi_line_comment(&mut self) -> Option<TokenKind> {
-    self.advance(1); // consumethe "*"
+    self.advance(); // consumethe "*"
 
     while !self.is_eof() {
-      self.advance(1); // consume the current char
+      self.advance(); // consume the current char
       if self.match_char(self.peek(), '*') && self.match_char(self.peek(), '/') {
-        self.advance(2); // consume the "*/"
+        self.advance(); // consume the "*"
+        self.advance(); // consume the "/"
         break;
       }
     }
@@ -121,10 +184,10 @@ impl<'a> Lexer<'a> {
   }
 
   fn lex_bang(&mut self) -> Option<TokenKind> {
-    self.advance(1); // consumethe "!"
+    self.advance(); // consumethe "!"
 
     if self.match_char(self.peek(), '=') {
-      self.advance(1); // consume the '='
+      self.advance(); // consume the '='
       return Some(TokenKind::BangEqual);
     }
 
@@ -132,10 +195,10 @@ impl<'a> Lexer<'a> {
   }
 
   fn lex_greater(&mut self) -> Option<TokenKind> {
-    self.advance(1); // consumethe ">"
+    self.advance(); // consumethe ">"
 
     if self.match_char(self.peek(), '=') {
-      self.advance(1); // consume the '='
+      self.advance(); // consume the '='
       return Some(TokenKind::GreaterEqual);
     }
 
@@ -143,10 +206,10 @@ impl<'a> Lexer<'a> {
   }
 
   fn lex_less(&mut self) -> Option<TokenKind> {
-    self.advance(1); // consumethe "<"
+    self.advance(); // consumethe "<"
 
     if self.match_char(self.peek(), '=') {
-      self.advance(1); // consume the '='
+      self.advance(); // consume the '='
       return Some(TokenKind::LessEqual);
     }
 
@@ -154,10 +217,10 @@ impl<'a> Lexer<'a> {
   }
 
   fn lex_equal(&mut self) -> Option<TokenKind> {
-    self.advance(1); // consumethe "="
+    self.advance(); // consumethe "="
 
     if self.match_char(self.peek(), '=') {
-      self.advance(1); // consume the '='
+      self.advance(); // consume the '='
       return Some(TokenKind::EqualEqual);
     }
 
@@ -165,10 +228,10 @@ impl<'a> Lexer<'a> {
   }
 
   fn lex_and(&mut self, engine: &mut DiagnosticEngine<'a>) -> Option<TokenKind> {
-    self.advance(1); // consumethe "&"
+    self.advance(); // consumethe "&"
 
     if self.match_char(self.peek(), '&') {
-      self.advance(1); // consume the '='
+      self.advance(); // consume the '='
       return Some(TokenKind::And);
     } else {
       self.emit_error_unexpected_character(engine);
@@ -177,10 +240,10 @@ impl<'a> Lexer<'a> {
   }
 
   fn lex_or(&mut self, engine: &mut DiagnosticEngine<'a>) -> Option<TokenKind> {
-    self.advance(1); // consumethe "|"
+    self.advance(); // consumethe "|"
 
     if self.match_char(self.peek(), '|') {
-      self.advance(1); // consume the '='
+      self.advance(); // consume the '='
       return Some(TokenKind::Or);
     } else {
       self.emit_error_unexpected_character(engine);
@@ -189,14 +252,14 @@ impl<'a> Lexer<'a> {
   }
 
   fn lex_keywords(&mut self) -> Option<TokenKind> {
-    self.advance(1); // consume the current char
+    self.advance(); // consume the current char
 
     while let Some(char) = self.peek() {
       if !char.is_ascii_alphabetic() || char == '_' {
         break;
       }
 
-      self.advance(1);
+      self.advance();
     }
 
     match self.get_current_lexeme() {
@@ -209,14 +272,14 @@ impl<'a> Lexer<'a> {
   }
 
   fn lex_number(&mut self) -> Option<TokenKind> {
-    self.advance(1); // consume the current number
+    self.advance(); // consume the current number
 
     while let Some(char) = self.peek() {
       if !char.is_ascii_digit() {
         break;
       }
 
-      self.advance(1);
+      self.advance();
     }
 
     if self.get_current_lexeme().contains(".") {
