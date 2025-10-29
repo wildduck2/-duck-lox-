@@ -8,8 +8,22 @@ use diagnostic::{
 use crate::{token::TokenKind, Lexer};
 
 impl<'a> Lexer<'a> {
+  fn lex_string(&mut self) -> Option<TokenKind> {
+    let current = self.advance(1); // consume the current "\""
+
+    while let Some(char) = self.peek() {
+      if char == '"' && current == '"' {
+        self.advance(1); // consume the current "\""
+        break;
+      }
+      self.advance(1);
+    }
+
+    Some(TokenKind::StringLiteral)
+  }
+
   /// Function that matches the next char to an argument and returns true.
-  pub fn lex_tokens(&mut self, c: char, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
+  pub fn lex_tokens(&mut self, c: char, engine: &mut DiagnosticEngine<'a>) -> Option<TokenKind> {
     match c {
       '{' => Some(TokenKind::LeftBrace),
       '}' => Some(TokenKind::RightBrace),
@@ -23,6 +37,10 @@ impl<'a> Lexer<'a> {
       '*' => Some(TokenKind::Star),
       '%' => Some(TokenKind::Percent),
       '^' => Some(TokenKind::Caret),
+      ';' => Some(TokenKind::Semicolon),
+      ',' => Some(TokenKind::Comma),
+      '.' => Some(TokenKind::Dot),
+      ':' => Some(TokenKind::Colon),
       '/' => self.lex_divide(),
       '=' => self.lex_equal(),
       '!' => self.lex_bang(),
@@ -30,29 +48,38 @@ impl<'a> Lexer<'a> {
       '>' => self.lex_greater(),
       '&' => self.lex_and(engine),
       '|' => self.lex_or(engine),
+      '"' | '\'' | '`' => self.lex_string(),
 
-      ';' => Some(TokenKind::Semicolon),
-      ',' => Some(TokenKind::Comma),
-      '.' => Some(TokenKind::Dot),
-      ':' => Some(TokenKind::Colon),
       '?' => Some(TokenKind::Question),
+      '\r' | '\t' | ' ' => {
+        self.column += 1;
+        None
+      },
+      '\n' => {
+        self.line += 1;
+        self.column = 1;
+        None
+      },
+      'A'..='Z' | 'a'..='z' | '_' => self.lex_keywords(),
+      '0'..='9' => self.lex_number(),
 
       _ => {
+        let current_line = self.get_line(self.line);
+
         let diagnostic = Diagnostic::new(
           DiagnosticCode::Error(DiagnosticError::InvalidCharacter),
-          format!("unexpected character: {:?}", self.get_current_lexeme()),
+          format!("unexpected character: {}", self.get_current_lexeme()),
           "demo.lox",
         )
+        .with_context_line(self.line, current_line)
         .with_label(
-          Span::new(self.start, self.current),
+          Span::new(self.line, self.current, self.column + 1),
           Some("unexpected character"),
           LabelStyle::Primary,
         );
 
-        self.emit(TokenKind::Identifier);
         engine.add(diagnostic);
-
-        None
+        None // Don't emit a token, just error
       },
     }
   }
@@ -137,7 +164,7 @@ impl<'a> Lexer<'a> {
     Some(TokenKind::Equal)
   }
 
-  fn lex_and(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
+  fn lex_and(&mut self, engine: &mut DiagnosticEngine<'a>) -> Option<TokenKind> {
     self.advance(1); // consumethe "&"
 
     if self.match_char(self.peek(), '&') {
@@ -149,7 +176,7 @@ impl<'a> Lexer<'a> {
     }
   }
 
-  fn lex_or(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
+  fn lex_or(&mut self, engine: &mut DiagnosticEngine<'a>) -> Option<TokenKind> {
     self.advance(1); // consumethe "|"
 
     if self.match_char(self.peek(), '|') {
@@ -159,5 +186,43 @@ impl<'a> Lexer<'a> {
       self.emit_error_unexpected_character(engine);
       None
     }
+  }
+
+  fn lex_keywords(&mut self) -> Option<TokenKind> {
+    self.advance(1); // consume the current char
+
+    while let Some(char) = self.peek() {
+      if !char.is_ascii_alphabetic() || char == '_' {
+        break;
+      }
+
+      self.advance(1);
+    }
+
+    match self.get_current_lexeme() {
+      "let" => Some(TokenKind::Let),
+      "true" => Some(TokenKind::True),
+      "false" => Some(TokenKind::False),
+      "nil" => Some(TokenKind::Nil),
+      _ => Some(TokenKind::Identifier),
+    }
+  }
+
+  fn lex_number(&mut self) -> Option<TokenKind> {
+    self.advance(1); // consume the current number
+
+    while let Some(char) = self.peek() {
+      if !char.is_ascii_digit() {
+        break;
+      }
+
+      self.advance(1);
+    }
+
+    if self.get_current_lexeme().contains(".") {
+      return Some(TokenKind::FloatLiteral);
+    }
+
+    Some(TokenKind::IntegerLiteral)
   }
 }

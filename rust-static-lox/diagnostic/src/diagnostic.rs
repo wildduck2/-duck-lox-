@@ -209,11 +209,7 @@ pub struct Span {
 }
 
 impl Span {
-  pub fn new(start: usize, end: usize) -> Self {
-    Self {
-      line: 1,
-      start,
-      end,
-    }
+  pub fn new(line: usize, start: usize, end: usize) -> Self {
+    Self { line, start, end }
   }
 }

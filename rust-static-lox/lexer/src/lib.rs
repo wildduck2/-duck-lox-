@@ -28,13 +28,13 @@ impl<'a> Lexer<'a> {
       tokens: Vec::new(),
       start: 0,
       current: 0,
-      line: 1,
-      column: 1,
+      line: 0,
+      column: 0,
     }
   }
 
   /// Function that scans the tokens.
-  pub fn scan_tokens(&mut self, engine: &mut DiagnosticEngine) {
+  pub fn scan_tokens(&mut self, engine: &mut DiagnosticEngine<'a>) {
     while !self.is_eof() {
       self.start = self.current;
       let c = self.advance(1);
@@ -63,7 +63,7 @@ impl<'a> Lexer<'a> {
     self.tokens.push(Token {
       kind,
       lexeme: self.get_current_lexeme(),
-      span: Span::new(self.start, self.current),
+      span: Span::new(self.line, self.start, self.current),
     });
     self.start = self.current;
   }
@@ -114,18 +114,30 @@ impl<'a> Lexer<'a> {
     self.current >= self.source.len()
   }
 
-  fn emit_error_unexpected_character(&mut self, engine: &mut DiagnosticEngine) {
+  fn emit_error_unexpected_character(&mut self, engine: &mut DiagnosticEngine<'a>) {
+    let current_line = self.get_line(self.line);
+
     let diagnostic = Diagnostic::new(
       DiagnosticCode::Error(DiagnosticError::InvalidCharacter),
-      format!("unexpected character: {:?}", self.get_current_lexeme()),
+      format!("unexpected character: {}", self.get_current_lexeme()),
       "demo.lox",
     )
+    .with_context_line(self.line, current_line) // ADD THIS!
     .with_label(
-      Span::new(self.start, self.current),
+      Span::new(
+        self.line,
+        self.current,
+        self.column + self.get_current_lexeme().len() - 1,
+      ),
       Some("unexpected character"),
       LabelStyle::Primary,
     );
 
     engine.add(diagnostic);
+  }
+
+  // Helper to get a specific line from source
+  pub fn get_line(&self, line_num: usize) -> &'a str {
+    self.source.lines().nth(line_num).unwrap_or("")
   }
 }

@@ -3,31 +3,33 @@ use std::fs;
 use diagnostic::DiagnosticEngine;
 use lexer::Lexer;
 
-pub struct Runner {}
+pub struct Runner {
+  pub source: String,
+}
 
 impl Runner {
   pub fn new() -> Self {
-    Self {}
+    Self {
+      source: String::new(),
+    }
   }
 
   pub fn run_interactive_mode(&mut self, engine: &mut DiagnosticEngine) {}
 
-  pub fn run_file(
-    &mut self,
+  pub fn run_file<'a>(
+    &'a mut self,
     path: String,
-    engine: &mut DiagnosticEngine,
+    engine: &mut DiagnosticEngine<'a>,
   ) -> Result<(), std::io::Error> {
     println!("\n============== READ =================\n");
-
-    let source = fs::read_to_string(&path)?;
-    println!("{}", source);
-
+    self.source = fs::read_to_string(&path)?;
+    println!("{}", self.source);
     println!("\n============= SCANNED ===============\n");
-    let mut lexer = Lexer::new(source.as_str());
+
+    let mut lexer = Lexer::new(&self.source);
     lexer.scan_tokens(engine);
     println!("{:?}", lexer.tokens);
 
-    // Check if there were scanning errors
     if engine.has_errors() {
       engine.print_diagnostics();
       return Err(std::io::Error::new(
@@ -35,7 +37,6 @@ impl Runner {
         "lexing error",
       ));
     }
-
     Ok(())
   }
 }
