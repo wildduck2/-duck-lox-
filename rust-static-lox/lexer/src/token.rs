@@ -1,5 +1,6 @@
 use diagnostic::diagnostic::Span;
 
+#[derive(Debug)]
 pub struct Token<'a> {
   pub kind: TokenKind,
   pub lexeme: &'a str,
@@ -84,7 +85,6 @@ pub enum TokenKind {
 
   // Operators.
   Equal,
-  NotEqual,
   LessEqualGreater,
   GreaterEqualLess,
   And,
@@ -99,6 +99,10 @@ pub enum TokenKind {
   AndAssign,
   OrAssign,
   XorAssign,
+
+  // Comments
+  SingleLineComment,
+  MultiLineComment,
 
   // Misc.
   Eof,

@@ -10,6 +10,7 @@ use crate::token::{Token, TokenKind};
 mod scanner_utils;
 pub mod token;
 
+#[derive(Debug)]
 pub struct Lexer<'a> {
   pub source: &'a str,
   pub tokens: Vec<Token<'a>>,
@@ -36,9 +37,9 @@ impl<'a> Lexer<'a> {
   pub fn scan_tokens(&mut self, engine: &mut DiagnosticEngine) {
     while !self.is_eof() {
       self.start = self.current;
-      let c = self.advance();
+      let c = self.advance(1);
 
-      let token = self.match_char(c, engine);
+      let token = self.lex_tokens(c, engine);
 
       if let Some(token_type) = token {
         self.emit(token_type);
@@ -46,6 +47,15 @@ impl<'a> Lexer<'a> {
     }
 
     self.emit(TokenKind::Eof);
+  }
+
+  fn match_char(&mut self, char: Option<char>, match_char: char) -> bool {
+    if let Some(char) = char {
+      if char == match_char {
+        return true;
+      }
+    }
+    return false;
   }
 
   /// Function that emits the token.
@@ -67,7 +77,7 @@ impl<'a> Lexer<'a> {
     self.source[(self.current as usize)..].chars().next()
   }
 
-  /// Function that returns the next char and shift the current and column count to this char.
+  /// Function that returns the (next + 1) char and shift the current and column count to this char.
   fn peek_next(&self) -> Option<char> {
     if self.is_eof() {
       return None;
@@ -77,13 +87,21 @@ impl<'a> Lexer<'a> {
   }
 
   /// Function that returns the next char without advancing the pointer.
-  fn advance(&mut self) -> char {
-    let char = self.peek();
+  fn advance(&mut self, n: u32) -> char {
+    let mut char: Option<char> = None;
 
-    self.current += 1;
-    self.column += 1;
+    for _i in 0..n {
+      char = self.peek();
+      self.current += 1;
+      self.column += 1;
+    }
 
-    char.unwrap()
+    match char {
+      Some(c) => c,
+      None => {
+        panic!("Failed to advance");
+      },
+    }
   }
 
   /// Function that returns the current lexelme.
@@ -94,5 +112,20 @@ impl<'a> Lexer<'a> {
   /// Function that matches the next char to an argument and returns true.
   fn is_eof(&self) -> bool {
     self.current >= self.source.len()
+  }
+
+  fn emit_error_unexpected_character(&mut self, engine: &mut DiagnosticEngine) {
+    let diagnostic = Diagnostic::new(
+      DiagnosticCode::Error(DiagnosticError::InvalidCharacter),
+      format!("unexpected character: {:?}", self.get_current_lexeme()),
+      "demo.lox",
+    )
+    .with_label(
+      Span::new(self.start, self.current),
+      Some("unexpected character"),
+      LabelStyle::Primary,
+    );
+
+    engine.add(diagnostic);
   }
 }

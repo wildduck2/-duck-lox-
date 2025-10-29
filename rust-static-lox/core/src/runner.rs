@@ -25,6 +25,7 @@ impl Runner {
     println!("\n============= SCANNED ===============\n");
     let mut lexer = Lexer::new(source.as_str());
     lexer.scan_tokens(engine);
+    println!("{:?}", lexer.tokens);
 
     // Check if there were scanning errors
     if engine.has_errors() {

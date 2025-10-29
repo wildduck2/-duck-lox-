@@ -1,8 +1,5 @@
 use diagnostic::{
-  code::DiagnosticCode,
-  diagnostic::{Diagnostic, LabelStyle, Span},
-  types::error::DiagnosticError,
-  DiagnosticEngine,
+  code::DiagnosticCode, diagnostic::Diagnostic, types::error::DiagnosticError, DiagnosticEngine,
 };
 
 use crate::runner::Runner;
@@ -10,7 +7,7 @@ use colored::*;
 
 mod runner;
 
-fn main() {
+fn main() -> Result<(), std::io::Error> {
   let args = std::env::args().collect::<Vec<_>>();
   let mut diagnostic_engine = DiagnosticEngine::new();
   let mut runner = Runner::new();
@@ -22,7 +19,7 @@ fn main() {
     },
     2 => {
       println!("{}", format!("Running file: {}", args[1]).cyan().bold());
-      runner.run_file(args[1].clone(), &mut diagnostic_engine);
+      runner.run_file(args[1].clone(), &mut diagnostic_engine)?;
     },
     _ => {
       // Error: Invalid arguments
@@ -43,4 +40,6 @@ fn main() {
   if diagnostic_engine.has_errors() {
     std::process::exit(65);
   }
+
+  Ok(())
 }
