@@ -4,3 +4,9 @@
 This is the rust static typed language implementation of lox.
 
 There is a [plan](./plan.md) for this language, so do not worry.
+
+Recent Updates
+--------------
+2025-10-29
+- Added dedicated README guidance for the diagnostic crate, including usage examples and test pointers.
+- Refined lexer documentation with precise Rust doc comments across the tokenization pipeline.

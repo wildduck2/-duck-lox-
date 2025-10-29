@@ -21,7 +21,7 @@ pub struct Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
-  /// Function that creates a new instance of the lexer.
+  /// Creates a lexer over the provided source text.
   pub fn new(source: &'a str) -> Self {
     Self {
       source,
@@ -33,7 +33,7 @@ impl<'a> Lexer<'a> {
     }
   }
 
-  /// Function that scans the tokens.
+  /// Tokenizes the entire source, emitting tokens and diagnostics along the way.
   pub fn scan_tokens(&mut self, engine: &mut DiagnosticEngine<'a>) {
     while !self.is_eof() {
       self.start = self.current;
@@ -58,7 +58,7 @@ impl<'a> Lexer<'a> {
     return false;
   }
 
-  /// Function that emits the token.
+  /// Pushes a token covering the span between `start` and `current`.
   fn emit(&mut self, kind: TokenKind) {
     self.tokens.push(Token {
       kind,
@@ -68,7 +68,7 @@ impl<'a> Lexer<'a> {
     self.start = self.current;
   }
 
-  /// Function that returns the next char without advancing the pointer.
+  /// Returns the next character without consuming it, or `None` at end of input.
   fn peek(&self) -> Option<char> {
     if self.is_eof() {
       println!("EOF");
@@ -83,7 +83,7 @@ impl<'a> Lexer<'a> {
     Some(char)
   }
 
-  /// Function that returns the (next + 1) char and shift the current and column count to this char.
+  /// Returns the character one position ahead of the cursor without advancing it.
   fn peek_next(&self) -> Option<char> {
     if self.is_eof() {
       return None;
@@ -92,7 +92,7 @@ impl<'a> Lexer<'a> {
     self.source[((self.current + 1) as usize)..].chars().next()
   }
 
-  /// Function that returns the next char without advancing the pointer.
+  /// Consumes the next character and updates the byte offset and column counters.
   fn advance(&mut self) -> char {
     let char = self.peek();
 
@@ -107,16 +107,17 @@ impl<'a> Lexer<'a> {
     }
   }
 
-  /// Function that returns the current lexelme.
+  /// Returns the current lexeme slice spanning the active token.
   fn get_current_lexeme(&self) -> &'a str {
     &self.source[self.start..self.current]
   }
 
-  /// Function that matches the next char to an argument and returns true.
+  /// Returns `true` when the cursor has reached the end of the source text.
   fn is_eof(&self) -> bool {
     self.current >= self.source.len()
   }
 
+  /// Emits a diagnostic for an unexpected character at the current cursor.
   fn emit_error_unexpected_character(&mut self, engine: &mut DiagnosticEngine<'a>) {
     let current_line = self.get_line(self.line);
 
@@ -139,7 +140,7 @@ impl<'a> Lexer<'a> {
     engine.add(diagnostic);
   }
 
-  // Helper to get a specific line from source
+  /// Returns the source line corresponding to `line_num`, or an empty string if it is out of range.
   pub fn get_line(&self, line_num: usize) -> &'a str {
     self.source.lines().nth(line_num).unwrap_or("")
   }
