@@ -7,9 +7,9 @@ use diagnostic::{
 
 use crate::{token::TokenKind, Lexer};
 
-impl<'a> Lexer<'a> {
+impl Lexer {
   /// Dispatches lexing for the current character, returning the matching token or emitting diagnostics.
-  pub fn lex_tokens(&mut self, c: char, engine: &mut DiagnosticEngine<'a>) -> Option<TokenKind> {
+  pub fn lex_tokens(&mut self, c: char, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     match c {
       '{' => Some(TokenKind::LeftBrace),
       '}' => Some(TokenKind::RightBrace),
@@ -52,12 +52,12 @@ impl<'a> Lexer<'a> {
         let diagnostic = Diagnostic::new(
           DiagnosticCode::Error(DiagnosticError::InvalidCharacter),
           format!("unexpected character: {}", self.get_current_lexeme()),
-          "demo.lox",
+          "demo.lox".to_string(),
         )
         .with_context_line(self.line, current_line)
         .with_label(
           Span::new(self.line, self.current, self.column + 1),
-          Some("unexpected character"),
+          Some("unexpected character".to_string()),
           LabelStyle::Primary,
         );
 
@@ -145,7 +145,7 @@ impl<'a> Lexer<'a> {
   }
 
   /// Lexes `&&`, emitting a diagnostic when a second `&` is missing.
-  fn lex_and(&mut self, engine: &mut DiagnosticEngine<'a>) -> Option<TokenKind> {
+  fn lex_and(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     if self.match_char(self.peek(), '&') {
       self.advance(); // consume the '='
       return Some(TokenKind::And);
@@ -156,7 +156,7 @@ impl<'a> Lexer<'a> {
   }
 
   /// Lexes `||`, emitting a diagnostic when a second `|` is missing.
-  fn lex_or(&mut self, engine: &mut DiagnosticEngine<'a>) -> Option<TokenKind> {
+  fn lex_or(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     if self.match_char(self.peek(), '|') {
       self.advance(); // consume the '='
       return Some(TokenKind::Or);
@@ -203,7 +203,7 @@ impl<'a> Lexer<'a> {
   }
 
   /// Parses a quoted string literal and reports unterminated strings.
-  fn lex_string(&mut self, engine: &mut DiagnosticEngine<'a>) -> Option<TokenKind> {
+  fn lex_string(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     // The opening quote is already in the lexeme at position self.start
     let first_char = self.source.chars().nth(self.start).unwrap();
 
@@ -214,12 +214,12 @@ impl<'a> Lexer<'a> {
         let diagnostic = Diagnostic::new(
           DiagnosticCode::Error(DiagnosticError::UnterminatedString),
           "unterminated string".to_string(),
-          "demo.lox",
+          "demo.lox".to_string(),
         )
         .with_context_line(self.line, line_content)
         .with_label(
           Span::new(self.line, 1, 1),
-          Some("unterminated string"),
+          Some("unterminated string".to_string()),
           LabelStyle::Primary,
         );
 
@@ -235,12 +235,12 @@ impl<'a> Lexer<'a> {
           let diagnostic = Diagnostic::new(
             DiagnosticCode::Error(DiagnosticError::UnterminatedString),
             "unterminated string".to_string(),
-            "demo.lox",
+            "demo.lox".to_string(),
           )
-          .with_context_line(self.line, line_content)
+          .with_context_line(self.line, line_content.clone())
           .with_label(
             Span::new(self.line, 1, line_content.len() + 1),
-            Some("unterminated string"),
+            Some("unterminated string".to_string()),
             LabelStyle::Primary,
           );
           engine.add(diagnostic);
@@ -250,12 +250,12 @@ impl<'a> Lexer<'a> {
         let diagnostic = Diagnostic::new(
           DiagnosticCode::Error(DiagnosticError::UnterminatedString),
           "unterminated string".to_string(),
-          "demo.lox",
+          "demo.lox".to_string(),
         )
         .with_context_line(self.line, line_content)
         .with_label(
           Span::new(self.line, self.start + 1, self.current + 1),
-          Some("unterminated string"),
+          Some("unterminated string".to_string()),
           LabelStyle::Primary,
         );
 

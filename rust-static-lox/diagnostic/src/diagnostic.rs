@@ -3,9 +3,9 @@ use colored::*;
 use crate::code::DiagnosticCode;
 
 #[derive(Debug, Clone)]
-pub struct Label<'a> {
+pub struct Label {
   pub span: Span,
-  pub message: Option<&'a str>,
+  pub message: Option<String>,
   pub style: LabelStyle,
 }
 
@@ -16,18 +16,18 @@ pub enum LabelStyle {
 }
 
 #[derive(Debug)]
-pub struct Diagnostic<'a> {
+pub struct Diagnostic {
   pub code: DiagnosticCode,
   pub message: String,
-  pub file_path: &'a str,
-  pub labels: Vec<Label<'a>>,
-  pub context_lines: Vec<(usize, &'a str)>,
-  pub help: Option<&'a str>,
-  pub note: Option<&'a str>,
+  pub file_path: String,
+  pub labels: Vec<Label>,
+  pub context_lines: Vec<(usize, String)>,
+  pub help: Option<String>,
+  pub note: Option<String>,
 }
 
-impl<'a> Diagnostic<'a> {
-  pub fn new(code: DiagnosticCode, message: String, file_path: &'a str) -> Self {
+impl Diagnostic {
+  pub fn new(code: DiagnosticCode, message: String, file_path: String) -> Self {
     Self {
       code,
       message,
@@ -39,7 +39,7 @@ impl<'a> Diagnostic<'a> {
     }
   }
 
-  pub fn with_label(mut self, span: Span, message: Option<&'a str>, style: LabelStyle) -> Self {
+  pub fn with_label(mut self, span: Span, message: Option<String>, style: LabelStyle) -> Self {
     self.labels.push(Label {
       span,
       message,
@@ -48,17 +48,17 @@ impl<'a> Diagnostic<'a> {
     self
   }
 
-  pub fn with_context_line(mut self, line_num: usize, content: &'a str) -> Self {
+  pub fn with_context_line(mut self, line_num: usize, content: String) -> Self {
     self.context_lines.push((line_num, content));
     self
   }
 
-  pub fn with_help(mut self, help: &'a str) -> Self {
+  pub fn with_help(mut self, help: String) -> Self {
     self.help = Some(help);
     self
   }
 
-  pub fn with_note(mut self, note: &'a str) -> Self {
+  pub fn with_note(mut self, note: String) -> Self {
     self.note = Some(note);
     self
   }
@@ -155,7 +155,7 @@ impl<'a> Diagnostic<'a> {
               };
 
               // Print marker line with optional message
-              if let Some(msg) = label.message {
+              if let Some(msg) = &label.message {
                 let colored_msg = match label.style {
                   LabelStyle::Primary => msg.red(),
                   LabelStyle::Secondary => msg.cyan(),
@@ -185,11 +185,11 @@ impl<'a> Diagnostic<'a> {
     }
 
     // Help and note
-    if let Some(help) = self.help {
+    if let Some(help) = &self.help {
       output.push_str(&format!("   {} {}\n", "= help:".blue().bold(), help.blue()));
     }
 
-    if let Some(note) = self.note {
+    if let Some(note) = &self.note {
       output.push_str(&format!("   {} {}\n", "= note:".blue().bold(), note.blue()));
     }
 

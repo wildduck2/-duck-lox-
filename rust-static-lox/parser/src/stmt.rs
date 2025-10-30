@@ -2,11 +2,11 @@ use crate::expr::Expr;
 use core::fmt;
 
 #[derive(Debug, Clone)]
-pub enum Stmt<'a> {
-  Expr(Expr<'a>),
+pub enum Stmt {
+  Expr(Expr),
 }
 
-impl<'a> fmt::Display for Stmt<'a> {
+impl fmt::Display for Stmt {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
       Stmt::Expr(expr) => write!(f, "ExprStmt({})", expr),
@@ -14,7 +14,7 @@ impl<'a> fmt::Display for Stmt<'a> {
   }
 }
 
-impl<'a> Stmt<'a> {
+impl Stmt {
   /// Beautiful ASCII tree output
   pub fn print_tree(&self) {
     self.build_tree("", true);

@@ -17,10 +17,10 @@ impl Runner {
 
   pub fn run_interactive_mode(&mut self, engine: &mut DiagnosticEngine) {}
 
-  pub fn run_file<'a>(
-    &'a mut self,
+  pub fn run_file(
+    mut self,
     path: String,
-    engine: &mut DiagnosticEngine<'a>,
+    engine: &mut DiagnosticEngine,
   ) -> Result<(), std::io::Error> {
     println!("\n============== READ =================\n");
 
@@ -29,7 +29,7 @@ impl Runner {
 
     println!("\n============= SCANNED ===============\n");
 
-    let mut lexer = Lexer::new(&self.source);
+    let mut lexer = Lexer::new(self.source);
     lexer.scan_tokens(engine);
 
     if engine.has_errors() {

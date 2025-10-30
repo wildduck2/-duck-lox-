@@ -26,9 +26,9 @@ fn main() -> Result<(), std::io::Error> {
       let diagnostic = Diagnostic::new(
         DiagnosticCode::Error(DiagnosticError::InvalidArguments),
         "invalid number of arguments".to_string(),
-        "demo.lox",
+        "demo.lox".to_string(),
       )
-      .with_help("Usage: lox [script]");
+      .with_help("Usage: lox [script]".to_string());
 
       diagnostic_engine.add(diagnostic);
       diagnostic_engine.print_diagnostics();

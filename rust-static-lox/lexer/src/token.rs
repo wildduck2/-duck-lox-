@@ -1,9 +1,9 @@
 use diagnostic::diagnostic::Span;
 
 #[derive(Debug, Clone)]
-pub struct Token<'a> {
+pub struct Token {
   pub kind: TokenKind,
-  pub lexeme: &'a str,
+  pub lexeme: String,
   pub span: Span,
 }
 

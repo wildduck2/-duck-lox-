@@ -1,30 +1,27 @@
-use crate::{
-  code::DiagnosticCode,
-  diagnostic::{Diagnostic, Span},
-};
+use crate::{code::DiagnosticCode, diagnostic::Diagnostic};
 
 pub mod code;
 pub mod diagnostic;
 pub mod types;
 
 #[derive(Debug, Default)]
-pub struct DiagnosticEngine<'a> {
-  source: &'a str,
-  diagnostics: Vec<Diagnostic<'a>>,
+pub struct DiagnosticEngine {
+  source: String,
+  diagnostics: Vec<Diagnostic>,
   error_count: usize,
   warning_count: usize,
 }
 
-impl<'a> DiagnosticEngine<'a> {
+impl DiagnosticEngine {
   pub fn new() -> Self {
     Self::default()
   }
 
-  pub fn insert_source(&mut self, source: &'a str) {
+  pub fn insert_source(&mut self, source: String) {
     self.source = source;
   }
 
-  pub fn add(&mut self, diagnostic: Diagnostic<'a>) {
+  pub fn add(&mut self, diagnostic: Diagnostic) {
     match diagnostic.code {
       DiagnosticCode::Error(_) => {
         self.error_count += 1;

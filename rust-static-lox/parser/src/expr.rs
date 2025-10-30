@@ -3,26 +3,26 @@ use core::fmt;
 use lexer::token::Token;
 
 #[derive(Debug, Clone)]
-pub enum Expr<'a> {
-  Literal(Token<'a>),
-  Identifier(Token<'a>),
-  Grouping(Box<Expr<'a>>),
+pub enum Expr {
+  Literal(Token),
+  Identifier(Token),
+  Grouping(Box<Expr>),
   Assign {
-    name: Token<'a>,
-    rhs: Box<Expr<'a>>,
+    name: Token,
+    rhs: Box<Expr>,
   },
   Unary {
-    operator: Token<'a>,
-    rhs: Box<Expr<'a>>,
+    operator: Token,
+    rhs: Box<Expr>,
   },
   Binary {
-    lhs: Box<Expr<'a>>,
-    operator: Token<'a>,
-    rhs: Box<Expr<'a>>,
+    lhs: Box<Expr>,
+    operator: Token,
+    rhs: Box<Expr>,
   },
 }
 
-impl<'a> fmt::Display for Expr<'a> {
+impl fmt::Display for Expr {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
       Expr::Literal(token) => write!(f, "{}", token.lexeme),
@@ -35,7 +35,7 @@ impl<'a> fmt::Display for Expr<'a> {
   }
 }
 
-impl<'a> Expr<'a> {
+impl Expr {
   pub(crate) fn build_tree(&self, prefix: &str, is_last: bool) {
     let (connector, extension) = if is_last {
       ("└── ", "    ")

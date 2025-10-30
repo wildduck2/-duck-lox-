@@ -11,18 +11,18 @@ mod scanner_utils;
 pub mod token;
 
 #[derive(Debug)]
-pub struct Lexer<'a> {
-  pub source: &'a str,
-  pub tokens: Vec<Token<'a>>,
+pub struct Lexer {
+  pub source: String,
+  pub tokens: Vec<Token>,
   pub start: usize,   // Start byte offset of current token
   pub current: usize, // Current byte offset in source
   pub line: usize,    // Current line (1-indexed)
   pub column: usize,  // Current column (1-indexed)
 }
 
-impl<'a> Lexer<'a> {
+impl Lexer {
   /// Creates a lexer over the provided source text.
-  pub fn new(source: &'a str) -> Self {
+  pub fn new(source: String) -> Self {
     Self {
       source,
       tokens: Vec::new(),
@@ -34,7 +34,7 @@ impl<'a> Lexer<'a> {
   }
 
   /// Tokenizes the entire source, emitting tokens and diagnostics along the way.
-  pub fn scan_tokens(&mut self, engine: &mut DiagnosticEngine<'a>) {
+  pub fn scan_tokens(&mut self, engine: &mut DiagnosticEngine) {
     while !self.is_eof() {
       self.start = self.current;
       let c = self.advance();
@@ -62,7 +62,7 @@ impl<'a> Lexer<'a> {
   fn emit(&mut self, kind: TokenKind) {
     self.tokens.push(Token {
       kind,
-      lexeme: self.get_current_lexeme(),
+      lexeme: self.get_current_lexeme().to_string(),
       span: Span::new(self.line, self.start, self.current),
     });
     self.start = self.current;
@@ -108,7 +108,7 @@ impl<'a> Lexer<'a> {
   }
 
   /// Returns the current lexeme slice spanning the active token.
-  fn get_current_lexeme(&self) -> &'a str {
+  fn get_current_lexeme(&self) -> &str {
     &self.source[self.start..self.current]
   }
 
@@ -118,13 +118,13 @@ impl<'a> Lexer<'a> {
   }
 
   /// Emits a diagnostic for an unexpected character at the current cursor.
-  fn emit_error_unexpected_character(&mut self, engine: &mut DiagnosticEngine<'a>) {
+  fn emit_error_unexpected_character(&mut self, engine: &mut DiagnosticEngine) {
     let current_line = self.get_line(self.line);
 
     let diagnostic = Diagnostic::new(
       DiagnosticCode::Error(DiagnosticError::InvalidCharacter),
       format!("unexpected character: {}", self.get_current_lexeme()),
-      "demo.lox",
+      "demo.lox".to_string(),
     )
     .with_context_line(self.line, current_line) // ADD THIS!
     .with_label(
@@ -133,7 +133,7 @@ impl<'a> Lexer<'a> {
         self.current,
         self.column + self.get_current_lexeme().len() - 1,
       ),
-      Some("unexpected character"),
+      Some("unexpected character".to_string()),
       LabelStyle::Primary,
     );
 
@@ -141,7 +141,7 @@ impl<'a> Lexer<'a> {
   }
 
   /// Returns the source line corresponding to `line_num`, or an empty string if it is out of range.
-  pub fn get_line(&self, line_num: usize) -> &'a str {
-    self.source.lines().nth(line_num).unwrap_or("")
+  pub fn get_line(&self, line_num: usize) -> String {
+    self.source.lines().nth(line_num).unwrap_or("").to_string()
   }
 }
