@@ -1,4 +1,6 @@
 use lexer::token::Token;
+mod expr;
+mod stmt;
 
 pub struct Parser<'a> {
   pub tokens: Vec<Token<'a>>,

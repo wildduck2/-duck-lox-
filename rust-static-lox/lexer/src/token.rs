@@ -1,6 +1,6 @@
 use diagnostic::diagnostic::Span;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Token<'a> {
   pub kind: TokenKind,
   pub lexeme: &'a str,
