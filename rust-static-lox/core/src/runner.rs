@@ -25,7 +25,7 @@ impl Runner {
     println!("\n============== READ =================\n");
 
     self.source = fs::read_to_string(&path)?;
-    println!("{:?}", self.source);
+    println!("{}", self.source);
 
     println!("\n============= SCANNED ===============\n");
 
@@ -44,8 +44,8 @@ impl Runner {
 
     println!("\n============= PARSED ===============\n");
 
-    let mut parser = Parser::new();
-    parser.parse();
+    let mut parser = Parser::new(lexer.tokens);
+    parser.parse(engine);
 
     if engine.has_errors() {
       engine.print_diagnostics();

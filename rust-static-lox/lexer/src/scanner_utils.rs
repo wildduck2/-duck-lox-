@@ -47,14 +47,11 @@ impl Lexer {
       '0'..='9' => self.lex_number(),
 
       _ => {
-        let current_line = self.get_line(self.line);
-
         let diagnostic = Diagnostic::new(
           DiagnosticCode::Error(DiagnosticError::InvalidCharacter),
           format!("unexpected character: {}", self.get_current_lexeme()),
           "demo.lox".to_string(),
         )
-        .with_context_line(self.line, current_line)
         .with_label(
           Span::new(self.line, self.current, self.column + 1),
           Some("unexpected character".to_string()),
@@ -178,8 +175,8 @@ impl Lexer {
 
     match self.get_current_lexeme() {
       "let" => Some(TokenKind::Let),
-      "true" => Some(TokenKind::True),
-      "false" => Some(TokenKind::False),
+      "true" => Some(TokenKind::TrueLiteral),
+      "false" => Some(TokenKind::FalseLiteral),
       "nil" => Some(TokenKind::Nil),
       _ => Some(TokenKind::Identifier),
     }
@@ -209,14 +206,11 @@ impl Lexer {
 
     while let Some(char) = self.peek() {
       if self.is_eof() {
-        let line_content = self.get_line(self.line);
-
         let diagnostic = Diagnostic::new(
           DiagnosticCode::Error(DiagnosticError::UnterminatedString),
           "unterminated string".to_string(),
           "demo.lox".to_string(),
         )
-        .with_context_line(self.line, line_content)
         .with_label(
           Span::new(self.line, 1, 1),
           Some("unterminated string".to_string()),
@@ -237,7 +231,6 @@ impl Lexer {
             "unterminated string".to_string(),
             "demo.lox".to_string(),
           )
-          .with_context_line(self.line, line_content.clone())
           .with_label(
             Span::new(self.line, 1, line_content.len() + 1),
             Some("unterminated string".to_string()),
@@ -252,7 +245,6 @@ impl Lexer {
           "unterminated string".to_string(),
           "demo.lox".to_string(),
         )
-        .with_context_line(self.line, line_content)
         .with_label(
           Span::new(self.line, self.start + 1, self.current + 1),
           Some("unterminated string".to_string()),

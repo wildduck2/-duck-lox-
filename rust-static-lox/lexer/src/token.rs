@@ -12,8 +12,8 @@ pub enum TokenKind {
   // Single-character tokens.
   Let,
   Fn,
-  True,
-  False,
+  TrueLiteral,
+  FalseLiteral,
   Nil,
   Return,
   Break,

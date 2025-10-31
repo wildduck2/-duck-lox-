@@ -119,14 +119,11 @@ impl Lexer {
 
   /// Emits a diagnostic for an unexpected character at the current cursor.
   fn emit_error_unexpected_character(&mut self, engine: &mut DiagnosticEngine) {
-    let current_line = self.get_line(self.line);
-
     let diagnostic = Diagnostic::new(
       DiagnosticCode::Error(DiagnosticError::InvalidCharacter),
       format!("unexpected character: {}", self.get_current_lexeme()),
       "demo.lox".to_string(),
     )
-    .with_context_line(self.line, current_line) // ADD THIS!
     .with_label(
       Span::new(
         self.line,

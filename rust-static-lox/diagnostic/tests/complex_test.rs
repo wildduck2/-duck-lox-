@@ -5,196 +5,280 @@ mod tests {
     diagnostic::{Diagnostic, LabelStyle, Span},
     types::error::DiagnosticError,
   };
+  use std::fs;
+  use std::path::Path;
 
-  #[test]
-  fn test_simple_diagnostic() {
-    println!("\n=== SIMPLE: Undefined Variable ===\n");
+  // Setup function to create test files
+  fn setup_test_files() {
+    // Create test directory if it doesn't exist
+    let _ = fs::create_dir_all("test_sources");
 
-    let diagnostic = Diagnostic::new(
-      DiagnosticCode::Error(DiagnosticError::UndefinedVariable),
-      "cannot find value `counter` in this scope".to_string(),
-      "src/main.rs".to_string(),
+    // Create main.rs
+    fs::write(
+      "test_sources/main.rs",
+      r#"fn main() {
+    let count = 5;
+    let result = calculate(count);
+    
+    println!("Count: {}", counter);
+    println!("Result: {}", result);
+}
+
+fn calculate(n: i32) -> i32 {
+    n * 2
+}
+"#,
     )
-    .with_context_line(5, r#"    println!("Count: {}", counter);"#.to_string())
-    .with_label(
-      Span {
-        line: 5,
-        start: 27,
-        end: 34,
-      },
-      Some("not found in this scope".to_string()),
-      LabelStyle::Primary,
-    )
-    .with_help("a local variable with a similar name exists: `count`".to_string());
+    .unwrap();
 
-    diagnostic.print();
+    // Create lib.rs
+    fs::write(
+      "test_sources/lib.rs",
+      r#"pub fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+pub fn subtract(a: i32, b: i32) -> i32 {
+    a - b
+}
+
+pub fn multiply(a: i32, b: i32) -> i32 {
+    a * b
+}
+
+fn process_data(value: i32) -> String {
+    let result = value * 2;
+    result
+}
+
+pub fn divide(a: i32, b: i32) -> Option<i32> {
+    if b == 0 {
+        None
+    } else {
+        Some(a / b)
+    }
+}
+"#,
+    )
+    .unwrap();
+
+    // Create calculator.rs
+    fs::write(
+      "test_sources/calculator.rs",
+      r#"fn calculate_sum(a: &str, b: i32) -> i32 {
+    println!("Calculating...");
+    a + b
+}
+
+pub fn add_numbers(x: i32, y: i32) -> i32 {
+    x + y
+}
+
+pub fn multiply_numbers(x: i32, y: i32) -> i32 {
+    x * y
+}
+"#,
+    )
+    .unwrap();
+
+    // Create collections.rs
+    fs::write(
+      "test_sources/collections.rs",
+      r#"use std::collections::HashMap;
+
+pub fn create_map() -> HashMap<String, i32> {
+    let mut map = HashMap::new();
+    map.insert("one".to_string(), 1);
+    map.insert("two".to_string(), 2);
+    map
+}
+
+pub fn process_vector(data: Vec<i32>) -> i32 {
+    data.iter().sum()
+}
+
+pub fn filter_even(data: Vec<i32>) -> Vec<i32> {
+    data.into_iter().filter(|x| x % 2 == 0).collect()
+}
+
+fn update_collection(data: &mut Vec<i32>) {
+    let first = &data[0];
+    let second = &data[1];
+    
+    data.push(42);
+    
+    println!("First: {}, Second: {}", first, second);
+}
+
+pub fn sort_vector(data: &mut Vec<i32>) {
+    data.sort();
+}
+"#,
+    )
+    .unwrap();
+
+    // Create example.rs
+    fs::write(
+      "test_sources/example.rs",
+      r#"pub fn example_function() {
+    let x = 10;
+    let y = 20;
+    let z = 30;
+    
+    println!("x = {}", x);
+    println!("y = {}", y);
+    println!("z = {}", z);
+    
+    let unknown = mystery_var;
+    
+    println!("Done");
+}
+
+pub fn another_function() {
+    println!("Another function");
+}
+"#,
+    )
+    .unwrap();
   }
 
-  #[test]
-  fn test_medium_diagnostic() {
-    println!("\n=== MEDIUM: Type Mismatch ===\n");
-
-    let diagnostic = Diagnostic::new(
-      DiagnosticCode::Error(DiagnosticError::MismatchedTypes),
-      "mismatched types".to_string(),
-      "src/lib.rs".to_string(),
-    )
-    .with_context_line(12, r#"fn process_data(value: i32) -> String {"#.to_string())
-    .with_context_line(13, r#"    let result = value * 2;"#.to_string())
-    .with_context_line(14, r#"    result"#.to_string())
-    .with_context_line(15, r#"}"#.to_string())
-    .with_label(
-      Span {
-        line: 14,
-        start: 5,
-        end: 11,
-      },
-      Some("expected `String`, found `i32`".to_string()),
-      LabelStyle::Primary,
-    )
-    .with_label(
-      Span {
-        line: 12,
-        start: 28,
-        end: 34,
-      },
-      Some("expected `String` because of return type".to_string()),
-      LabelStyle::Secondary,
-    )
-    .with_help("try using `.to_string()` to convert `i32` to `String`".to_string())
-    .with_note("expected type `String`\n          found type `i32`".to_string());
-
-    diagnostic.print();
-  }
-
-  #[test]
-  fn test_complex_diagnostic() {
-    println!("\n=== COMPLEX: Trait Bound Not Satisfied ===\n");
-
-    let diagnostic = Diagnostic::new(
-      DiagnosticCode::Error(DiagnosticError::TraitNotSatisfied),
-      "the trait bound `&str: std::ops::Add<i32>` is not satisfied".to_string(),
-      "src/calculator.rs".to_string(),
-    )
-    .with_context_line(1, r#"fn calculate_sum(a: &str, b: i32) -> i32 {"#.to_string())
-    .with_context_line(2, r#"    println!("Calculating...");"#.to_string())
-    .with_context_line(3, r#"    a + b"#.to_string())
-    .with_context_line(4, r#"}"#.to_string())
-    .with_label(
-      Span {
-        line: 1,
-        start: 21,
-        end: 25,
-      },
-      Some("this parameter has type `&str`".to_string()),
-      LabelStyle::Secondary,
-    )
-    .with_label(
-      Span {
-        line: 3,
-        start: 5,
-        end: 6,
-      },
-      Some("no implementation for `&str + i32`".to_string()),
-      LabelStyle::Primary,
-    )
-    .with_label(
-      Span {
-        line: 3,
-        start: 7,
-        end: 8,
-      },
-      Some("cannot add `i32` to `&str`".to_string()),
-      LabelStyle::Secondary,
-    )
-    .with_help("the trait `Add<i32>` is not implemented for `&str`".to_string())
-    .with_note("the following trait bounds were not satisfied:\n            `&str: Add<i32>`\n            which is required by `&str: Add<i32>`".to_string());
-
-    diagnostic.print();
-  }
-
-  #[test]
-  fn test_super_complex_diagnostic() {
-    println!("\n=== SUPER COMPLEX: Borrow Checker Violation ===\n");
-
-    let diagnostic = Diagnostic::new(
-      DiagnosticCode::Error(DiagnosticError::BorrowCheckerViolation),
-      "cannot borrow `data` as mutable because it is also borrowed as immutable".to_string(),
-      "src/collections.rs".to_string(),
-    )
-    .with_context_line(
-      18,
-      r#"fn update_collection(data: &mut Vec<i32>) {"#.to_string(),
-    )
-    .with_context_line(19, r#"    let first = &data[0];"#.to_string())
-    .with_context_line(20, r#"    let second = &data[1];"#.to_string())
-    .with_context_line(21, r#"    "#.to_string())
-    .with_context_line(22, r#"    data.push(42);"#.to_string())
-    .with_context_line(23, r#"    "#.to_string())
-    .with_context_line(
-      24,
-      r#"    println!("First: {}, Second: {}", first, second);"#.to_string(),
-    )
-    .with_context_line(25, r#"}"#.to_string())
-    .with_label(
-      Span {
-        line: 19,
-        start: 17,
-        end: 25,
-      },
-      Some("immutable borrow occurs here".to_string()),
-      LabelStyle::Secondary,
-    )
-    .with_label(
-      Span {
-        line: 20,
-        start: 18,
-        end: 26,
-      },
-      Some("another immutable borrow occurs here".to_string()),
-      LabelStyle::Secondary,
-    )
-    .with_label(
-      Span {
-        line: 22,
-        start: 5,
-        end: 9,
-      },
-      Some("mutable borrow occurs here".to_string()),
-      LabelStyle::Primary,
-    )
-    .with_label(
-      Span {
-        line: 24,
-        start: 39,
-        end: 44,
-      },
-      Some("immutable borrow later used here".to_string()),
-      LabelStyle::Secondary,
-    )
-    .with_label(
-      Span {
-        line: 24,
-        start: 46,
-        end: 52,
-      },
-      Some("immutable borrow also used here".to_string()),
-      LabelStyle::Secondary,
-    )
-    .with_help("consider cloning the values before mutating `data`".to_string())
-    .with_note("cannot borrow `data` as mutable, as it is not declared as mutable".to_string());
-
-    diagnostic.print();
+  // Cleanup function to remove test files
+  fn cleanup_test_files() {
+    let _ = fs::remove_dir_all("test_sources");
   }
 
   #[test]
   fn test_all_diagnostics() {
     println!("\n\n\n DIAGNOSTIC SYSTEM TEST SUITE \n\n\n");
 
-    test_simple_diagnostic();
-    test_medium_diagnostic();
-    test_complex_diagnostic();
-    test_super_complex_diagnostic();
+    // Setup once at the beginning
+    setup_test_files();
+
+    // Run all tests without cleanup
+    println!("\n=== SIMPLE: Undefined Variable ===\n");
+    let diagnostic1 = Diagnostic::new(
+      DiagnosticCode::Error(DiagnosticError::UndefinedVariable),
+      "cannot find value `counter` in this scope".to_string(),
+      "test_sources/main.rs".to_string(),
+    )
+    .with_label(
+      Span::new(5, 28, 7),
+      Some("not found in this scope".to_string()),
+      LabelStyle::Primary,
+    )
+    .with_help("a local variable with a similar name exists: `count`".to_string());
+    diagnostic1.print();
+
+    println!("\n=== MEDIUM: Type Mismatch ===\n");
+    let diagnostic2 = Diagnostic::new(
+      DiagnosticCode::Error(DiagnosticError::MismatchedTypes),
+      "mismatched types".to_string(),
+      "test_sources/lib.rs".to_string(),
+    )
+    .with_label(
+      Span::new(15, 5, 6),
+      Some("expected `String`, found `i32`".to_string()),
+      LabelStyle::Primary,
+    )
+    .with_label(
+      Span::new(13, 32, 6),
+      Some("expected `String` because of return type".to_string()),
+      LabelStyle::Secondary,
+    )
+    .with_help("try using `.to_string()` to convert `i32` to `String`".to_string())
+    .with_note("expected type `String`\n          found type `i32`".to_string());
+    diagnostic2.print();
+
+    println!("\n=== COMPLEX: Trait Bound Not Satisfied ===\n");
+    let diagnostic3 = Diagnostic::new(
+      DiagnosticCode::Error(DiagnosticError::TraitNotSatisfied),
+      "the trait bound `&str: std::ops::Add<i32>` is not satisfied".to_string(),
+      "test_sources/calculator.rs".to_string(),
+    )
+    .with_label(
+      Span::new(1, 21, 4),
+      Some("this parameter has type `&str`".to_string()),
+      LabelStyle::Secondary,
+    )
+    .with_label(
+      Span::new(3, 5, 1),
+      Some("no implementation for `&str + i32`".to_string()),
+      LabelStyle::Primary,
+    )
+    .with_label(
+      Span::new(3, 9, 1),
+      Some("cannot add `i32` to `&str`".to_string()),
+      LabelStyle::Secondary,
+    )
+    .with_help("the trait `Add<i32>` is not implemented for `&str`".to_string())
+    .with_note("the following trait bounds were not satisfied:\n            `&str: Add<i32>`\n            which is required by `&str: Add<i32>`".to_string());
+    diagnostic3.print();
+
+    println!("\n=== SUPER COMPLEX: Borrow Checker Violation ===\n");
+    let diagnostic4 = Diagnostic::new(
+      DiagnosticCode::Error(DiagnosticError::BorrowCheckerViolation),
+      "cannot borrow `data` as mutable because it is also borrowed as immutable".to_string(),
+      "test_sources/collections.rs".to_string(),
+    )
+    .with_context_padding(1)
+    .with_label(
+      Span::new(19, 17, 8),
+      Some("immutable borrow occurs here".to_string()),
+      LabelStyle::Secondary,
+    )
+    .with_label(
+      Span::new(20, 18, 8),
+      Some("another immutable borrow occurs here".to_string()),
+      LabelStyle::Secondary,
+    )
+    .with_label(
+      Span::new(22, 5, 4),
+      Some("mutable borrow occurs here".to_string()),
+      LabelStyle::Primary,
+    )
+    .with_label(
+      Span::new(24, 39, 5),
+      Some("immutable borrow later used here".to_string()),
+      LabelStyle::Secondary,
+    )
+    .with_label(
+      Span::new(24, 46, 6),
+      Some("immutable borrow also used here".to_string()),
+      LabelStyle::Secondary,
+    )
+    .with_help("consider cloning the values before mutating `data`".to_string())
+    .with_note("cannot borrow `data` as mutable, as it is not declared as mutable".to_string());
+    diagnostic4.print();
+
+    println!("\n=== CUSTOM PADDING: Wide Context ===\n");
+    let diagnostic5 = Diagnostic::new(
+      DiagnosticCode::Error(DiagnosticError::UndefinedVariable),
+      "variable not found".to_string(),
+      "test_sources/example.rs".to_string(),
+    )
+    .with_context_padding(3)
+    .with_label(
+      Span::new(10, 19, 11),
+      Some("undefined variable".to_string()),
+      LabelStyle::Primary,
+    );
+    diagnostic5.print();
+
+    println!("\n=== USING from_range ===\n");
+    let diagnostic6 = Diagnostic::new(
+      DiagnosticCode::Error(DiagnosticError::MismatchedTypes),
+      "type error".to_string(),
+      "test_sources/main.rs".to_string(),
+    )
+    .with_label(
+      Span::from_range(3, 18, 27),
+      Some("type mismatch here".to_string()),
+      LabelStyle::Primary,
+    );
+    diagnostic6.print();
+
+    // Cleanup once at the end
+    cleanup_test_files();
 
     println!("\n\n\n ALL TESTS COMPLETED \n\n\n");
   }
