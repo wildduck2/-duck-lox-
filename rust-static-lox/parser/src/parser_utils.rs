@@ -7,6 +7,16 @@
 *
 *  expr_stmt      → expr ";" ;
 *
+*  ternary        → logical_or ( "?" expr ":" ternary )? ;
+*
+*  logical_or     → logical_and ( "or" logical_and )* ;
+*
+*  logical_and    → equality ( "and" equality )* ;
+*
+*  equality       → comparison ( ( "==" | "!=" ) comparison )* ;
+*
+*  comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
+*
 *  term           → factor ( ( "+" | "-" ) ) factor )* ;
 *
 *  factor         → unary ( ( "/" | "*" | "%" ) unary )* ;
@@ -44,13 +54,63 @@ impl Parser {
   }
 
   fn parse_declaration(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
-    let expr = self.parse_term(engine)?;
+    let expr = self.parse_expr(engine)?;
 
     Ok(Stmt::Expr(expr))
   }
 
   fn parse_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     Err(())
+  }
+
+  fn parse_expr(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    self.parse_equality(engine)
+  }
+
+  fn parse_equality(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let mut lhs = self.parse_comparison(engine)?;
+
+    while !self.is_eof() {
+      let operator = self.current_token();
+
+      match operator.kind {
+        TokenKind::EqualEqual | TokenKind::BangEqual => {
+          self.advance(engine);
+          let rhs = self.parse_comparison(engine)?;
+          lhs = Expr::Binary {
+            operator,
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+          };
+        },
+        _ => break,
+      }
+    }
+
+    Ok(lhs)
+  }
+
+  fn parse_comparison(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let mut lhs = self.parse_term(engine)?;
+
+    while !self.is_eof() {
+      let operator = self.current_token();
+
+      match operator.kind {
+        TokenKind::Greater | TokenKind::GreaterEqual | TokenKind::Less | TokenKind::LessEqual => {
+          self.advance(engine);
+          let rhs = self.parse_term(engine)?;
+          lhs = Expr::Binary {
+            operator,
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+          };
+        },
+        _ => break,
+      }
+    }
+
+    Ok(lhs)
   }
 
   fn parse_term(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
@@ -140,6 +200,47 @@ impl Parser {
         Ok(Expr::Identifier(token))
       },
 
+      // handle the case where group is used
+      TokenKind::LeftParen => {
+        self.advance(engine); // consume the "("
+
+        let expr = self.parse_expr(engine)?;
+
+        if self.is_eof() || self.current_token().kind != TokenKind::RightParen {
+          let current = self.current_token();
+
+          // For EOF, use the PREVIOUS token's end position
+          let error_span = if self.is_eof() {
+            let prev_token = &self.tokens[self.current - 1];
+            Span {
+              line: prev_token.span.line,
+              col: prev_token.span.col + prev_token.lexeme.len(),
+              len: 1,
+            }
+          } else {
+            current.span.clone()
+          };
+
+          let diagnostic = Diagnostic::new(
+            DiagnosticCode::Error(DiagnosticError::MissingClosingParen),
+            "Expected ')' after expr".to_string(),
+            "duck.lox".to_string(),
+          )
+          .with_label(
+            Span::new(error_span.line + 1, error_span.col + 1, error_span.len),
+            Some("expected ')' here".to_string()),
+            LabelStyle::Primary,
+          );
+
+          engine.add(diagnostic);
+          return Err(());
+        }
+
+        self.advance(engine); // consume ')'
+        return Ok(Expr::Grouping(Box::new(expr)));
+      },
+
+      // handle any other token
       _ => {
         // make some diagnostic here
         let diagnostic = Diagnostic::new(

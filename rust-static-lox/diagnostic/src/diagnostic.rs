@@ -67,7 +67,13 @@ impl Diagnostic {
 
   /// Loads the source file and extracts relevant context lines based on label spans
   fn load_context(&self) -> Result<Vec<(usize, String)>, io::Error> {
-    let file = fs::File::open(&self.file_path)?;
+    let file = match fs::File::open(&self.file_path) {
+      Ok(file) => file,
+      Err(_) => {
+        // When real source is missing (e.g. synthetic demo paths), skip context lines gracefully.
+        return Ok(Vec::new());
+      },
+    };
     let reader = io::BufReader::new(file);
     let lines: Vec<String> = reader.lines().collect::<Result<_, _>>()?;
 

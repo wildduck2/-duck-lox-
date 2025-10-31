@@ -40,7 +40,8 @@ impl Runner {
       ));
     }
 
-    println!("{:?}", lexer.tokens);
+    // println!("{:?}", lexer.tokens);
+    println!("TooLongVecOfTokens[{}]", lexer.tokens.len());
 
     println!("\n============= PARSED ===============\n");
 

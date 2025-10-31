@@ -36,7 +36,7 @@ impl DiagnosticEngine {
 
   pub fn print_diagnostics(&self) {
     for diagnostic in &self.diagnostics {
-      diagnostic.print();
+      let _ = diagnostic.print();
     }
   }
 

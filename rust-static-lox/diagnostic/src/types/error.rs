@@ -11,6 +11,7 @@ pub enum DiagnosticError {
   InvalidArguments,
   UnterminatedString,
   UnexpectedToken,
+  MissingClosingParen,
 }
 
 impl DiagnosticError {
@@ -25,6 +26,7 @@ impl DiagnosticError {
       Self::InvalidArguments => "E0602",
       Self::UnterminatedString => "E0603",
       Self::UnexpectedToken => "E0604",
+      Self::MissingClosingParen => "E0605",
     }
   }
 

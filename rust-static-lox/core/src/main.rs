@@ -19,7 +19,15 @@ fn main() -> Result<(), std::io::Error> {
     },
     2 => {
       println!("{}", format!("Running file: {}", args[1]).cyan().bold());
-      runner.run_file(args[1].clone(), &mut diagnostic_engine)?;
+      match runner.run_file(args[1].clone(), &mut diagnostic_engine) {
+        Ok(_) => {
+          println!("\n{}", "Compiled Successfully [0] ".green().bold());
+        },
+        Err(e) => {
+          println!("{}", e.to_string());
+          std::process::exit(64);
+        },
+      };
     },
     _ => {
       // Error: Invalid arguments
