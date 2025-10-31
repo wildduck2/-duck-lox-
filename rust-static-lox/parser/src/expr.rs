@@ -20,6 +20,11 @@ pub enum Expr {
     operator: Token,
     rhs: Box<Expr>,
   },
+  Ternary {
+    condition: Box<Expr>,
+    then_branch: Box<Expr>,
+    else_branch: Box<Expr>,
+  },
 }
 
 impl fmt::Display for Expr {
@@ -31,6 +36,11 @@ impl fmt::Display for Expr {
       Expr::Binary { lhs, operator, rhs } => write!(f, "⚙️ ({} {} {})", lhs, operator.lexeme, rhs),
       Expr::Grouping(expr) => write!(f, "({})", expr),
       Expr::Assign { name, rhs } => write!(f, "({} = {})", name.lexeme, rhs),
+      Expr::Ternary {
+        condition,
+        then_branch,
+        else_branch,
+      } => write!(f, "({} ? {} : {})", condition, then_branch, else_branch),
     }
   }
 }
@@ -72,6 +82,16 @@ impl Expr {
       Expr::Assign { name, rhs } => {
         print_node!("Assign", name.lexeme);
         rhs.build_tree(&new_prefix, true);
+      },
+      Expr::Ternary {
+        condition,
+        then_branch,
+        else_branch,
+      } => {
+        print_node!("Ternary");
+        condition.build_tree(&new_prefix, false);
+        then_branch.build_tree(&new_prefix, false);
+        else_branch.build_tree(&new_prefix, true);
       },
     }
   }

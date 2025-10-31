@@ -64,7 +64,112 @@ impl Parser {
   }
 
   fn parse_expr(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    self.parse_equality(engine)
+    self.parse_ternary(engine)
+  }
+
+  fn parse_ternary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let token = self.current_token();
+    let condition = self.parse_logical_or(engine)?;
+
+    if !self.is_eof() && matches!(self.current_token().kind, TokenKind::Question) {
+      self.advance(engine); // consume the (?)
+      let then_branch = self.parse_expr(engine)?;
+
+      if self.is_eof() || !matches!(self.current_token().kind, TokenKind::Colon) {
+        let current_token = self.current_token();
+
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+          format!(
+            "Expected ':' in ternary expr, found '{}'",
+            current_token.lexeme
+          ),
+          "duck.lox".to_string(),
+        )
+        .with_label(
+          Span::new(
+            current_token.span.line + 1,
+            current_token.span.col + 1,
+            current_token.lexeme.len(),
+          ),
+          Some("expected ':' before this token".to_string()),
+          LabelStyle::Primary,
+        )
+        .with_label(
+          Span::new(
+            current_token.span.line + 1,
+            token.span.col + 1,
+            current_token.span.len,
+          ),
+          Some("ternary started here".to_string()),
+          LabelStyle::Secondary,
+        )
+        .with_help(
+          "Ternary exprs require the format: condition ? then_value : else_value".to_string(),
+        );
+
+        engine.add(diagnostic);
+
+        return Err(());
+      }
+
+      self.advance(engine); // consume the (:)
+      let else_branch = self.parse_ternary(engine)?;
+
+      return Ok(Expr::Ternary {
+        condition: Box::new(condition),
+        then_branch: Box::new(then_branch),
+        else_branch: Box::new(else_branch),
+      });
+    }
+
+    Ok(condition)
+  }
+
+  fn parse_logical_or(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let mut lhs = self.parse_logical_and(engine)?;
+
+    while !self.is_eof() {
+      let operator = self.current_token();
+
+      match operator.kind {
+        TokenKind::Or => {
+          self.advance(engine);
+          let rhs = self.parse_logical_and(engine)?;
+          lhs = Expr::Binary {
+            operator,
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+          };
+        },
+        _ => break,
+      }
+    }
+
+    Ok(lhs)
+  }
+
+  fn parse_logical_and(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let mut lhs = self.parse_equality(engine)?;
+
+    while !self.is_eof() {
+      let operator = self.current_token();
+
+      match operator.kind {
+        TokenKind::And => {
+          self.advance(engine);
+          let rhs = self.parse_equality(engine)?;
+          lhs = Expr::Binary {
+            operator,
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+          };
+        },
+        _ => break,
+      }
+    }
+
+    Ok(lhs)
   }
 
   fn parse_equality(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {

@@ -89,16 +89,6 @@ pub enum TokenKind {
   GreaterEqualLess,
   And,
   Or,
-  AddAssign,
-  SubtractAssign,
-  MultiplyAssign,
-  DivideAssign,
-  RemainderAssign,
-  LeftShiftAssign,
-  RightShiftAssign,
-  AndAssign,
-  OrAssign,
-  XorAssign,
 
   // Comments
   SingleLineComment,
