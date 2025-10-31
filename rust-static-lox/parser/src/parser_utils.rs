@@ -1,40 +1,45 @@
-/*
-*  program        → declaration* EOF ;
-*
-*  declaration    → stmt ;
-*
-*  stmt           → expr_stmt ;
-*
-*  expr           → comma ;
-*
-*  comma          → assignment ( "," assignment )* ;
-*
-*  assignment     → (ternary ".")? IDENTIFIER "=" assignment
-*                 | ternary ;
-*
-*  ternary        → logical_or ( "?" expr ":" ternary )? ;
-*
-*  logical_or     → logical_and ( "or" logical_and )* ;
-*
-*  logical_and    → equality ( "and" equality )* ;
-*
-*  equality       → comparison ( ( "==" | "!=" ) comparison )* ;
-*
-*  comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
-*
-*  term           → factor ( ( "+" | "-" ) factor )* ;
-*
-*  factor         → unary ( ( "/" | "*" | "%" ) unary )* ;
-*
-*  unary          → ( "-" | "!" ) unary
-*                   | call;
-*
-*  call           → primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
-*
-*  primary        → "true" | "false" | IDENTIFIER
-*                   | STRING | FLOATING | INTEGER
-*                   | "nil" | "(" expr ")" ;
-*
+/*!
+
+### Grammar (BNF-style)
+
+program        → declaration* EOF ;
+
+declaration    → varDecl | fnDecl | structDecl | traitDecl | implBlock | statement ;
+
+varDecl        → "let" IDENTIFIER ":" type ( "=" expression )? ";" ;
+fnDecl         → "fn" IDENTIFIER "(" parameters? ")" "->" type block ;
+structDecl     → "struct" IDENTIFIER "{" fields "}" ;
+traitDecl      → "trait" IDENTIFIER "{" fnSignatures "}" ;
+implBlock      → "impl" IDENTIFIER ("for" IDENTIFIER)? "{" fnDecl* "}" ;
+
+statement      → exprStmt | ifStmt | whileStmt | forStmt | returnStmt | block ;
+
+exprStmt       → expression ";" ;
+ifStmt         → "if" expression block ( "else" block )? ;
+whileStmt      → "while" expression block ;
+forStmt        → "for" IDENTIFIER "in" expression block ;
+returnStmt     → "return" expression? ";" ;
+block          → "{" declaration* "}" ;
+
+expression     → assignment ;
+assignment     → ( call "." )? IDENTIFIER "=" assignment | logicOr ;
+logicOr        → logicAnd ( "or" logicAnd )* ;
+logicAnd       → equality ( "and" equality )* ;
+equality       → comparison ( ( "==" | "!=" ) comparison )* ;
+comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
+term           → factor ( ( "+" | "-" ) factor )* ;
+factor         → unary ( ( "*" | "/" | "%" ) unary )* ;
+unary          → ( "!" | "-" ) unary | call ;
+call           → primary ( "(" arguments? ")" | "." IDENTIFIER | "[" expression "]" )* ;
+primary        → INTEGER | FLOAT | STRING | "true" | "false" | "nil"
+               | IDENTIFIER | "(" expression ")" | array | object | lambda | match ;
+
+type           → "int" | "float" | "string" | "bool" | "void"
+               | "[" type "]"
+               | "(" type ( "," type )* ")" "->" type
+               | IDENTIFIER
+               | IDENTIFIER "<" type ( "," type )* ">"
+
 */
 
 use diagnostic::{
@@ -45,7 +50,11 @@ use diagnostic::{
 };
 use lexer::token::TokenKind;
 
-use crate::{expr::Expr, stmt::Stmt, Parser};
+use crate::{
+  expr::{BinaryOp, Expr, UnaryOp},
+  stmt::{Stmt, Type},
+  Parser,
+};
 
 impl Parser {
   /// Parses the top-level production, collecting statements until EOF.
@@ -63,14 +72,62 @@ impl Parser {
 
   /// Parses a declaration, currently delegating to statement parsing.
   fn parse_declaration(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
-    let expr = self.parse_expr(engine)?;
-
-    Ok(Stmt::Expr(expr))
+    self.parse_stmt(engine)
   }
 
   /// Parses a single statement node (stubbed for future grammar branches).
   fn parse_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
-    Err(())
+    match self.current_token().kind {
+      TokenKind::Let => self.parse_let_declaration(engine),
+      _ => {
+        let expr = self.parse_expr(engine)?;
+        Ok(Stmt::Expr(expr))
+      },
+    }
+  }
+
+  // *  let_declaration → "let" IDENTIFIER ( ":" type )? ("=" expr)? ";" ;
+  fn parse_let_declaration(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    self.advance(engine); // consume the "let"
+
+    let lhs = self.parse_primary(engine)?;
+
+    if let Expr::Identifier { name, span } = lhs {
+      if self.is_eof() {
+        self.error_eof(engine);
+        return Err(());
+      }
+
+      if matches!(self.current_token().kind, TokenKind::Colon) {
+        self.advance(engine); // consume the ":" token
+
+        let rhs = self.parse_primary(engine)?;
+
+        return Ok(Stmt::LetDecl {
+          name,
+          type_annotation: Type::String,
+          initializer: Some(rhs),
+          is_mutable: false,
+          span: span,
+        });
+      } else if matches!(self.current_token().kind, TokenKind::Equal) {
+        self.advance(engine); // consume the "=" token
+        let rhs = self.parse_assignment(engine)?;
+
+        return Ok(Stmt::LetDecl {
+          name: "test".to_string(),
+          type_annotation: Type::String,
+          initializer: Some(rhs),
+          is_mutable: false,
+          span: span,
+        });
+      } else {
+        panic!("Expected identifier");
+      }
+    } else {
+      panic!("Expected identifier");
+      return Err(());
+    }
   }
 
   /// Parses a general expression entrypoint.
@@ -91,11 +148,11 @@ impl Parser {
 
           let rhs = self.parse_assignment(engine)?;
 
-          lhs = Expr::Binary {
-            lhs: Box::new(lhs),
-            operator: token,
-            rhs: Box::new(rhs),
-          };
+          // lhs = Expr::Binary {
+          //   lhs: Box::new(lhs),
+          //   operator: token,
+          //   rhs: Box::new(rhs),
+          // };
         },
         _ => break,
       }
@@ -113,10 +170,11 @@ impl Parser {
       self.advance(engine);
       let rhs = self.parse_assignment(engine)?;
 
-      if let Expr::Identifier(name) = lhs {
+      if let Expr::Identifier { name, span } = lhs.clone() {
         return Ok(Expr::Assign {
-          name,
-          rhs: Box::new(rhs),
+          target: Box::new(lhs),
+          value: Box::new(rhs),
+          span,
         });
       } else {
         let diagnostic = Diagnostic::new(
@@ -215,6 +273,7 @@ impl Parser {
         condition: Box::new(condition),
         then_branch: Box::new(then_branch),
         else_branch: Box::new(else_branch),
+        span: token.span,
       });
     }
 
@@ -233,9 +292,10 @@ impl Parser {
           self.advance(engine);
           let rhs = self.parse_logical_and(engine)?;
           lhs = Expr::Binary {
-            operator,
-            lhs: Box::new(lhs),
-            rhs: Box::new(rhs),
+            op: BinaryOp::Or,
+            left: Box::new(lhs),
+            right: Box::new(rhs),
+            span: operator.span,
           };
         },
         _ => break,
@@ -257,9 +317,10 @@ impl Parser {
           self.advance(engine);
           let rhs = self.parse_equality(engine)?;
           lhs = Expr::Binary {
-            operator,
-            lhs: Box::new(lhs),
-            rhs: Box::new(rhs),
+            op: BinaryOp::And,
+            left: Box::new(lhs),
+            right: Box::new(rhs),
+            span: operator.span,
           };
         },
         _ => break,
@@ -281,9 +342,14 @@ impl Parser {
           self.advance(engine);
           let rhs = self.parse_comparison(engine)?;
           lhs = Expr::Binary {
-            operator,
-            lhs: Box::new(lhs),
-            rhs: Box::new(rhs),
+            op: match operator.lexeme.as_str() {
+              "==" => BinaryOp::Eq,
+              "!=" => BinaryOp::NotEq,
+              _ => unreachable!(),
+            },
+            left: Box::new(lhs),
+            right: Box::new(rhs),
+            span: operator.span,
           };
         },
         _ => break,
@@ -305,10 +371,17 @@ impl Parser {
           self.advance(engine);
           let rhs = self.parse_term(engine)?;
           lhs = Expr::Binary {
-            operator,
-            lhs: Box::new(lhs),
-            rhs: Box::new(rhs),
-          };
+            op: match operator.lexeme.as_str() {
+              ">" => BinaryOp::Greater,
+              ">=" => BinaryOp::GreaterEq,
+              "<" => BinaryOp::Less,
+              "<=" => BinaryOp::LessEq,
+              _ => unreachable!(),
+            },
+            left: Box::new(lhs),
+            right: Box::new(rhs),
+            span: operator.span,
+          }
         },
         _ => break,
       }
@@ -329,10 +402,15 @@ impl Parser {
           self.advance(engine);
           let rhs = self.parse_factor(engine)?;
           lhs = Expr::Binary {
-            operator,
-            lhs: Box::new(lhs),
-            rhs: Box::new(rhs),
-          };
+            op: match operator.lexeme.as_str() {
+              "+" => BinaryOp::Add,
+              "-" => BinaryOp::Sub,
+              _ => unreachable!(),
+            },
+            left: Box::new(lhs),
+            right: Box::new(rhs),
+            span: operator.span,
+          }
         },
         _ => break,
       }
@@ -353,10 +431,16 @@ impl Parser {
           self.advance(engine);
           let rhs = self.parse_unary(engine)?;
           lhs = Expr::Binary {
-            operator,
-            lhs: Box::new(lhs),
-            rhs: Box::new(rhs),
-          };
+            op: match operator.lexeme.as_str() {
+              "%" => BinaryOp::Mod,
+              "/" => BinaryOp::Div,
+              "*" => BinaryOp::Mul,
+              _ => unreachable!(),
+            },
+            left: Box::new(lhs),
+            right: Box::new(rhs),
+            span: operator.span,
+          }
         },
         _ => break,
       }
@@ -375,8 +459,13 @@ impl Parser {
         let rhs = self.parse_unary(engine)?;
 
         Ok(Expr::Unary {
-          operator,
-          rhs: Box::new(rhs),
+          op: match operator.lexeme.as_str() {
+            "!" => UnaryOp::Not,
+            "-" => UnaryOp::Neg,
+            _ => unreachable!(),
+          },
+          expr: Box::new(rhs),
+          span: operator.span,
         })
       },
       _ => self.parse_call(engine),
@@ -385,41 +474,85 @@ impl Parser {
 
   /// Parses function calls and dotted access chains.
   fn parse_call(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let primary = self.parse_primary(engine)?;
+    let callee = self.parse_primary(engine)?;
 
     if !self.is_eof() && matches!(self.current_token().kind, TokenKind::LeftParen) {
+      let token = self.current_token();
       self.advance(engine); // consume the "("
-      let arguments = self.parser_arguments(engine)?;
+      let args = self.parser_arguments(engine)?;
 
       return Ok(Expr::Call {
-        callee: Box::new(primary),
-        paren: self.current_token(),
-        arguments,
+        callee: Box::new(callee),
+        args,
+        span: token.span,
       });
     }
 
-    Ok(primary)
+    Ok(callee)
   }
 
   /// Parses primary expressions: literals, identifiers, and grouped expressions.
   fn parse_primary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let token = self.current_token();
     match token.kind {
-      // handle the case where the token is a literal
-      TokenKind::StringLiteral
-      | TokenKind::FloatLiteral
-      | TokenKind::IntegerLiteral
-      | TokenKind::NilLiteral
-      | TokenKind::TrueLiteral
-      | TokenKind::FalseLiteral => {
+      // handle string literals
+      TokenKind::StringLiteral => {
         self.advance(engine); // consume this token
-        Ok(Expr::Literal(token))
+        Ok(Expr::String {
+          value: token.lexeme,
+          span: token.span,
+        })
+      },
+
+      // handle numeric integers literal
+      TokenKind::FloatLiteral => {
+        self.advance(engine); // consume this token
+        Ok(Expr::Float {
+          value: token.lexeme.parse().unwrap(),
+          span: token.span,
+        })
+      },
+
+      // handle numeric floats literal
+      TokenKind::IntegerLiteral => {
+        self.advance(engine); // consume this token
+        Ok(Expr::Integer {
+          value: token.lexeme.parse().unwrap(),
+          span: token.span,
+        })
+      },
+
+      // handle nil literal
+      TokenKind::NilLiteral => {
+        self.advance(engine); // consume this token
+        Ok(Expr::Nil { span: token.span })
+      },
+
+      // handle true literal
+      TokenKind::TrueLiteral => {
+        self.advance(engine); // consume this token
+        Ok(Expr::Bool {
+          value: true,
+          span: token.span,
+        })
+      },
+
+      // handle false literal
+      TokenKind::FalseLiteral => {
+        self.advance(engine); // consume this token
+        Ok(Expr::Bool {
+          value: false,
+          span: token.span,
+        })
       },
 
       // handle the case where the token is a keyword
       TokenKind::Identifier => {
         self.advance(engine); // consume this token
-        Ok(Expr::Identifier(token))
+        Ok(Expr::Identifier {
+          name: token.lexeme,
+          span: token.span,
+        })
       },
 
       // handle the case where group is used
@@ -459,7 +592,10 @@ impl Parser {
         }
 
         self.advance(engine); // consume ')'
-        return Ok(Expr::Grouping(Box::new(expr)));
+        return Ok(Expr::Grouping {
+          expr: Box::new(expr),
+          span: token.span,
+        });
       },
 
       // handle any other token

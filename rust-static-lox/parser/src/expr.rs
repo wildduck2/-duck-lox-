@@ -1,35 +1,128 @@
 use core::fmt;
 
-use lexer::token::Token;
+use diagnostic::diagnostic::Span;
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-  Literal(Token),
-  Identifier(Token),
-  Grouping(Box<Expr>),
-  Assign {
-    name: Token,
-    rhs: Box<Expr>,
+  Integer {
+    value: i64,
+    span: Span,
   },
-  Unary {
-    operator: Token,
-    rhs: Box<Expr>,
+  Float {
+    value: f64,
+    span: Span,
   },
+  String {
+    value: String,
+    span: Span,
+  },
+  Bool {
+    value: bool,
+    span: Span,
+  },
+  Nil {
+    span: Span,
+  },
+  Identifier {
+    name: String,
+    span: Span,
+  },
+
   Binary {
-    lhs: Box<Expr>,
-    operator: Token,
-    rhs: Box<Expr>,
+    left: Box<Expr>,
+    op: BinaryOp,
+    right: Box<Expr>,
+    span: Span,
   },
+
+  Unary {
+    op: UnaryOp,
+    expr: Box<Expr>,
+    span: Span,
+  },
+
+  Call {
+    callee: Box<Expr>,
+    args: Vec<Expr>,
+    span: Span,
+  },
+
+  Member {
+    object: Box<Expr>,
+    field: String,
+    span: Span,
+  },
+
+  Index {
+    object: Box<Expr>,
+    index: Box<Expr>,
+    span: Span,
+  },
+
+  Assign {
+    target: Box<Expr>,
+    value: Box<Expr>,
+    span: Span,
+  },
+
+  // Array {
+  //   elements: Vec<Expr>,
+  //   span: Span,
+  // },
+
+  // Object {
+  //   type_name: String,
+  //   fields: Vec<(String, Expr)>,
+  //   span: Span,
+  // },
+
+  // Lambda {
+  //   params: Vec<Param>,
+  //   return_type: Type,
+  //   body: Vec<Stmt>,
+  //   span: Span,
+  // },
+
+  // Match {
+  //   expr: Box<Expr>,
+  //   arms: Vec<MatchArm>,
+  //   span: Span,
+  // },
+  Grouping {
+    expr: Box<Expr>,
+    span: Span,
+  },
+
   Ternary {
     condition: Box<Expr>,
     then_branch: Box<Expr>,
     else_branch: Box<Expr>,
+    span: Span,
   },
-  Call {
-    callee: Box<Expr>,
-    paren: Token,
-    arguments: Vec<Expr>,
-  },
+}
+
+#[derive(Debug, Clone)]
+pub enum BinaryOp {
+  Add,
+  Sub,
+  Mul,
+  Div,
+  Mod,
+  Power,
+  Eq,
+  NotEq,
+  Less,
+  LessEq,
+  Greater,
+  GreaterEq,
+  And,
+  Or,
+}
+
+#[derive(Debug, Clone)]
+pub enum UnaryOp {
+  Neg, // -x
+  Not, // !x
 }
 
 impl fmt::Display for Expr {

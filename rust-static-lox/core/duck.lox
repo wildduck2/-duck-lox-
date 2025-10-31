@@ -1,1 +1,1 @@
-print("wildduck", "Hallo")
+let name: String = "wildduck"
