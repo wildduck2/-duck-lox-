@@ -49,6 +49,7 @@ impl Lexer {
     self.emit(TokenKind::Eof);
   }
 
+  /// Returns `true` when the provided lookahead matches the target character.
   fn match_char(&mut self, char: Option<char>, match_char: char) -> bool {
     if let Some(char) = char {
       if char == match_char {

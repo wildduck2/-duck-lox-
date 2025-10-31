@@ -5,7 +5,12 @@
 *
 *  stmt           → expr_stmt ;
 *
-*  expr_stmt      → expr ";" ;
+*  expr           → comma ;
+*
+*  comma          → assignment ( "," assignment )* ;
+*
+*  assignment     → (ternary ".")? IDENTIFIER "=" assignment
+*                 | ternary ;
 *
 *  ternary        → logical_or ( "?" expr ":" ternary )? ;
 *
@@ -17,15 +22,17 @@
 *
 *  comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
 *
-*  term           → factor ( ( "+" | "-" ) ) factor )* ;
+*  term           → factor ( ( "+" | "-" ) factor )* ;
 *
 *  factor         → unary ( ( "/" | "*" | "%" ) unary )* ;
 *
 *  unary          → ( "-" | "!" ) unary
-*                   | primary ;
+*                   | call;
+*
+*  call           → primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
 *
 *  primary        → "true" | "false" | IDENTIFIER
-*                   | STRING | FLOATING | INEGER
+*                   | STRING | FLOATING | INTEGER
 *                   | "nil" | "(" expr ")" ;
 *
 */
@@ -41,6 +48,7 @@ use lexer::token::TokenKind;
 use crate::{expr::Expr, stmt::Stmt, Parser};
 
 impl Parser {
+  /// Parses the top-level production, collecting statements until EOF.
   pub fn parse_program(&mut self, engine: &mut DiagnosticEngine) {
     while !self.is_eof() {
       match self.parse_declaration(engine) {
@@ -53,20 +61,107 @@ impl Parser {
     }
   }
 
+  /// Parses a declaration, currently delegating to statement parsing.
   fn parse_declaration(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     let expr = self.parse_expr(engine)?;
 
     Ok(Stmt::Expr(expr))
   }
 
+  /// Parses a single statement node (stubbed for future grammar branches).
   fn parse_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     Err(())
   }
 
+  /// Parses a general expression entrypoint.
   fn parse_expr(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    self.parse_ternary(engine)
+    self.parse_comma(engine)
   }
 
+  /// Parses comma-separated expressions, emitting `Expr::Binary` nodes.
+  fn parse_comma(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let mut lhs = self.parse_assignment(engine)?;
+
+    while !self.is_eof() || !matches!(self.current_token().kind, TokenKind::Comma) {
+      let token = self.current_token();
+
+      match token.kind {
+        TokenKind::Comma => {
+          self.advance(engine);
+
+          let rhs = self.parse_assignment(engine)?;
+
+          lhs = Expr::Binary {
+            lhs: Box::new(lhs),
+            operator: token,
+            rhs: Box::new(rhs),
+          };
+        },
+        _ => break,
+      }
+    }
+
+    Ok(lhs)
+  }
+
+  /// Parses assignment expressions and verifies the left side is assignable.
+  fn parse_assignment(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let token = self.current_token();
+    let lhs = self.parse_ternary(engine)?;
+
+    if !self.is_eof() && matches!(self.current_token().kind, TokenKind::Equal) {
+      self.advance(engine);
+      let rhs = self.parse_assignment(engine)?;
+
+      if let Expr::Identifier(name) = lhs {
+        return Ok(Expr::Assign {
+          name,
+          rhs: Box::new(rhs),
+        });
+      } else {
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+          "Expected identifier after '='".to_string(),
+          "duck.lox".to_string(),
+        )
+        .with_label(
+          Span::new(token.span.line + 1, token.span.col + 1, token.span.len),
+          Some("expected identifier here".to_string()),
+          LabelStyle::Primary,
+        )
+        .with_help("use '=' for assignment".to_string());
+
+        engine.add(diagnostic);
+
+        return Err(());
+      }
+      // NOTE: please check this later when we sclare the parser
+      // } else if !self.is_eof()
+      //   && !matches!(self.current_token().kind, TokenKind::Semicolon)
+      //   && !matches!(self.current_token().kind, TokenKind::Comma)
+      //   && !matches!(self.current_token().kind, TokenKind::LeftParen)
+      // {
+      //   let diagnostic = Diagnostic::new(
+      //     DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+      //     "Expected '=' or ';' after identifier, found '='".to_string(),
+      //     "duck.lox".to_string(),
+      //   )
+      //   .with_label(
+      //     Span::new(self.current_token().span.line + 1, 2, 2),
+      //     Some("expected '=' or ';' here".to_string()),
+      //     LabelStyle::Primary,
+      //   )
+      //   .with_help("use '=' for assignment".to_string());
+      //
+      //   engine.add(diagnostic);
+      //
+      //   return Err(());
+    }
+
+    Ok(lhs)
+  }
+
+  /// Parses ternary expressions of the form `cond ? a : b`.
   fn parse_ternary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let token = self.current_token();
     let condition = self.parse_logical_or(engine)?;
@@ -126,6 +221,7 @@ impl Parser {
     Ok(condition)
   }
 
+  /// Parses logical OR chains (`expr or expr`).
   fn parse_logical_or(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_logical_and(engine)?;
 
@@ -149,6 +245,7 @@ impl Parser {
     Ok(lhs)
   }
 
+  /// Parses logical AND chains (`expr and expr`).
   fn parse_logical_and(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_equality(engine)?;
 
@@ -172,6 +269,7 @@ impl Parser {
     Ok(lhs)
   }
 
+  /// Parses equality comparisons (`==` and `!=`).
   fn parse_equality(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_comparison(engine)?;
 
@@ -195,6 +293,7 @@ impl Parser {
     Ok(lhs)
   }
 
+  /// Parses relational comparisons (`<`, `<=`, `>`, `>=`).
   fn parse_comparison(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_term(engine)?;
 
@@ -218,6 +317,7 @@ impl Parser {
     Ok(lhs)
   }
 
+  /// Parses additive expressions (`+` and `-` sequences).
   fn parse_term(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_factor(engine)?;
 
@@ -241,6 +341,7 @@ impl Parser {
     Ok(lhs)
   }
 
+  /// Parses multiplicative expressions (`*`, `/`, `%`).
   fn parse_factor(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_unary(engine)?;
 
@@ -264,11 +365,8 @@ impl Parser {
     Ok(lhs)
   }
 
+  /// Parses prefix unary operators and defers to the next precedence level.
   fn parse_unary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    if self.is_eof() {
-      self.error_eof(engine);
-    }
-
     let operator = self.current_token();
 
     match operator.kind {
@@ -281,10 +379,29 @@ impl Parser {
           rhs: Box::new(rhs),
         })
       },
-      _ => self.parse_primary(engine),
+      _ => self.parse_call(engine),
     }
   }
 
+  /// Parses function calls and dotted access chains.
+  fn parse_call(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let primary = self.parse_primary(engine)?;
+
+    if !self.is_eof() && matches!(self.current_token().kind, TokenKind::LeftParen) {
+      self.advance(engine); // consume the "("
+      let arguments = self.parser_arguments(engine)?;
+
+      return Ok(Expr::Call {
+        callee: Box::new(primary),
+        paren: self.current_token(),
+        arguments,
+      });
+    }
+
+    Ok(primary)
+  }
+
+  /// Parses primary expressions: literals, identifiers, and grouped expressions.
   fn parse_primary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let token = self.current_token();
     match token.kind {
@@ -350,13 +467,13 @@ impl Parser {
         // make some diagnostic here
         let diagnostic = Diagnostic::new(
           DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
-          format!("Unexpected token \"{}\"", token.lexeme),
+          format!("Unexpected token {:?}", token.lexeme),
           "duck.lox".to_string(),
         )
         .with_label(
           Span::new(token.span.line + 1, 1, token.span.len),
           Some(format!(
-            "Expected a primary expression, found \"{}\"",
+            "Expected a primary expression, found {:?}",
             token.lexeme
           )),
           LabelStyle::Primary,
@@ -367,5 +484,44 @@ impl Parser {
         Err(())
       },
     }
+  }
+
+  /// Parses a comma-separated argument list for function calls.
+  fn parser_arguments(&mut self, engine: &mut DiagnosticEngine) -> Result<Vec<Expr>, ()> {
+    let mut args = Vec::<Expr>::new();
+    let expr = self.parse_assignment(engine)?;
+    args.push(expr);
+
+    while !self.is_eof() && matches!(self.current_token().kind, TokenKind::Comma) {
+      self.advance(engine); // consume the comma
+
+      let expr = self.parse_assignment(engine)?;
+      args.push(expr);
+    }
+
+    if args.len() >= 255 {
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::WrongNumberOfArguments),
+        "Too many arguments".to_string(),
+        "duck.lox".to_string(),
+      )
+      .with_label(
+        Span::new(
+          self.current_token().span.line + 1,
+          self.current_token().span.col + 1,
+          self.current_token().span.len,
+        ),
+        Some("too many arguments".to_string()),
+        LabelStyle::Primary,
+      );
+
+      engine.add(diagnostic);
+
+      return Err(());
+    }
+
+    self.expect(TokenKind::RightParen, engine)?;
+
+    Ok(args)
   }
 }

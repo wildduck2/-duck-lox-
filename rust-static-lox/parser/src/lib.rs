@@ -12,6 +12,7 @@ mod expr;
 mod parser_utils;
 mod stmt;
 
+/// Recursive-descent parser that transforms tokens into an AST while reporting diagnostics.
 pub struct Parser {
   pub tokens: Vec<Token>,
   pub ast: Vec<Stmt>,
@@ -19,6 +20,7 @@ pub struct Parser {
 }
 
 impl Parser {
+  /// Creates a parser seeded with the lexer output.
   pub fn new(tokens: Vec<Token>) -> Self {
     if tokens.is_empty() {
       panic!("Parser::new: tokens is empty");
@@ -31,14 +33,17 @@ impl Parser {
     }
   }
 
+  /// Parses the entire token stream, accumulating AST nodes and diagnostics.
   pub fn parse(&mut self, engine: &mut DiagnosticEngine) {
     self.parse_program(engine)
   }
 
+  /// Returns the token at the current cursor position.
   fn current_token(&self) -> Token {
     self.tokens[self.current].clone()
   }
 
+  /// Advances to the next token, emitting an unterminated-string diagnostic if we passed EOF.
   fn advance(&mut self, engine: &mut DiagnosticEngine) {
     if self.is_eof() {
       let current_token = self.current_token();
@@ -60,6 +65,7 @@ impl Parser {
     self.current += 1;
   }
 
+  /// Reports whether the cursor points at the synthetic EOF token.
   fn is_eof(&self) -> bool {
     self.current == (self.tokens.len() - 1)
   }
@@ -163,12 +169,13 @@ impl Parser {
     }
   }
 
+  /// Raises an unexpected-token diagnostic when the parser runs out of input mid-production.
   fn error_eof(&mut self, engine: &mut DiagnosticEngine) {
     let token = self.current_token();
 
     let diagnostic = Diagnostic::new(
       DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
-      format!("Unexpected token \"{}\"", token.lexeme),
+      format!("Unexpected token {:?}", token.lexeme),
       "duck.lox".to_string(),
     )
     .with_label(

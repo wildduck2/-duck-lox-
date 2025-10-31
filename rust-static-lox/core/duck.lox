@@ -1,1 +1,1 @@
-true ? "wildduck" : false
+print("wildduck", "Hallo")

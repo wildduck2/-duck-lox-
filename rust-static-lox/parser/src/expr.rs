@@ -25,6 +25,11 @@ pub enum Expr {
     then_branch: Box<Expr>,
     else_branch: Box<Expr>,
   },
+  Call {
+    callee: Box<Expr>,
+    paren: Token,
+    arguments: Vec<Expr>,
+  },
 }
 
 impl fmt::Display for Expr {
@@ -41,6 +46,20 @@ impl fmt::Display for Expr {
         then_branch,
         else_branch,
       } => write!(f, "({} ? {} : {})", condition, then_branch, else_branch),
+      Expr::Call {
+        callee,
+        paren: _,
+        arguments,
+      } => write!(
+        f,
+        "{}({})",
+        callee,
+        arguments
+          .iter()
+          .map(|a| a.to_string())
+          .collect::<Vec<String>>()
+          .join(", ")
+      ),
     }
   }
 }
@@ -92,6 +111,19 @@ impl Expr {
         condition.build_tree(&new_prefix, false);
         then_branch.build_tree(&new_prefix, false);
         else_branch.build_tree(&new_prefix, true);
+      },
+      Expr::Call {
+        callee,
+        paren: _,
+        arguments,
+      } => {
+        print_node!("Call");
+        let total_children = 1 + arguments.len();
+        callee.build_tree(&new_prefix, arguments.is_empty());
+        for (i, arg) in arguments.iter().enumerate() {
+          let is_last_arg = i == arguments.len() - 1;
+          arg.build_tree(&new_prefix, is_last_arg);
+        }
       },
     }
   }
