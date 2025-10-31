@@ -7,6 +7,14 @@ There is a [plan](./plan.md) for this language, so do not worry.
 
 Change Log
 ----------
+2025-10-31
+- Refined diagnostics to lazily load context from source files, updated span representation, and wired parser construction to operate on scanned tokens while adding synchronization/error recovery helpers.
+- Added integration tests for the lexer to cover basic statements, keyword/literal handling, and invalid-character diagnostics via `cargo test -p lexer`.
+
+2025-10-30
+- Expanded the parser with recursive-descent utilities for expressions and introduced richer error reporting tied to the diagnostic engine.
+- Updated lexer token kinds for boolean literals and adjusted runner wiring to pass scanned tokens into the parser.
+
 2025-10-29
 - Documented the diagnostic crate with a usage-oriented README and example output.
 - Added targeted Rust doc comments to the lexer, covering lifecycle methods and token-specific lexers.
