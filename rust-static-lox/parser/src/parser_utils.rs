@@ -79,6 +79,7 @@ impl Parser {
 
   /// Parses a declaration, currently delegating to statement parsing.
   fn parse_declaration(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    // Declarations currently share the statement parsing pipeline.
     self.parse_stmt(engine)
   }
 
@@ -87,6 +88,7 @@ impl Parser {
     match self.current_token().kind {
       TokenKind::Let | TokenKind::Const => self.parse_variable_declaration(engine),
       _ => {
+        // Fallback to an expression statement when no declaration keyword is found.
         let expr = self.parse_expr(engine)?;
         Ok(Stmt::Expr(expr))
       },
@@ -95,7 +97,7 @@ impl Parser {
 
   fn parse_variable_declaration(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     let declaration_kind = self.current_token();
-    self.advance(engine); // consume the "const"
+    self.advance(engine); // consume the declaration keyword
 
     let kind = if declaration_kind.kind == TokenKind::Let {
       DeclKind::Let
@@ -104,7 +106,7 @@ impl Parser {
     };
 
     let is_mutable = if self.current_token().kind == TokenKind::Mut {
-      self.advance(engine); // consume the "mut"
+      self.advance(engine); // consume `mut`
       true
     } else {
       false
@@ -119,6 +121,7 @@ impl Parser {
           .chars()
           .all(|c| !c.is_ascii_alphabetic() || c.is_ascii_uppercase());
 
+        // Const bindings must be uppercase; let bindings may use any casing.
         if kind == DeclKind::Let || is_uppercase {
           name
         } else {
@@ -163,7 +166,7 @@ impl Parser {
     };
 
     let type_annotation = if self.current_token().kind == TokenKind::Colon {
-      self.advance(engine); // consume the ":" token
+      self.advance(engine); // consume ':'
       let rhs = self.parse_type(engine)?;
       Some(rhs)
     } else {
@@ -171,14 +174,14 @@ impl Parser {
     };
 
     let initializer = if self.current_token().kind == TokenKind::Equal {
-      self.advance(engine); // consume the "=" token
+      self.advance(engine); // consume '='
       let rhs = self.parse_assignment(engine)?;
       Some(rhs)
     } else {
       None
     };
 
-    self.expect(TokenKind::Semicolon, engine)?; // consume the ";"
+    self.expect(TokenKind::Semicolon, engine)?; // ensure the declaration is terminated
 
     Ok(Stmt::Decl {
       is_mutable,
@@ -199,6 +202,7 @@ impl Parser {
   fn parse_comma(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_assignment(engine)?;
 
+    // TODO: Re-enable once comma expressions are fully defined in the grammar.
     // while !self.is_eof() || !matches!(self.current_token().kind, TokenKind::Comma) {
     //   let token = self.current_token();
     //
@@ -225,7 +229,8 @@ impl Parser {
       let rhs = self.parse_assignment(engine)?;
 
       if let Expr::Identifier { name: _, span } = lhs.clone() {
-        self.expect(TokenKind::Semicolon, engine)?; // consume the ";"
+        // Assignment succeeds only when the left-hand side is an identifier.
+        self.expect(TokenKind::Semicolon, engine)?; // enforce trailing ';' for now
         return Ok(Expr::Assign {
           target: Box::new(lhs),
           value: Box::new(rhs),
@@ -246,6 +251,7 @@ impl Parser {
 
         engine.add(diagnostic);
 
+        // Abort this production so the caller can attempt recovery.
         return Err(());
       }
       // NOTE: please check this later when we sclare the parser
@@ -284,6 +290,7 @@ impl Parser {
       let then_branch = self.parse_expr(engine)?;
 
       if self.is_eof() || !matches!(self.current_token().kind, TokenKind::Colon) {
+        // Colon is mandatory for ternary expressions; report the omission.
         let current_token = self.current_token();
 
         let diagnostic = Diagnostic::new(
@@ -324,6 +331,7 @@ impl Parser {
       self.advance(engine); // consume the (:)
       let else_branch = self.parse_ternary(engine)?;
 
+      // Form the ternary expression once all components have been parsed.
       return Ok(Expr::Ternary {
         condition: Box::new(condition),
         then_branch: Box::new(then_branch),
@@ -344,8 +352,9 @@ impl Parser {
 
       match operator.kind {
         TokenKind::Or => {
-          self.advance(engine);
+          self.advance(engine); // consume 'or'
           let rhs = self.parse_logical_and(engine)?;
+          // Represent `lhs or rhs` as a binary operation node.
           lhs = Expr::Binary {
             op: BinaryOp::Or,
             left: Box::new(lhs),
@@ -369,8 +378,9 @@ impl Parser {
 
       match operator.kind {
         TokenKind::And => {
-          self.advance(engine);
+          self.advance(engine); // consume 'and'
           let rhs = self.parse_equality(engine)?;
+          // Build a binary node for each logical conjunction.
           lhs = Expr::Binary {
             op: BinaryOp::And,
             left: Box::new(lhs),
@@ -394,8 +404,9 @@ impl Parser {
 
       match operator.kind {
         TokenKind::EqualEqual | TokenKind::BangEqual => {
-          self.advance(engine);
+          self.advance(engine); // consume comparison operator
           let rhs = self.parse_comparison(engine)?;
+          // Map the lexeme to the appropriate equality variant.
           lhs = Expr::Binary {
             op: match operator.lexeme.as_str() {
               "==" => BinaryOp::Eq,
@@ -423,8 +434,9 @@ impl Parser {
 
       match operator.kind {
         TokenKind::Greater | TokenKind::GreaterEqual | TokenKind::Less | TokenKind::LessEqual => {
-          self.advance(engine);
+          self.advance(engine); // consume relational operator
           let rhs = self.parse_term(engine)?;
+          // Convert the operator lexeme into the matching binary enum variant.
           lhs = Expr::Binary {
             op: match operator.lexeme.as_str() {
               ">" => BinaryOp::Greater,
@@ -454,8 +466,9 @@ impl Parser {
 
       match operator.kind {
         TokenKind::Plus | TokenKind::Minus => {
-          self.advance(engine);
+          self.advance(engine); // consume '+' or '-'
           let rhs = self.parse_factor(engine)?;
+          // Maintain left-associativity for additive chains.
           lhs = Expr::Binary {
             op: match operator.lexeme.as_str() {
               "+" => BinaryOp::Add,
@@ -483,8 +496,9 @@ impl Parser {
 
       match operator.kind {
         TokenKind::Percent | TokenKind::Slash | TokenKind::Star => {
-          self.advance(engine);
+          self.advance(engine); // consume multiplicative operator
           let rhs = self.parse_unary(engine)?;
+          // Promote each operator to its binary expression counterpart.
           lhs = Expr::Binary {
             op: match operator.lexeme.as_str() {
               "%" => BinaryOp::Mod,
@@ -510,9 +524,10 @@ impl Parser {
 
     match operator.kind {
       TokenKind::Minus | TokenKind::Bang => {
-        self.advance(engine);
+        self.advance(engine); // consume unary operator
         let rhs = self.parse_unary(engine)?;
 
+        // Convert the operator lexeme into the proper unary AST node.
         Ok(Expr::Unary {
           op: match operator.lexeme.as_str() {
             "!" => UnaryOp::Not,
@@ -523,6 +538,7 @@ impl Parser {
           span: operator.span,
         })
       },
+      // Fall through to call/primary parsing when no unary operator is present.
       _ => self.parse_call(engine),
     }
   }
@@ -536,6 +552,7 @@ impl Parser {
       self.advance(engine); // consume the "("
       let args = self.parser_arguments(engine)?;
 
+      // Record the call along with the source span of the opening parenthesis.
       return Ok(Expr::Call {
         callee: Box::new(callee),
         args,
@@ -560,6 +577,7 @@ impl Parser {
     }
 
     if args.len() >= 255 {
+      // Mirror the canonical Lox limitation on function parameters.
       let diagnostic = Diagnostic::new(
         DiagnosticCode::Error(DiagnosticError::WrongNumberOfArguments),
         "Too many arguments".to_string(),
@@ -580,7 +598,7 @@ impl Parser {
       return Err(());
     }
 
-    self.expect(TokenKind::RightParen, engine)?; // consume the ")"
+    self.expect(TokenKind::RightParen, engine)?; // ensure the argument list is closed
 
     Ok(args)
   }
@@ -699,10 +717,10 @@ impl Parser {
   fn parse_match(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let token = self.expect(TokenKind::Match, engine)?; // consume the "match"
 
-    let expr = self.parse_primary(engine)?;
-    self.expect(TokenKind::LeftBrace, engine)?; // consume the "("
+    let expr = self.parse_primary(engine)?; // expression being matched
+    self.expect(TokenKind::LeftBrace, engine)?; // consume '{'
     let arms = self.parse_arms(engine)?;
-    self.expect(TokenKind::RightBrace, engine)?; // consume the ")"
+    self.expect(TokenKind::RightBrace, engine)?; // consume '}'
 
     // println!(
     //   "{:#?}",
@@ -724,10 +742,11 @@ impl Parser {
     let mut arms = Vec::<MatchArm>::new();
 
     while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::RightBrace) {
+      // Parse the pattern for this arm.
       let pattern = self.parse_pattern(engine)?;
 
       let guard = if self.current_token().kind == TokenKind::If {
-        self.advance(engine); // consume the "if"
+        self.advance(engine); // consume 'if'
         let guard = self.parse_logical_or(engine)?;
         Some(guard)
       } else {
@@ -735,8 +754,8 @@ impl Parser {
       };
 
       // TODO: make FatArrow a TokenKind
-      self.expect(TokenKind::Equal, engine)?; // consume the "="
-      self.expect(TokenKind::Greater, engine)?; // consume the ">"
+      self.expect(TokenKind::Equal, engine)?; // consume '='
+      self.expect(TokenKind::Greater, engine)?; // consume '>'
 
       // Parse body (either block or single expression)
       let body = if self.current_token().kind == TokenKind::LeftBrace {
@@ -755,7 +774,7 @@ impl Parser {
 
       // Optional comma between arms
       if self.current_token().kind == TokenKind::Comma {
-        self.advance(engine);
+        self.advance(engine); // consume trailing comma separating arms
       }
     }
 
@@ -763,6 +782,7 @@ impl Parser {
   }
 
   fn parse_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
+    // Dispatch through the precedence of pattern constructs.
     self.parse_or_pattern(engine)
   }
 
@@ -786,7 +806,7 @@ impl Parser {
     match token.kind {
       // Wildcard: _
       TokenKind::Underscore => {
-        self.advance(engine);
+        self.advance(engine); // consume '_'
         Ok(Pattern::Wildcard)
       },
 
@@ -798,7 +818,7 @@ impl Parser {
       | TokenKind::False
       | TokenKind::Nil => {
         if self.peek().kind == TokenKind::DotDot {
-          self.advance(engine); // consume the "consume the token
+          self.advance(engine); // consume the literal start
           let start = Expr::Integer {
             value: token.lexeme.parse().unwrap(),
             span: token.span,
@@ -820,17 +840,17 @@ impl Parser {
       // Identifier or Struct: x or Person { ... }
       TokenKind::Identifier => {
         let struct_name = self.current_token();
-        self.advance(engine); // consume the "struct name"
+        self.advance(engine); // consume the identifier
         let mut fields = Vec::<(String, Pattern)>::new();
 
         if self.current_token().kind == TokenKind::LeftBrace {
-          self.advance(engine); // consume the "{"
+          self.advance(engine); // consume '{'
           while !self.is_eof() && self.current_token().kind != TokenKind::RightBrace {
             let field_name = self.current_token();
             self.advance(engine);
 
             let field_pattern = if self.current_token().kind == TokenKind::Colon {
-              self.advance(engine);
+              self.advance(engine); // consume ':'
               self.parse_pattern(engine)?
             } else {
               Pattern::Identifier(field_name.lexeme.clone())
@@ -876,13 +896,13 @@ impl Parser {
   }
 
   fn parse_tuple(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
-    self.expect(TokenKind::LeftParen, engine)?; // consume the "("
+    self.expect(TokenKind::LeftParen, engine)?; // consume '('
 
     let mut fields = Vec::<Pattern>::new();
 
     while !self.is_eof() && self.current_token().kind != TokenKind::RightParen {
       if self.current_token().kind == TokenKind::Underscore {
-        self.advance(engine); // consume the "_"
+        self.advance(engine); // consume '_' wildcard
         continue;
       }
 
@@ -894,10 +914,10 @@ impl Parser {
         break;
       }
 
-      self.advance(engine); // consume the ","
+      self.advance(engine); // consume ','
     }
 
-    self.expect(TokenKind::RightParen, engine)?;
+    self.expect(TokenKind::RightParen, engine)?; // consume ')'
     Ok(Pattern::Tuple(fields))
   }
 
@@ -905,9 +925,9 @@ impl Parser {
     let token = self.current_token();
     self.advance(engine); // consume the "fn"
 
-    self.expect(TokenKind::LeftParen, engine)?; // consume the "("
+    self.expect(TokenKind::LeftParen, engine)?; // consume '('
     let params = self.parse_parameters(engine)?;
-    self.expect(TokenKind::RightParen, engine)?; // consume the ")"
+    self.expect(TokenKind::RightParen, engine)?; // consume ')'
     let return_type = if matches!(self.current_token().kind, TokenKind::Minus) {
       // TODO: make FatArrow a TokenKind
       self.expect(TokenKind::Minus, engine)?; // consume the "-"
@@ -919,6 +939,7 @@ impl Parser {
     };
     let body = self.parse_block(engine)?;
 
+    // Compose the lambda expression from the parsed components.
     Ok(Expr::Lambda {
       params,
       return_type,
@@ -928,14 +949,14 @@ impl Parser {
   }
 
   fn parse_block(&mut self, engine: &mut DiagnosticEngine) -> Result<Vec<Stmt>, ()> {
-    self.expect(TokenKind::LeftBrace, engine)?; // consume the "{"
+    self.expect(TokenKind::LeftBrace, engine)?; // consume '{'
     let mut stmts = Vec::<Stmt>::new();
 
     while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::RightBrace) {
       let stmt = self.parse_stmt(engine)?;
       stmts.push(stmt);
     }
-    self.expect(TokenKind::RightBrace, engine)?; // consume the "}"
+    self.expect(TokenKind::RightBrace, engine)?; // consume '}'
 
     Ok(stmts)
   }
@@ -948,6 +969,7 @@ impl Parser {
       let param_name = match param_name {
         Expr::Identifier { name, .. } => name,
         _ => {
+          // Only identifiers are valid parameter names.
           let diagnostic = Diagnostic::new(
             DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
             "Expected identifier after '('".to_string(),
@@ -968,7 +990,7 @@ impl Parser {
       };
 
       let typee = if matches!(self.current_token().kind, TokenKind::Colon) {
-        self.expect(TokenKind::Colon, engine)?; // consume the ":"
+        self.expect(TokenKind::Colon, engine)?; // consume ':'
         let typee = self.parse_type(engine)?;
         Some(typee)
       } else {
@@ -976,7 +998,7 @@ impl Parser {
       };
 
       let default_value = if matches!(self.current_token().kind, TokenKind::Equal) {
-        self.expect(TokenKind::Equal, engine)?; // consume the "="
+        self.expect(TokenKind::Equal, engine)?; // consume '='
         let default_value = self.parse_assignment(engine)?;
         Some(default_value)
       } else {
@@ -984,7 +1006,7 @@ impl Parser {
       };
 
       if !matches!(self.current_token().kind, TokenKind::RightParen) {
-        self.expect(TokenKind::Comma, engine)?; // consume the ","
+        self.expect(TokenKind::Comma, engine)?; // consume ',' between parameters
       }
 
       params.push(Param {
@@ -998,7 +1020,7 @@ impl Parser {
   }
 
   fn parse_object(&mut self, token: Token, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    self.expect(TokenKind::LeftBrace, engine)?; // consume the "{"
+    self.expect(TokenKind::LeftBrace, engine)?; // consume '{'
 
     let mut fields = Vec::<(String, Expr)>::new();
 
@@ -1027,15 +1049,15 @@ impl Parser {
         },
       };
 
-      self.expect(TokenKind::Colon, engine)?; // consume the ":"
+      self.expect(TokenKind::Colon, engine)?; // consume ':'
       let value = self.parse_primary(engine)?;
       if !matches!(self.current_token().kind, TokenKind::RightBrace) {
-        self.expect(TokenKind::Comma, engine)?; // consume the ","
+        self.expect(TokenKind::Comma, engine)?; // consume ',' between fields
       }
 
       fields.push((name, value));
     }
-    self.expect(TokenKind::RightBrace, engine)?; // consume the "}"
+    self.expect(TokenKind::RightBrace, engine)?; // consume '}'
 
     Ok(Expr::Object {
       type_name: String::from(""),
@@ -1045,7 +1067,7 @@ impl Parser {
   }
 
   fn parse_array(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let token = self.expect(TokenKind::LeftBracket, engine)?; // consume the "["
+    let token = self.expect(TokenKind::LeftBracket, engine)?; // consume '['
 
     let mut elements = Vec::<Expr>::new();
     if self.current_token().kind != TokenKind::RightBracket {
@@ -1056,7 +1078,7 @@ impl Parser {
     // parse comma-separated expressions, to handle [1, 2, 3]
     if self.current_token().kind == TokenKind::Comma {
       while !self.is_eof() && self.current_token().kind != TokenKind::RightBracket {
-        self.advance(engine); // consume the ","
+        self.advance(engine); // consume ','
         let expr = self.parse_expr(engine)?;
         elements.push(expr);
       }
@@ -1091,7 +1113,7 @@ impl Parser {
       engine.add(diagnostic);
       return Err(());
     } else {
-      self.advance(engine); // consume the "]"
+      self.advance(engine); // consume ']'
       return Ok(Expr::Array {
         elements,
         span: token.span,
@@ -1100,7 +1122,7 @@ impl Parser {
   }
 
   fn parse_grouping(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let token = self.expect(TokenKind::LeftParen, engine)?; // consume the "("
+    let token = self.expect(TokenKind::LeftParen, engine)?; // consume '('
 
     let mut tuple = Vec::<Expr>::new();
     let expr = self.parse_expr(engine)?;
@@ -1109,7 +1131,7 @@ impl Parser {
     // parse comma-separated expressions, to handle (1, 2, 3)
     if self.current_token().kind == TokenKind::Comma {
       while !self.is_eof() && self.current_token().kind != TokenKind::RightParen {
-        self.advance(engine); // consume the ","
+        self.advance(engine); // consume ','
         let expr = self.parse_expr(engine)?;
         tuple.push(expr);
       }
@@ -1148,11 +1170,13 @@ impl Parser {
     self.advance(engine); // consume ')'
 
     if tuple.len() == 1 {
+      // A single expression represents a grouped expression.
       return Ok(Expr::Grouping {
         expr: Box::new(tuple[0].clone()),
         span: token.span,
       });
     } else {
+      // Multiple expressions represent a tuple literal.
       return Ok(Expr::Tuple {
         elements: tuple,
         span: token.span,
@@ -1164,6 +1188,7 @@ impl Parser {
     let token = self.current_token();
     self.advance(engine); // consume the type token
 
+    // Map token kinds to their semantic type representation.
     match token.kind {
       TokenKind::Int => {
         if token.lexeme == "int" {

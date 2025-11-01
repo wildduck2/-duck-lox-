@@ -7,6 +7,12 @@ There is a [plan](./plan.md) for this language, so do not worry.
 
 Change Log
 ----------
+2025-11-01
+- Expanded the grammar with tuple literals/expressions, tuple pattern destructuring, and unified handling for `let`/`const` declarations across lexer and parser.
+- Introduced comprehensive pattern matching and lambda expression support, covering anonymous functions and match arms.
+- Added parsing and diagnostic coverage for `mut`/`const` bindings, lambda declarations, and match statements, plus regression tests for these flows.
+- Landed integration tests that exercise variable declarations, lambdas, and match constructs to validate the new parser paths.
+
 2025-10-31
 - Refined diagnostics to lazily load context from source files, updated span representation, and wired parser construction to operate on scanned tokens while adding synchronization/error recovery helpers.
 - Added integration tests for the lexer to cover basic statements, keyword/literal handling, and invalid-character diagnostics via `cargo test -p lexer`.
