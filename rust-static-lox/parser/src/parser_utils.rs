@@ -1048,8 +1048,10 @@ impl Parser {
     let token = self.expect(TokenKind::LeftBracket, engine)?; // consume the "["
 
     let mut elements = Vec::<Expr>::new();
-    let expr = self.parse_expr(engine)?;
-    elements.push(expr);
+    if self.current_token().kind != TokenKind::RightBracket {
+      let expr = self.parse_expr(engine)?;
+      elements.push(expr);
+    }
 
     // parse comma-separated expressions, to handle [1, 2, 3]
     if self.current_token().kind == TokenKind::Comma {
