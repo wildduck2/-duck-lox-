@@ -192,6 +192,8 @@ impl Lexer {
     if self.get_current_lexeme() == "_"
       && !next_char.chars().next().unwrap().is_ascii_alphabetic()
       && next_char != ","
+      && next_char != ")"
+      && next_char != "}"
     {
       self.advance();
       return Some(TokenKind::Underscore);

@@ -154,10 +154,16 @@ pub enum Pattern {
     fields: Vec<(String, Pattern)>, // { name: x, age: _ }
   },
 
-  Enum {
-    name: String,           // Option
-    variant: String,        // Some
-    patterns: Vec<Pattern>, // (x) or { value: x }
+  // For tuple-style patterns: Some(x), Point(1, 2)
+  TupleStruct {
+    name: String,
+    patterns: Vec<Pattern>,
+  },
+
+  // For enum with path: Option::Some(x)
+  Path {
+    path: Vec<String>,      // ["Option", "Some"]
+    patterns: Vec<Pattern>, // [Identifier("x")]
   },
 
   Array(Vec<Pattern>), // [first, second, rest @ ..]
@@ -232,6 +238,7 @@ impl fmt::Display for Pattern {
       Pattern::Wildcard => write!(f, "_"),
       Pattern::Literal(expr) => write!(f, "{}", expr),
       Pattern::Identifier(name) => write!(f, "{}", name),
+
       Pattern::Tuple(patterns) => {
         let pattern_str = patterns
           .iter()
@@ -240,6 +247,7 @@ impl fmt::Display for Pattern {
           .join(", ");
         write!(f, "({})", pattern_str)
       },
+
       Pattern::Struct { name, fields } => {
         let field_str = fields
           .iter()
@@ -248,18 +256,36 @@ impl fmt::Display for Pattern {
           .join(", ");
         write!(f, "{} {{ {} }}", name, field_str)
       },
-      Pattern::Enum {
-        name,
-        variant,
-        patterns,
-      } => {
-        let pattern_str = patterns
-          .iter()
-          .map(|p| p.to_string())
-          .collect::<Vec<_>>()
-          .join(", ");
-        write!(f, "{}::{}({})", name, variant, pattern_str)
+
+      // TupleStruct: Some(x), Point(1, 2)
+      Pattern::TupleStruct { name, patterns } => {
+        if patterns.is_empty() {
+          write!(f, "{}", name)
+        } else {
+          let pattern_str = patterns
+            .iter()
+            .map(|p| p.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+          write!(f, "{}({})", name, pattern_str)
+        }
       },
+
+      // Path: Option::Some(x)
+      Pattern::Path { path, patterns } => {
+        let path_str = path.join("::");
+        if patterns.is_empty() {
+          write!(f, "{}", path_str)
+        } else {
+          let pattern_str = patterns
+            .iter()
+            .map(|p| p.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+          write!(f, "{}({})", path_str, pattern_str)
+        }
+      },
+
       Pattern::Array(patterns) => {
         let pattern_str = patterns
           .iter()
@@ -268,14 +294,16 @@ impl fmt::Display for Pattern {
           .join(", ");
         write!(f, "[{}]", pattern_str)
       },
+
       Pattern::Or(patterns) => {
         let pattern_str = patterns
           .iter()
           .map(|p| p.to_string())
           .collect::<Vec<_>>()
           .join(" | ");
-        write!(f, "({})", pattern_str)
+        write!(f, "{}", pattern_str) // Remove extra parens
       },
+
       Pattern::Range { start, end } => write!(f, "{}..{}", start, end),
     }
   }

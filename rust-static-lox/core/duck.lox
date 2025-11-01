@@ -275,19 +275,21 @@
 
 
 // Tuple of structs with guard
-let pair_check = match (user1, user2) {
-  // (User { age: 18, name: _ }, User { age: 18, name: _ }) => "both 18",
-   (User { age: a1, name: _ }}) if a1 == a2 => "same age",
-  _ => "different ages",
-};
-//
-//
-//// ==========================================
-//// EDGE CASES
-//// ==========================================
-//
-//// Empty array
-//let empty: [int] = [];
+//let pair_check = match (user1, user2) {
+//  (User { age: 18, name: _ }, User { age: 18, name: _ }) => "both 18",
+//  (User { age: a1, name: _ }) => "same age",
+//  User { age: a1, name } if a1 == a2 => "same age",
+//  (_) => "same age",
+//  _ => "different ages",
+//};
+
+
+// ==========================================
+// EDGE CASES
+// ==========================================
+
+// Empty array
+let empty: [int] = [];
 //
 //
 //// Single element tuple

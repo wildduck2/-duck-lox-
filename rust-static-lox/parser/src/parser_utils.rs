@@ -815,10 +815,7 @@ impl Parser {
         Ok(Pattern::Literal(expr))
       },
 
-      TokenKind::LeftParen => {
-        let tuple = self.parse_tuple(engine)?;
-        Ok(Pattern::Literal(tuple))
-      },
+      TokenKind::LeftParen => self.parse_tuple(engine),
 
       // Identifier or Struct: x or Person { ... }
       TokenKind::Identifier => {
@@ -826,16 +823,9 @@ impl Parser {
         self.advance(engine); // consume the "struct name"
         let mut fields = Vec::<(String, Pattern)>::new();
 
-        let is_struct = self.current_token().kind == TokenKind::LeftBrace;
-
-        if self.current_token().kind == TokenKind::LeftBrace
-          || self.current_token().kind == TokenKind::LeftParen
-        {
+        if self.current_token().kind == TokenKind::LeftBrace {
           self.advance(engine); // consume the "{"
-          while !self.is_eof()
-            && self.current_token().kind != TokenKind::RightBrace
-            && self.current_token().kind != TokenKind::RightParen
-          {
+          while !self.is_eof() && self.current_token().kind != TokenKind::RightBrace {
             let field_name = self.current_token();
             self.advance(engine);
 
@@ -853,21 +843,11 @@ impl Parser {
             }
           }
 
-          if is_struct {
-            self.expect(TokenKind::RightBrace, engine)?;
-            Ok(Pattern::Struct {
-              name: struct_name.lexeme,
-              fields,
-            })
-          } else {
-            // TODO: make this work you idiot
-            self.expect(TokenKind::RightParen, engine)?;
-            Ok(Pattern::Enum {
-              name: struct_name.lexeme,
-              variant: variant_name.lexeme,
-              patterns,
-            })
-          }
+          self.expect(TokenKind::RightBrace, engine)?;
+          Ok(Pattern::Struct {
+            name: struct_name.lexeme,
+            fields,
+          })
         } else {
           Ok(Pattern::Identifier(struct_name.lexeme))
         }
@@ -895,31 +875,20 @@ impl Parser {
     }
   }
 
-  fn parse_tuple(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let token = self.expect(TokenKind::LeftParen, engine)?; // consume the "("
+  fn parse_tuple(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
+    self.expect(TokenKind::LeftParen, engine)?; // consume the "("
 
-    let mut fields = Vec::<(String, Pattern)>::new();
-    let is_struct = self.current_token().kind == TokenKind::LeftBrace;
+    let mut fields = Vec::<Pattern>::new();
 
-    while !self.is_eof()
-      && self.current_token().kind != TokenKind::RightParen
-      && self.current_token().kind != TokenKind::RightBrace
-    {
-      if self.current_token().kind != TokenKind::Underscore {
+    while !self.is_eof() && self.current_token().kind != TokenKind::RightParen {
+      if self.current_token().kind == TokenKind::Underscore {
         self.advance(engine); // consume the "_"
         continue;
       }
-      let expr = if self.current_token().kind == TokenKind::Underscore {
-        self.advance(engine); // consume the "_"
-        Expr::Identifier {
-          name: "_".to_string(),
-          span: self.current_token().span,
-        }
-      } else {
-        self.parse_expr(engine)?
-      };
 
-      fields.push((expr, None));
+      let field = self.parse_pattern(engine)?;
+
+      fields.push(field);
 
       if self.current_token().kind != TokenKind::Comma {
         break;
@@ -928,25 +897,8 @@ impl Parser {
       self.advance(engine); // consume the ","
     }
 
-    if is_struct {
-      self.expect(TokenKind::RightBrace, engine)?;
-      Ok(Pattern::Struct {
-        name: "tuple".to_string(),
-        fields: elements,
-      })
-    } else {
-      self.expect(TokenKind::RightParen, engine)?;
-      Ok(Pattern::Enum {
-        name: "tuple".to_string(),
-        fields: elements,
-      })
-    }
-    // self.expect(TokenKind::RightParen, engine)?; // consume the ")"
-    //
-    // Ok(Expr::Tuple {
-    //   elements,
-    //   span: self.current_token().span,
-    // })
+    self.expect(TokenKind::RightParen, engine)?;
+    Ok(Pattern::Tuple(fields))
   }
 
   fn parse_lambda(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
