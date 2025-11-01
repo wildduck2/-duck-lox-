@@ -13,6 +13,7 @@ pub enum DiagnosticError {
   UnexpectedToken,
   MissingClosingParen,
   WrongNumberOfArguments,
+  MissingClosingBracket,
 }
 
 impl DiagnosticError {
@@ -29,6 +30,7 @@ impl DiagnosticError {
       Self::UnexpectedToken => "E0604",
       Self::MissingClosingParen => "E0605",
       Self::WrongNumberOfArguments => "E0606",
+      Self::MissingClosingBracket => "E0607",
     }
   }
 

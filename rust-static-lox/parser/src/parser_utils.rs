@@ -6,7 +6,8 @@ program        → declaration* EOF ;
 
 declaration    → varDecl | fnDecl | structDecl | traitDecl | implBlock | statement ;
 
-varDecl        → "let" IDENTIFIER ":" type ( "=" expression )? ";" ;
+varDecl        → ("let" | "const") IDENTIFIER ( ":" type )? ( "=" expression )? ";" ;
+
 fnDecl         → "fn" IDENTIFIER "(" parameters? ")" "->" type block ;
 structDecl     → "struct" IDENTIFIER "{" fields "}" ;
 traitDecl      → "trait" IDENTIFIER "{" fnSignatures "}" ;
@@ -31,14 +32,20 @@ term           → factor ( ( "+" | "-" ) factor )* ;
 factor         → unary ( ( "*" | "/" | "%" ) unary )* ;
 unary          → ( "!" | "-" ) unary | call ;
 call           → primary ( "(" arguments? ")" | "." IDENTIFIER | "[" expression "]" )* ;
+
 primary        → INTEGER | FLOAT | STRING | "true" | "false" | "nil"
-               | IDENTIFIER | "(" expression ")" | array | object | lambda | match ;
+               | IDENTIFIER
+               | "(" tupleOrGrouping ")"
+               | array | object | lambda | match ;
+
+tupleOrGrouping → expression ( "," expression )* ;
 
 type           → "int" | "float" | "string" | "bool" | "void"
                | "[" type "]"
                | "(" type ( "," type )* ")" "->" type
                | IDENTIFIER
-               | IDENTIFIER "<" type ( "," type )* ">"
+               | IDENTIFIER "<" type ( "," type )* ">" ;
+
 
 */
 
@@ -48,7 +55,7 @@ use diagnostic::{
   types::{error::DiagnosticError, warning::DiagnosticWarning},
   DiagnosticEngine,
 };
-use lexer::token::TokenKind;
+use lexer::token::{Token, TokenKind};
 
 use crate::{
   expr::{BinaryOp, Expr, UnaryOp},
@@ -62,8 +69,8 @@ impl Parser {
     while !self.is_eof() {
       match self.parse_declaration(engine) {
         Ok(stmt) => {
-          println!("stmt: {:#?}", stmt);
-          // stmt.print_tree();
+          // println!("stmt: {:#?}", stmt);
+          stmt.print_tree();
           self.ast.push(stmt);
         },
         Err(_) => self.synchronize(engine),
@@ -91,7 +98,7 @@ impl Parser {
     let declaration_kind = self.current_token();
     self.advance(engine); // consume the "const"
 
-    let kind = if self.current_token().kind == TokenKind::Let {
+    let kind = if declaration_kind.kind == TokenKind::Let {
       DeclKind::Let
     } else {
       DeclKind::Const
@@ -113,7 +120,7 @@ impl Parser {
           .chars()
           .all(|c| !c.is_ascii_alphabetic() || c.is_ascii_uppercase());
 
-        if is_uppercase {
+        if kind == DeclKind::Let || is_uppercase {
           name
         } else {
           let diagnostic = Diagnostic::new(
@@ -159,7 +166,6 @@ impl Parser {
     let type_annotation = if self.current_token().kind == TokenKind::Colon {
       self.advance(engine); // consume the ":" token
       let rhs = self.parse_type(engine)?;
-      self.advance(engine); // consume the type token
       Some(rhs)
     } else {
       None
@@ -192,24 +198,18 @@ impl Parser {
   fn parse_comma(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_assignment(engine)?;
 
-    while !self.is_eof() || !matches!(self.current_token().kind, TokenKind::Comma) {
-      let token = self.current_token();
-
-      match token.kind {
-        TokenKind::Comma => {
-          self.advance(engine);
-
-          let rhs = self.parse_assignment(engine)?;
-
-          // lhs = Expr::Binary {
-          //   lhs: Box::new(lhs),
-          //   operator: token,
-          //   rhs: Box::new(rhs),
-          // };
-        },
-        _ => break,
-      }
-    }
+    // while !self.is_eof() || !matches!(self.current_token().kind, TokenKind::Comma) {
+    //   let token = self.current_token();
+    //
+    //   match token.kind {
+    //     TokenKind::Comma => {
+    //       self.advance(engine);
+    //
+    //       let rhs = self.parse_assignment(engine)?;
+    //     },
+    //     _ => break,
+    //   }
+    // }
 
     Ok(lhs)
   }
@@ -650,48 +650,11 @@ impl Parser {
         })
       },
 
-      // handle the case where group is used
-      TokenKind::LeftParen => {
-        self.advance(engine); // consume the "("
+      // handle the case where group is used also for tuple
+      TokenKind::LeftParen => self.parse_grouping(engine),
 
-        let expr = self.parse_expr(engine)?;
-
-        if self.is_eof() || self.current_token().kind != TokenKind::RightParen {
-          let current = self.current_token();
-
-          // For EOF, use the PREVIOUS token's end position
-          let error_span = if self.is_eof() {
-            let prev_token = &self.tokens[self.current - 1];
-            Span {
-              line: prev_token.span.line,
-              col: prev_token.span.col + prev_token.lexeme.len(),
-              len: 1,
-            }
-          } else {
-            current.span.clone()
-          };
-
-          let diagnostic = Diagnostic::new(
-            DiagnosticCode::Error(DiagnosticError::MissingClosingParen),
-            "Expected ')' after expr".to_string(),
-            "duck.lox".to_string(),
-          )
-          .with_label(
-            Span::new(error_span.line + 1, error_span.col + 1, error_span.len),
-            Some("expected ')' here".to_string()),
-            LabelStyle::Primary,
-          );
-
-          engine.add(diagnostic);
-          return Err(());
-        }
-
-        self.advance(engine); // consume ')'
-        return Ok(Expr::Grouping {
-          expr: Box::new(expr),
-          span: token.span,
-        });
-      },
+      // handle the case where array is declared
+      TokenKind::LeftBracket => self.parse_array(engine),
 
       // handle any other token
       _ => {
@@ -717,25 +680,270 @@ impl Parser {
     }
   }
 
+  fn parse_array(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let token = self.current_token();
+    self.advance(engine); // consume the "["
+
+    let mut elements = Vec::<Expr>::new();
+    let expr = self.parse_expr(engine)?;
+    elements.push(expr);
+
+    // parse comma-separated expressions, to handle [1, 2, 3]
+    if self.current_token().kind == TokenKind::Comma {
+      while !self.is_eof() && self.current_token().kind != TokenKind::RightBracket {
+        self.advance(engine); // consume the ","
+        let expr = self.parse_expr(engine)?;
+        elements.push(expr);
+      }
+    }
+
+    if self.is_eof() || self.current_token().kind != TokenKind::RightBracket {
+      let current = self.current_token();
+
+      // For EOF, use the PREVIOUS token's end position
+      let error_span = if self.is_eof() {
+        let prev_token = &self.tokens[self.current - 1];
+        Span {
+          line: prev_token.span.line,
+          col: prev_token.span.col + prev_token.lexeme.len(),
+          len: 1,
+        }
+      } else {
+        current.span.clone()
+      };
+
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::MissingClosingBracket),
+        "Expected ']' after array element".to_string(),
+        "duck.lox".to_string(),
+      )
+      .with_label(
+        Span::new(error_span.line + 1, error_span.col + 1, error_span.len),
+        Some("expected ']' here".to_string()),
+        LabelStyle::Primary,
+      );
+
+      engine.add(diagnostic);
+      return Err(());
+    } else {
+      self.advance(engine); // consume the "]"
+      return Ok(Expr::Array {
+        elements,
+        span: token.span,
+      });
+    }
+  }
+
+  fn parse_grouping(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let token = self.current_token();
+    self.advance(engine); // consume the "("
+
+    let mut tuple = Vec::<Expr>::new();
+    let expr = self.parse_expr(engine)?;
+    tuple.push(expr);
+
+    // parse comma-separated expressions, to handle (1, 2, 3)
+    if self.current_token().kind == TokenKind::Comma {
+      while !self.is_eof() && self.current_token().kind != TokenKind::RightParen {
+        self.advance(engine); // consume the ","
+        let expr = self.parse_expr(engine)?;
+        tuple.push(expr);
+      }
+    }
+
+    if self.is_eof() || self.current_token().kind != TokenKind::RightParen {
+      let current = self.current_token();
+
+      // For EOF, use the PREVIOUS token's end position
+      let error_span = if self.is_eof() {
+        let prev_token = &self.tokens[self.current - 1];
+        Span {
+          line: prev_token.span.line,
+          col: prev_token.span.col + prev_token.lexeme.len(),
+          len: 1,
+        }
+      } else {
+        current.span.clone()
+      };
+
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::MissingClosingParen),
+        "Expected ')' after expr".to_string(),
+        "duck.lox".to_string(),
+      )
+      .with_label(
+        Span::new(error_span.line + 1, error_span.col + 1, error_span.len),
+        Some("expected ')' here".to_string()),
+        LabelStyle::Primary,
+      );
+
+      engine.add(diagnostic);
+      return Err(());
+    }
+
+    self.advance(engine); // consume ')'
+
+    if tuple.len() == 1 {
+      return Ok(Expr::Grouping {
+        expr: Box::new(tuple[0].clone()),
+        span: token.span,
+      });
+    } else {
+      return Ok(Expr::Tuple {
+        elements: tuple,
+        span: token.span,
+      });
+    }
+  }
+
   fn parse_type(&mut self, engine: &mut DiagnosticEngine) -> Result<Type, ()> {
     let token = self.current_token();
-    // type           → "int" | "float" | "string" | "bool" | "void"
-    //                | "[" type "]"
-    //                | "(" type ( "," type )* ")" "->" type
-    //                | IDENTIFIER
-    //                | IDENTIFIER "<" type ( "," type )* ">"
 
+    self.advance(engine); // consume the type token
     match token.kind {
-      TokenKind::Int => Ok(Type::Int),
-      TokenKind::Float => Ok(Type::Float),
-      TokenKind::String => Ok(Type::String),
+      TokenKind::Int => {
+        if token.lexeme == "int" {
+          Ok(Type::Int)
+        } else {
+          Ok(Type::Named(token.lexeme))
+        }
+      },
+      TokenKind::Float => {
+        if token.lexeme == "float" {
+          Ok(Type::Float)
+        } else {
+          Ok(Type::Named(token.lexeme))
+        }
+      },
+      TokenKind::String => {
+        if token.lexeme == "string" {
+          Ok(Type::String)
+        } else {
+          Ok(Type::Named(token.lexeme))
+        }
+      },
       TokenKind::Bool => Ok(Type::Bool),
+      TokenKind::True => Ok(Type::Named(token.lexeme)),
+      TokenKind::False => Ok(Type::Named(token.lexeme)),
       TokenKind::Void => Ok(Type::Void),
-      // TokenKind::LeftBracket => self.parse_array_type(engine),
-      // TokenKind::LeftParen => self.parse_tuple_type(engine),
-      // TokenKind::Identifier => self.parse_named_type(engine),
-      // TokenKind::Identifier => self.parse_generic_type(engine),
+      TokenKind::LeftBracket => self.parse_array_type(engine),
+      TokenKind::LeftParen => self.parse_tuple_type(engine),
+      TokenKind::Identifier => self.parse_named_type(token, engine),
       _ => Err(()),
     }
+  }
+
+  fn parse_named_type(&mut self, name: Token, engine: &mut DiagnosticEngine) -> Result<Type, ()> {
+    if matches!(self.current_token().kind, TokenKind::Less) {
+      self.advance(engine); // consume the "<"
+
+      let mut types = Vec::<Type>::new();
+      while !self.is_eof() && self.current_token().kind != TokenKind::Greater {
+        let ty = self.parse_type(engine)?;
+        types.push(ty);
+
+        if self.current_token().kind != TokenKind::Comma {
+          break;
+        }
+
+        self.advance(engine); // consume the ","
+      }
+
+      if self.current_token().kind == TokenKind::Greater {
+        self.advance(engine); // consume the ">"
+        return Ok(Type::Generic {
+          name: name.lexeme,
+          type_params: types,
+        });
+      } else {
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::MissingClosingBracket),
+          "Expected '>' after generic type".to_string(),
+          "duck.lox".to_string(),
+        )
+        .with_label(
+          Span::new(
+            self.current_token().span.line + 1,
+            self.current_token().span.col + 1,
+            self.current_token().span.len,
+          ),
+          Some("expected '>' here".to_string()),
+          LabelStyle::Primary,
+        );
+
+        engine.add(diagnostic);
+
+        return Err(());
+      }
+    }
+
+    Ok(Type::Named(name.lexeme))
+  }
+
+  fn parse_array_type(&mut self, engine: &mut DiagnosticEngine) -> Result<Type, ()> {
+    let element_type = self.parse_type(engine)?;
+
+    if self.current_token().kind == TokenKind::RightBracket {
+      self.advance(engine); // consume the "]"
+      return Ok(Type::Array(Box::new(element_type)));
+    }
+
+    let diagnostic = Diagnostic::new(
+      DiagnosticCode::Error(DiagnosticError::MissingClosingBracket),
+      "Expected ']' after array element type".to_string(),
+      "duck.lox".to_string(),
+    )
+    .with_label(
+      Span::new(
+        self.current_token().span.line + 1,
+        self.current_token().span.col + 1,
+        self.current_token().span.len,
+      ),
+      Some("expected ']' here".to_string()),
+      LabelStyle::Primary,
+    );
+
+    engine.add(diagnostic);
+
+    Err(())
+  }
+
+  fn parse_tuple_type(&mut self, engine: &mut DiagnosticEngine) -> Result<Type, ()> {
+    let mut types = Vec::<Type>::new();
+
+    while !self.is_eof() && self.current_token().kind != TokenKind::RightParen {
+      let ty = self.parse_type(engine)?;
+      types.push(ty);
+
+      if self.current_token().kind != TokenKind::Comma {
+        break;
+      }
+
+      self.advance(engine); // consume the ","
+    }
+
+    if self.current_token().kind == TokenKind::RightParen {
+      self.advance(engine); // consume the ")"
+      return Ok(Type::Tuple(types));
+    }
+
+    let diagnostic = Diagnostic::new(
+      DiagnosticCode::Error(DiagnosticError::MissingClosingParen),
+      "Expected ')' after tuple element type".to_string(),
+      "duck.lox".to_string(),
+    )
+    .with_label(
+      Span::new(
+        self.current_token().span.line + 1,
+        self.current_token().span.col + 1,
+        self.current_token().span.len,
+      ),
+      Some("expected ')' here".to_string()),
+      LabelStyle::Primary,
+    );
+
+    engine.add(diagnostic);
+
+    Err(())
   }
 }

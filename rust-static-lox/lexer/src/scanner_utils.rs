@@ -118,7 +118,7 @@ impl Lexer {
       return Some(TokenKind::GreaterEqual);
     }
 
-    Some(TokenKind::GreaterEqual)
+    Some(TokenKind::Greater)
   }
 
   /// Lexes less-than comparators, upgrading to `<=` when an equals sign follows.
