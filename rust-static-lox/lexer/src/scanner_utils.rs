@@ -164,20 +164,67 @@ impl Lexer {
   }
 
   /// Consumes an identifier or keyword, returning the proper token kind.
+
   fn lex_keywords(&mut self) -> Option<TokenKind> {
-    while let Some(char) = self.peek() {
-      if !char.is_ascii_alphabetic() || char == '_' {
+    // Consume valid identifier characters
+    while let Some(ch) = self.peek() {
+      if !ch.is_ascii_alphanumeric() && ch != '_' {
         break;
       }
-
       self.advance();
     }
 
     match self.get_current_lexeme() {
+      // Type & Structure Keywords
+      "int" => Some(TokenKind::Int),
+      "float" => Some(TokenKind::Float),
+      "string" => Some(TokenKind::String),
+      "bool" => Some(TokenKind::Bool),
+      "void" => Some(TokenKind::Void),
+      "type" => Some(TokenKind::Type),
+      "struct" => Some(TokenKind::Struct),
+      "trait" => Some(TokenKind::Trait),
+      "impl" => Some(TokenKind::Impl),
+      "interface" => Some(TokenKind::Interface),
+      "enum" => Some(TokenKind::Enum),
+
+      // Control Flow Keywords
+      "if" => Some(TokenKind::If),
+      "else" => Some(TokenKind::Else),
+      "while" => Some(TokenKind::While),
+      "for" => Some(TokenKind::For),
+      "loop" => Some(TokenKind::Loop),
+      "match" => Some(TokenKind::Match),
+      "break" => Some(TokenKind::Break),
+      "continue" => Some(TokenKind::Continue),
+      "return" => Some(TokenKind::Return),
+      "await" => Some(TokenKind::Await),
+
+      // Declaration & Module Keywords
       "let" => Some(TokenKind::Let),
-      "true" => Some(TokenKind::TrueLiteral),
-      "false" => Some(TokenKind::FalseLiteral),
+      "mut" => Some(TokenKind::Mut), // ✅ New: mutable variable bindings
+      "const" => Some(TokenKind::Const),
+      "fn" => Some(TokenKind::Fn),
+      "function" => Some(TokenKind::Function),
+      "import" => Some(TokenKind::Import),
+      "from" => Some(TokenKind::From),
+      "export" => Some(TokenKind::Export),
+      "as" => Some(TokenKind::As),
+
+      // Object & Type System Keywords
+      "self" => Some(TokenKind::SelfKeyword),
+      "super" => Some(TokenKind::Super),
+
+      // Logical Operators
+      "and" => Some(TokenKind::And),
+      "or" => Some(TokenKind::Or),
+
+      // Literals
+      "true" => Some(TokenKind::True),
+      "false" => Some(TokenKind::False),
       "nil" => Some(TokenKind::Nil),
+
+      // Default Fallback
       _ => Some(TokenKind::Identifier),
     }
   }
@@ -193,10 +240,10 @@ impl Lexer {
     }
 
     if self.get_current_lexeme().contains(".") {
-      return Some(TokenKind::FloatLiteral);
+      return Some(TokenKind::Float);
     }
 
-    Some(TokenKind::IntegerLiteral)
+    Some(TokenKind::Int)
   }
 
   /// Parses a quoted string literal and reports unterminated strings.
@@ -266,6 +313,6 @@ impl Lexer {
       self.advance();
     }
 
-    Some(TokenKind::StringLiteral)
+    Some(TokenKind::String)
   }
 }

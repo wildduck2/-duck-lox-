@@ -9,12 +9,11 @@ pub struct Token {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TokenKind {
-  // Single-character tokens.
+  // 1️⃣ Keywords
   Let,
+  Mut,
+  Const,
   Fn,
-  TrueLiteral,
-  FalseLiteral,
-  Nil,
   Return,
   Break,
   Continue,
@@ -36,64 +35,70 @@ pub enum TokenKind {
   Enum,
   SelfKeyword,
   Super,
-  Const,
   Function,
   Await,
 
-  // One or two character tokens.
-  Plus,
-  Minus,
-  Star,
-  Slash,
-  Percent,
-  Caret,
-  Bang,
-  BangEqual,
-  EqualEqual,
-  Greater,
-  Less,
-  GreaterEqual,
-  LessEqual,
-  Ampersand,
-  Pipe,
-  CaretEqual,
-  Tilde,
-
-  // Literals.
+  // 2️⃣ Literals
   Identifier,
-  StringLiteral,
-  IntegerLiteral,
-  FloatLiteral,
-  BooleanLiteral,
-  NilLiteral,
+  String,
+  Int,
+  Float,
+  Bool,
+  Nil,
+  True,
+  False,
+  Void,
 
-  // Keywords.
-  Keyword,
+  // 3️⃣ Operators
 
-  // Delimiters.
-  LeftParen,
-  RightParen,
-  LeftBrace,
-  RightBrace,
-  LeftBracket,
-  RightBracket,
-  Dot,
-  Comma,
-  Colon,
-  Semicolon,
-  Question,
+  // Arithmetic
+  Plus,    // +
+  Minus,   // -
+  Star,    // *
+  Slash,   // /
+  Percent, // %
+  Caret,   // ^
 
-  // Operators.
-  Equal,
-  LessEqualGreater,
-  GreaterEqualLess,
-  And,
-  Or,
+  // Logical / Bitwise
+  Bang,      // !
+  Ampersand, // &
+  Pipe,      // |
+  Tilde,     // ~
 
-  // Comments
-  SingleLineComment,
-  MultiLineComment,
+  // Comparison
+  Greater,      // >
+  GreaterEqual, // >=
+  Less,         // <
+  LessEqual,    // <=
+  EqualEqual,   // ==
+  BangEqual,    // !=
+  Equal,        // =
 
-  // Misc.
-  Eof,
+  // Compound / Misc
+  CaretEqual,       // ^=
+  LessEqualGreater, // <=>
+  GreaterEqualLess, // >=<
+  And,              // and
+  Or,               // or
+
+  // 4️⃣ Delimiters
+  LeftParen,    // (
+  RightParen,   // )
+  LeftBrace,    // {
+  RightBrace,   // }
+  LeftBracket,  // [
+  RightBracket, // ]
+  Dot,          // .
+  Comma,        // ,
+  Colon,        // :
+  Semicolon,    // ;
+  Question,     // ?
+
+  // 5️⃣ Comments
+  SingleLineComment, // //
+  MultiLineComment,  // /* ... */
+
+  // 6️⃣ Miscellaneous
+  Keyword, // For general keyword handling if needed
+  Eof,     // End of file/input
 }

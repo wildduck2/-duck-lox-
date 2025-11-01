@@ -1,1 +1,1 @@
-let name: String = "wildduck"
+const NAME = "wildduck"

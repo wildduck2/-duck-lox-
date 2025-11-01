@@ -125,99 +125,99 @@ pub enum UnaryOp {
   Not, // !x
 }
 
-impl fmt::Display for Expr {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Expr::Literal(token) => write!(f, "{}", token.lexeme),
-      Expr::Identifier(token) => write!(f, "{}", token.lexeme),
-      Expr::Unary { operator, rhs } => write!(f, "({} {})", operator.lexeme, rhs),
-      Expr::Binary { lhs, operator, rhs } => write!(f, "⚙️ ({} {} {})", lhs, operator.lexeme, rhs),
-      Expr::Grouping(expr) => write!(f, "({})", expr),
-      Expr::Assign { name, rhs } => write!(f, "({} = {})", name.lexeme, rhs),
-      Expr::Ternary {
-        condition,
-        then_branch,
-        else_branch,
-      } => write!(f, "({} ? {} : {})", condition, then_branch, else_branch),
-      Expr::Call {
-        callee,
-        paren: _,
-        arguments,
-      } => write!(
-        f,
-        "{}({})",
-        callee,
-        arguments
-          .iter()
-          .map(|a| a.to_string())
-          .collect::<Vec<String>>()
-          .join(", ")
-      ),
-    }
-  }
-}
-
-impl Expr {
-  pub(crate) fn build_tree(&self, prefix: &str, is_last: bool) {
-    let (connector, extension) = if is_last {
-      ("└── ", "    ")
-    } else {
-      ("├── ", "│   ")
-    };
-    let new_prefix = format!("{}{}", prefix, extension);
-
-    macro_rules! print_node {
-      ($label:expr) => {
-        println!("{}{}{}", prefix, connector, $label)
-      };
-      ($label:expr, $lexeme:expr) => {
-        println!("{}{}{}({})", prefix, connector, $label, $lexeme)
-      };
-    }
-
-    match self {
-      Expr::Literal(token) => print_node!("Literal", token.lexeme),
-      Expr::Identifier(token) => print_node!("Identifier", token.lexeme),
-      Expr::Binary { lhs, operator, rhs } => {
-        print_node!("Binary", operator.lexeme);
-        lhs.build_tree(&new_prefix, false);
-        rhs.build_tree(&new_prefix, true);
-      },
-      Expr::Unary { operator, rhs } => {
-        print_node!("Unary", operator.lexeme);
-        rhs.build_tree(&new_prefix, true);
-      },
-      Expr::Grouping(expr) => {
-        print_node!("Grouping");
-        expr.build_tree(&new_prefix, true);
-      },
-      Expr::Assign { name, rhs } => {
-        print_node!("Assign", name.lexeme);
-        rhs.build_tree(&new_prefix, true);
-      },
-      Expr::Ternary {
-        condition,
-        then_branch,
-        else_branch,
-      } => {
-        print_node!("Ternary");
-        condition.build_tree(&new_prefix, false);
-        then_branch.build_tree(&new_prefix, false);
-        else_branch.build_tree(&new_prefix, true);
-      },
-      Expr::Call {
-        callee,
-        paren: _,
-        arguments,
-      } => {
-        print_node!("Call");
-        let total_children = 1 + arguments.len();
-        callee.build_tree(&new_prefix, arguments.is_empty());
-        for (i, arg) in arguments.iter().enumerate() {
-          let is_last_arg = i == arguments.len() - 1;
-          arg.build_tree(&new_prefix, is_last_arg);
-        }
-      },
-    }
-  }
-}
+// impl fmt::Display for Expr {
+//   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//     match self {
+//       Expr::Literal(token) => write!(f, "{}", token.lexeme),
+//       Expr::Identifier(token) => write!(f, "{}", token.lexeme),
+//       Expr::Unary { operator, rhs } => write!(f, "({} {})", operator.lexeme, rhs),
+//       Expr::Binary { lhs, operator, rhs } => write!(f, "⚙️ ({} {} {})", lhs, operator.lexeme, rhs),
+//       Expr::Grouping(expr) => write!(f, "({})", expr),
+//       Expr::Assign { name, rhs } => write!(f, "({} = {})", name.lexeme, rhs),
+//       Expr::Ternary {
+//         condition,
+//         then_branch,
+//         else_branch,
+//       } => write!(f, "({} ? {} : {})", condition, then_branch, else_branch),
+//       Expr::Call {
+//         callee,
+//         paren: _,
+//         arguments,
+//       } => write!(
+//         f,
+//         "{}({})",
+//         callee,
+//         arguments
+//           .iter()
+//           .map(|a| a.to_string())
+//           .collect::<Vec<String>>()
+//           .join(", ")
+//       ),
+//     }
+//   }
+// }
+//
+// impl Expr {
+//   pub(crate) fn build_tree(&self, prefix: &str, is_last: bool) {
+//     let (connector, extension) = if is_last {
+//       ("└── ", "    ")
+//     } else {
+//       ("├── ", "│   ")
+//     };
+//     let new_prefix = format!("{}{}", prefix, extension);
+//
+//     macro_rules! print_node {
+//       ($label:expr) => {
+//         println!("{}{}{}", prefix, connector, $label)
+//       };
+//       ($label:expr, $lexeme:expr) => {
+//         println!("{}{}{}({})", prefix, connector, $label, $lexeme)
+//       };
+//     }
+//
+//     match self {
+//       Expr::Literal(token) => print_node!("Literal", token.lexeme),
+//       Expr::Identifier(token) => print_node!("Identifier", token.lexeme),
+//       Expr::Binary { lhs, operator, rhs } => {
+//         print_node!("Binary", operator.lexeme);
+//         lhs.build_tree(&new_prefix, false);
+//         rhs.build_tree(&new_prefix, true);
+//       },
+//       Expr::Unary { operator, rhs } => {
+//         print_node!("Unary", operator.lexeme);
+//         rhs.build_tree(&new_prefix, true);
+//       },
+//       Expr::Grouping(expr) => {
+//         print_node!("Grouping");
+//         expr.build_tree(&new_prefix, true);
+//       },
+//       Expr::Assign { name, rhs } => {
+//         print_node!("Assign", name.lexeme);
+//         rhs.build_tree(&new_prefix, true);
+//       },
+//       Expr::Ternary {
+//         condition,
+//         then_branch,
+//         else_branch,
+//       } => {
+//         print_node!("Ternary");
+//         condition.build_tree(&new_prefix, false);
+//         then_branch.build_tree(&new_prefix, false);
+//         else_branch.build_tree(&new_prefix, true);
+//       },
+//       Expr::Call {
+//         callee,
+//         paren: _,
+//         arguments,
+//       } => {
+//         print_node!("Call");
+//         let total_children = 1 + arguments.len();
+//         callee.build_tree(&new_prefix, arguments.is_empty());
+//         for (i, arg) in arguments.iter().enumerate() {
+//           let is_last_arg = i == arguments.len() - 1;
+//           arg.build_tree(&new_prefix, is_last_arg);
+//         }
+//       },
+//     }
+//   }
+// }
