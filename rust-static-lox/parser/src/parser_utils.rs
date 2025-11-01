@@ -58,7 +58,7 @@ use diagnostic::{
 use lexer::token::{Token, TokenKind};
 
 use crate::{
-  expr::{BinaryOp, Expr, UnaryOp},
+  expr::{BinaryOp, Expr, MatchArm, Param, Pattern, UnaryOp},
   stmt::{DeclKind, Stmt, Type},
   Parser,
 };
@@ -69,7 +69,6 @@ impl Parser {
     while !self.is_eof() {
       match self.parse_declaration(engine) {
         Ok(stmt) => {
-          // println!("stmt: {:#?}", stmt);
           stmt.print_tree();
           self.ast.push(stmt);
         },
@@ -179,6 +178,8 @@ impl Parser {
       None
     };
 
+    self.expect(TokenKind::Semicolon, engine)?; // consume the ";"
+
     Ok(Stmt::Decl {
       is_mutable,
       kind,
@@ -224,6 +225,7 @@ impl Parser {
       let rhs = self.parse_assignment(engine)?;
 
       if let Expr::Identifier { name, span } = lhs.clone() {
+        self.expect(TokenKind::Semicolon, engine)?; // consume the ";"
         return Ok(Expr::Assign {
           target: Box::new(lhs),
           value: Box::new(rhs),
@@ -578,7 +580,7 @@ impl Parser {
       return Err(());
     }
 
-    self.expect(TokenKind::RightParen, engine)?;
+    self.expect(TokenKind::RightParen, engine)?; // consume the ")"
 
     Ok(args)
   }
@@ -586,7 +588,9 @@ impl Parser {
   /// Parses primary expressions: literals, identifiers, and grouped expressions.
   fn parse_primary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     // primary        → INTEGER | FLOAT | STRING | "true" | "false" | "nil"
-    //                | IDENTIFIER | "(" expression ")" | array | object | lambda | match ;
+    //                | IDENTIFIER
+    //                | "(" tupleOrGrouping ")"
+    //                | array | object | lambda | match ;
 
     let token = self.current_token();
     match token.kind {
@@ -644,6 +648,11 @@ impl Parser {
       // handle the case where the token is a keyword
       TokenKind::Identifier => {
         self.advance(engine); // consume this token
+        if self.current_token().kind == TokenKind::LeftBrace {
+          return self.parse_object(token, engine);
+        }
+
+        // handle the case where object is declared
         Ok(Expr::Identifier {
           name: token.lexeme,
           span: token.span,
@@ -655,6 +664,11 @@ impl Parser {
 
       // handle the case where array is declared
       TokenKind::LeftBracket => self.parse_array(engine),
+
+      // handle the case where lambda is declared
+      TokenKind::Fn => self.parse_lambda(engine),
+
+      TokenKind::Match => self.parse_match(engine),
 
       // handle any other token
       _ => {
@@ -680,9 +694,164 @@ impl Parser {
     }
   }
 
-  fn parse_array(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+  fn parse_match(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let token = self.expect(TokenKind::Match, engine)?; // consume the "match"
+    let expr = self.parse_expr(engine)?;
+    self.expect(TokenKind::LeftBrace, engine)?; // consume the "("
+
+    let arms = self.parse_arms(engine)?;
+
+    println!("{:?}", self.current_token());
+
+    Err(())
+  }
+
+  fn parse_arms(&mut self, engine: &mut DiagnosticEngine) -> Result<Vec<MatchArm>, ()> {
+    let mut arms = Vec::<MatchArm>::new();
+
+    while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::RightParen) {
+      // let pattern = self.parse_pattern(engine)?;
+    }
+
+    Err(())
+  }
+
+  fn parse_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
     let token = self.current_token();
-    self.advance(engine); // consume the "["
+
+    Err(())
+  }
+
+  fn parse_lambda(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let token = self.current_token();
+    self.advance(engine); // consume the "fn"
+
+    self.expect(TokenKind::LeftParen, engine)?; // consume the "("
+    let params = self.parse_parameters(engine)?;
+    self.expect(TokenKind::RightParen, engine)?; // consume the ")"
+    let return_type = if matches!(self.current_token().kind, TokenKind::Minus) {
+      self.expect(TokenKind::Minus, engine)?; // consume the "-"
+      self.expect(TokenKind::Greater, engine)?; // consume the ">"
+      let r_type = self.parse_type(engine)?;
+      Some(r_type)
+    } else {
+      None
+    };
+    let body = self.parse_block(engine)?;
+
+    Ok(Expr::Lambda {
+      params,
+      return_type,
+      body,
+      span: token.span,
+    })
+  }
+
+  fn parse_block(&mut self, engine: &mut DiagnosticEngine) -> Result<Vec<Stmt>, ()> {
+    self.expect(TokenKind::LeftBrace, engine)?; // consume the "{"
+    let mut stmts = Vec::<Stmt>::new();
+
+    while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::RightBrace) {
+      let stmt = self.parse_stmt(engine)?;
+      stmts.push(stmt);
+    }
+    self.expect(TokenKind::RightBrace, engine)?; // consume the "}"
+
+    Ok(stmts)
+  }
+
+  fn parse_parameters(&mut self, engine: &mut DiagnosticEngine) -> Result<Vec<Param>, ()> {
+    let mut params = Vec::<Param>::new();
+
+    while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::RightParen) {
+      let param_name = self.parse_primary(engine)?;
+      let param_name = match param_name {
+        Expr::Identifier { name, span } => name,
+        _ => {
+          let diagnostic = Diagnostic::new(
+            DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+            "Expected identifier after '('".to_string(),
+            "duck.lox".to_string(),
+          )
+          .with_label(
+            Span::new(
+              self.current_token().span.line + 1,
+              self.current_token().span.col + 1,
+              self.current_token().span.len,
+            ),
+            Some("expected identifier here".to_string()),
+            LabelStyle::Primary,
+          );
+          engine.add(diagnostic);
+          return Err(());
+        },
+      };
+
+      self.expect(TokenKind::Colon, engine)?; // consume the ":"
+      let typee = self.parse_type(engine)?;
+      if !matches!(self.current_token().kind, TokenKind::RightParen) {
+        self.expect(TokenKind::Comma, engine)?; // consume the ","
+      }
+
+      params.push(Param {
+        name: param_name,
+        type_annotation: typee,
+        default_value: None,
+      });
+    }
+
+    Ok(params)
+  }
+
+  fn parse_object(&mut self, token: Token, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    self.expect(TokenKind::LeftBrace, engine)?; // consume the "{"
+
+    let mut fields = Vec::<(String, Expr)>::new();
+
+    // Parse fields
+    while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::RightBrace) {
+      let name = self.parse_primary(engine)?;
+      let name = match name {
+        Expr::Identifier { name, span } => name,
+        _ => {
+          let diagnostic = Diagnostic::new(
+            DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+            "Expected identifier after '{'".to_string(),
+            "duck.lox".to_string(),
+          )
+          .with_label(
+            Span::new(
+              self.current_token().span.line + 1,
+              self.current_token().span.col + 1,
+              self.current_token().span.len,
+            ),
+            Some("expected identifier here".to_string()),
+            LabelStyle::Primary,
+          );
+          engine.add(diagnostic);
+          return Err(());
+        },
+      };
+
+      self.expect(TokenKind::Colon, engine)?; // consume the ":"
+      let value = self.parse_primary(engine)?;
+      if !matches!(self.current_token().kind, TokenKind::RightBrace) {
+        self.expect(TokenKind::Comma, engine)?; // consume the ","
+      }
+
+      fields.push((name, value));
+    }
+    self.expect(TokenKind::RightBrace, engine)?; // consume the "}"
+
+    Ok(Expr::Object {
+      type_name: String::from(""),
+      fields,
+      span: token.span,
+    })
+  }
+
+  fn parse_array(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let token = self.expect(TokenKind::LeftBracket, engine)?; // consume the "["
 
     let mut elements = Vec::<Expr>::new();
     let expr = self.parse_expr(engine)?;
@@ -735,8 +904,7 @@ impl Parser {
   }
 
   fn parse_grouping(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let token = self.current_token();
-    self.advance(engine); // consume the "("
+    let token = self.expect(TokenKind::LeftParen, engine)?; // consume the "("
 
     let mut tuple = Vec::<Expr>::new();
     let expr = self.parse_expr(engine)?;
@@ -798,8 +966,8 @@ impl Parser {
 
   fn parse_type(&mut self, engine: &mut DiagnosticEngine) -> Result<Type, ()> {
     let token = self.current_token();
-
     self.advance(engine); // consume the type token
+
     match token.kind {
       TokenKind::Int => {
         if token.lexeme == "int" {

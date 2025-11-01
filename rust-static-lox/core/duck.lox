@@ -1,1 +1,18 @@
-let mut name: [string] = ["wildduck", "duck"]
+// let name = "wildduck";
+// name: string = "hello";
+// let tuple: (int, float, string) = (1, 2.0, "hello");
+// let mut name: [string] = ["wildduck", "duck"];
+// let mut name: Array<string> = ["wildduck", "duck"];
+// let mut name: User<string> = User { name: "wildduck", age: 10 };
+// let add = fn(x: int, y: int) -> int {
+//   let x = x + y;
+//   // return x + y;
+// };
+match 1 {
+  1 => {
+    let x = 1;
+  },
+//  _ => {
+//    let x = 3;
+//  },
+}

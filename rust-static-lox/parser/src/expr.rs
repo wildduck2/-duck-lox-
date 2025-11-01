@@ -1,27 +1,34 @@
 use core::fmt;
 use diagnostic::diagnostic::Span;
 
+use crate::stmt::{Stmt, Type};
+
 #[derive(Debug, Clone)]
 pub enum Expr {
   Integer {
     value: i64,
     span: Span,
   },
+
   Float {
     value: f64,
     span: Span,
   },
+
   String {
     value: String,
     span: Span,
   },
+
   Bool {
     value: bool,
     span: Span,
   },
+
   Nil {
     span: Span,
   },
+
   Identifier {
     name: String,
     span: Span,
@@ -33,14 +40,10 @@ pub enum Expr {
     right: Box<Expr>,
     span: Span,
   },
+
   Unary {
     op: UnaryOp,
     expr: Box<Expr>,
-    span: Span,
-  },
-
-  Tuple {
-    elements: Vec<Expr>,
     span: Span,
   },
 
@@ -49,34 +52,104 @@ pub enum Expr {
     args: Vec<Expr>,
     span: Span,
   },
+
   Member {
     object: Box<Expr>,
     field: String,
     span: Span,
   },
+
   Index {
     object: Box<Expr>,
     index: Box<Expr>,
     span: Span,
   },
+
   Assign {
     target: Box<Expr>,
     value: Box<Expr>,
     span: Span,
   },
+
   Array {
     elements: Vec<Expr>,
     span: Span,
   },
+
+  Object {
+    type_name: String,
+    fields: Vec<(String, Expr)>,
+    span: Span,
+  },
+
+  Lambda {
+    params: Vec<Param>,
+    return_type: Option<Type>,
+    body: Vec<Stmt>,
+    span: Span,
+  },
+
+  Match {
+    expr: Box<Expr>,
+    arms: Vec<MatchArm>,
+    span: Span,
+  },
+
+  Tuple {
+    elements: Vec<Expr>,
+    span: Span,
+  },
+
   Grouping {
     expr: Box<Expr>,
     span: Span,
   },
+
   Ternary {
     condition: Box<Expr>,
     then_branch: Box<Expr>,
     else_branch: Box<Expr>,
     span: Span,
+  },
+}
+
+#[derive(Debug, Clone)]
+pub struct Param {
+  pub name: String,
+  pub type_annotation: Type,
+  pub default_value: Option<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Field {
+  pub name: String,
+  pub type_annotation: Type,
+  pub default_value: Option<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct FnSignature {
+  pub name: String,
+  pub params: Vec<Param>,
+  pub return_type: Type,
+}
+
+#[derive(Debug, Clone)]
+pub struct MatchArm {
+  pub pattern: Pattern,
+  pub guard: Option<Expr>,
+  pub body: Expr,
+}
+
+#[derive(Debug, Clone)]
+pub enum Pattern {
+  Wildcard,
+  Literal(Expr),
+  Identifier(String),
+  Tuple(Vec<Pattern>),
+  Struct {
+    name: String,
+    fields: Vec<(String, Pattern)>,
   },
 }
 
@@ -136,6 +209,32 @@ impl fmt::Display for UnaryOp {
   }
 }
 
+impl fmt::Display for Pattern {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match self {
+      Pattern::Wildcard => write!(f, "_"),
+      Pattern::Literal(expr) => write!(f, "{}", expr),
+      Pattern::Identifier(name) => write!(f, "{}", name),
+      Pattern::Tuple(patterns) => {
+        let pattern_str = patterns
+          .iter()
+          .map(|p| p.to_string())
+          .collect::<Vec<_>>()
+          .join(", ");
+        write!(f, "({})", pattern_str)
+      },
+      Pattern::Struct { name, fields } => {
+        let field_str = fields
+          .iter()
+          .map(|(k, v)| format!("{}: {}", k, v))
+          .collect::<Vec<_>>()
+          .join(", ");
+        write!(f, "{} {{ {} }}", name, field_str)
+      },
+    }
+  }
+}
+
 impl fmt::Display for Expr {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
@@ -188,6 +287,48 @@ impl fmt::Display for Expr {
           .join(", ");
         write!(f, "[{}]", element_str)
       },
+
+      Expr::Object {
+        type_name, fields, ..
+      } => {
+        let field_str = fields
+          .iter()
+          .map(|(k, v)| format!("{}: {}", k, v))
+          .collect::<Vec<_>>()
+          .join(", ");
+        write!(f, "{} {{ {} }}", type_name, field_str)
+      },
+
+      Expr::Lambda {
+        params,
+        return_type,
+        body,
+        ..
+      } => {
+        let param_str = params
+          .iter()
+          .map(|p| format!("{}: {}", p.name, p.type_annotation))
+          .collect::<Vec<_>>()
+          .join(", ");
+
+        let return_type = if let Some(ref return_type) = return_type {
+          format!("-> {}", return_type)
+        } else {
+          String::from("")
+        };
+
+        write!(
+          f,
+          "fn({}) -> {} {{ {} stmts }}",
+          param_str,
+          return_type,
+          body.len()
+        )
+      },
+
+      Expr::Match { expr, arms, .. } => {
+        write!(f, "match {} {{ {} arms }}", expr, arms.len())
+      },
     }
   }
 }
@@ -213,7 +354,7 @@ impl Expr {
     match self {
       Expr::Integer { value, .. } => print_node!("Integer", value),
       Expr::Float { value, .. } => print_node!("Float", value),
-      Expr::String { value, .. } => print_node!("String", value),
+      Expr::String { value, .. } => print_node!("String", format!("\"{}\"", value)),
       Expr::Bool { value, .. } => print_node!("Bool", value),
       Expr::Nil { .. } => print_node!("Nil"),
       Expr::Identifier { name, .. } => print_node!("Identifier", name),
@@ -238,7 +379,11 @@ impl Expr {
       },
 
       Expr::Call { callee, args, .. } => {
-        print_node!("Call");
+        if args.is_empty() {
+          print_node!("Call()");
+        } else {
+          print_node!("Call");
+        }
         callee.build_tree(&new_prefix, args.is_empty());
         for (i, arg) in args.iter().enumerate() {
           arg.build_tree(&new_prefix, i == args.len() - 1);
@@ -272,6 +417,7 @@ impl Expr {
         then_branch.build_tree(&new_prefix, false);
         else_branch.build_tree(&new_prefix, true);
       },
+
       Expr::Tuple { elements, .. } => {
         print_node!("Tuple");
         for (i, element) in elements.iter().enumerate() {
@@ -283,6 +429,122 @@ impl Expr {
         print_node!("Array");
         for (i, element) in elements.iter().enumerate() {
           element.build_tree(&new_prefix, i == elements.len() - 1);
+        }
+      },
+
+      Expr::Object {
+        type_name, fields, ..
+      } => {
+        print_node!("Object", type_name);
+        for (i, (field_name, field_value)) in fields.iter().enumerate() {
+          let is_last_field = i == fields.len() - 1;
+          println!(
+            "{}{}{}",
+            new_prefix,
+            if is_last_field {
+              "└── "
+            } else {
+              "├── "
+            },
+            field_name
+          );
+          let field_prefix = format!(
+            "{}{}",
+            new_prefix,
+            if is_last_field { "    " } else { "│   " }
+          );
+          field_value.build_tree(&field_prefix, true);
+        }
+      },
+
+      Expr::Lambda {
+        params,
+        return_type,
+        body,
+        ..
+      } => {
+        let return_type = if let Some(ref return_type) = return_type {
+          format!("{}", return_type)
+        } else {
+          String::from("")
+        };
+        print_node!("Lambda", format!("-> {}", return_type));
+
+        // Print params
+        let has_body = !body.is_empty();
+        for (i, param) in params.iter().enumerate() {
+          let is_last_param = i == params.len() - 1 && !has_body;
+          let param_str = if let Some(ref default) = param.default_value {
+            format!("{}: {} = {}", param.name, param.type_annotation, default)
+          } else {
+            format!("{}: {}", param.name, param.type_annotation)
+          };
+          println!(
+            "{}{}{}",
+            new_prefix,
+            if is_last_param {
+              "└── "
+            } else {
+              "├── "
+            },
+            param_str
+          );
+        }
+
+        // Print body statements
+        if !body.is_empty() {
+          println!("{}└── body:", new_prefix);
+          let body_prefix = format!("{}    ", new_prefix);
+          for (i, stmt) in body.iter().enumerate() {
+            stmt.build_tree(&body_prefix, i == body.len() - 1);
+          }
+        }
+      },
+
+      Expr::Match { expr, arms, .. } => {
+        print_node!("Match");
+        expr.build_tree(&new_prefix, arms.is_empty());
+
+        for (i, arm) in arms.iter().enumerate() {
+          let is_last_arm = i == arms.len() - 1;
+          println!(
+            "{}{}arm:",
+            new_prefix,
+            if is_last_arm {
+              "└── "
+            } else {
+              "├── "
+            }
+          );
+          let arm_prefix = format!(
+            "{}{}",
+            new_prefix,
+            if is_last_arm { "    " } else { "│   " }
+          );
+
+          // Print pattern
+          println!("{}├── pattern: {}", arm_prefix, arm.pattern);
+
+          // Print guard if exists
+          let has_guard = arm.guard.is_some();
+          if let Some(ref guard) = arm.guard {
+            println!("{}├── guard:", arm_prefix);
+            let guard_prefix = format!("{}│   ", arm_prefix);
+            guard.build_tree(&guard_prefix, true);
+          }
+
+          // Print body
+          println!(
+            "{}{}body:",
+            arm_prefix,
+            if has_guard {
+              "└── "
+            } else {
+              "└── "
+            }
+          );
+          let body_prefix = format!("{}    ", arm_prefix);
+          arm.body.build_tree(&body_prefix, true);
         }
       },
     }

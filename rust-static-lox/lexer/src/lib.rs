@@ -61,10 +61,15 @@ impl Lexer {
 
   /// Pushes a token covering the span between `start` and `current`.
   fn emit(&mut self, kind: TokenKind) {
+    // ignore comments
+    if kind == TokenKind::MultiLineComment || kind == TokenKind::SingleLineComment {
+      return;
+    }
+
     self.tokens.push(Token {
       kind,
       lexeme: self.get_current_lexeme().to_string(),
-      span: Span::new(self.line, self.start, self.current),
+      span: Span::new(self.line, self.column, self.current - self.start),
     });
     self.start = self.current;
   }

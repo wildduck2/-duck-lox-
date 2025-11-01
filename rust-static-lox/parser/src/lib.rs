@@ -43,6 +43,10 @@ impl Parser {
     self.tokens[self.current].clone()
   }
 
+  fn peek(&self) -> Token {
+    self.tokens[self.current + 1].clone()
+  }
+
   /// Advances to the next token, emitting an unterminated-string diagnostic if we passed EOF.
   fn advance(&mut self, engine: &mut DiagnosticEngine) {
     if self.is_eof() {
@@ -110,13 +114,13 @@ impl Parser {
     let diagnostic = Diagnostic::new(
       DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
       format!("Expected '{:?}', but reached end of file", expected),
-      "demo.lox".to_string(),
+      "duck.lox".to_string(),
     )
     .with_label(
-      Span::new(token.span.line + 1, 1, token.span.len),
+      Span::new(token.span.line, 1, token.span.len),
       Some(format!(
-        "Expected a primary expression, found \"{}\"",
-        token.lexeme
+        "Expected a {:?} expression, found {:?}",
+        expected, token.lexeme
       )),
       LabelStyle::Primary,
     );

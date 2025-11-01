@@ -81,9 +81,13 @@ impl Lexer {
       self.advance(); // consume the current char
       if self.match_char(self.peek(), '\n') {
         self.advance(); // consume the '\n'
+        self.line += 1;
+        self.column = 0;
+
         break;
       }
     }
+    println!("{:?}", self.column);
     Some(TokenKind::SingleLineComment)
   }
 
@@ -91,6 +95,10 @@ impl Lexer {
   fn lex_multi_line_comment(&mut self) -> Option<TokenKind> {
     while !self.is_eof() {
       self.advance(); // consume the current char
+      if self.match_char(self.peek(), '\n') {
+        self.line += 1;
+        self.column = 0
+      }
       if self.match_char(self.peek(), '*') && self.match_char(self.peek(), '/') {
         self.advance(); // consume the "*"
         self.advance(); // consume the "/"

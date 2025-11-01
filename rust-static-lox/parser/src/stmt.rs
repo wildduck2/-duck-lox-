@@ -3,7 +3,7 @@ use std::fmt;
 
 use crate::expr::Expr;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Stmt {
   Expr(Expr),
   Decl {
@@ -22,13 +22,13 @@ pub enum Stmt {
   },
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum DeclKind {
   Let,
   Const,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Type {
   Int,
   Float,
@@ -155,7 +155,7 @@ impl Stmt {
     self.build_tree("", true);
   }
 
-  fn build_tree(&self, prefix: &str, is_last: bool) {
+  pub fn build_tree(&self, prefix: &str, is_last: bool) {
     let connector = if is_last { "└── " } else { "├── " };
     let extension = if is_last { "    " } else { "│   " };
     let new_prefix = format!("{}{}", prefix, extension);
