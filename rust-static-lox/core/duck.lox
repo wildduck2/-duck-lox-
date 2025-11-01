@@ -1,18 +1,325 @@
-// let name = "wildduck";
-// name: string = "hello";
-// let tuple: (int, float, string) = (1, 2.0, "hello");
-// let mut name: [string] = ["wildduck", "duck"];
-// let mut name: Array<string> = ["wildduck", "duck"];
-// let mut name: User<string> = User { name: "wildduck", age: 10 };
+//// ==========================================
+//// VARIABLE DECLARATIONS
+//// ==========================================
+  
+// Basic let without type
+//let name = "wildduck";
+  
+  
+// Let with type annotation
+//let greeting: string = "hello";
+  
+  
+// Tuple with type annotation
+//let tuple: (int, float, string) = (1, 2.0, "hello");
+  
+  
+// Mutable array with bracket syntax
+//let mut numbers: [int] = [1, 2, 3, 4, 5];
+  
+  
+// Mutable array with generic syntax
+//let mut names: Array<string> = ["wildduck", "duck"];
+  
+  
+// Mutable struct instantiation with generic
+//let mut user: User<string> = User { 
+//  name: "wildduck", 
+//  age: 10 
+//};
+  
+  
+// Const declaration
+// const PI: float = 3.14159;
+
+
+// ==========================================
+// LAMBDA FUNCTIONS
+// ==========================================
+
+// Lambda with explicit return
 // let add = fn(x: int, y: int) -> int {
-//   let x = x + y;
-//   // return x + y;
+  //return x + y;
 // };
-match 1 {
-  1 => {
-    let x = 1;
-  },
-//  _ => {
-//    let x = 3;
+
+
+// Lambda with implicit return
+//let multiply = fn(x: int, y: int) -> int {
+//  x * y
+//};
+  
+  
+// Lambda with default parameter
+//let greet = fn(name: string, greeting: string = "Hello") -> string {
+//  return greeting + " " + name;
+//};
+
+
+
+// Lambda with no parameters
+//let get_random = fn() -> int {
+  //return 42;
+//};
+
+
+// Lambda with multiple statements
+//let complex = fn(x: int) -> int {
+//  let doubled = x * 2;
+//  let squared = doubled * doubled;
+//  return squared;
+//};
+
+
+// ==========================================
+// MATCH - LITERAL PATTERNS
+// ==========================================
+
+// Integer literals
+//let result1 = match status {
+//  0 => "zero",
+//  1 => "one",
+//  2 => "two",
+//  _ => "other",
+//};
+
+
+// Boolean literals
+//let bool_result = match is_active {
+//  true => "active",
+//  false => "inactive",
+//};
+
+
+// String literals
+//let color_name = match color {
+//  "red" => "Red color",
+//  "blue" => "Blue color",
+//  _ => "Unknown color",
+//};
+
+
+// ==========================================
+// MATCH - IDENTIFIER BINDING
+// ==========================================
+
+// Single identifier binding
+//let incremented = match x {
+//  n => n + 1,
+//};
+
+
+// Mix of literal and identifier
+//let doubled = match value {
+//  0 => 0,
+//  n => n * 2,
+//};
+
+
+// ==========================================
+// MATCH - TUPLE DESTRUCTURING
+// ==========================================
+
+// Basic tuple patterns
+//let location = match point {
+//  (0, 0) => "origin",
+//  (x, 0) => "on x-axis",
+//  (0, y) => "on y-axis",
+//  (x, y) => "somewhere else",
+//};
+
+
+// Tuple patterns with guards
+//let quad = match coords {
+//  (x, y) if x > 0 && y > 0 => "Q1",
+//  (x, y) if x < 0 && y > 0 => "Q2",
+//  (x, y) if x < 0 && y < 0 => "Q3",
+//  (x, y) if x > 0 && y < 0 => "Q4",
+//  _ => "on axis",
+//};
+
+
+// Nested tuple patterns
+//let nested = match data {
+//  ((0, 0), (0, 0)) => "double origin",
+//  ((x, y), (0, 0)) => "second is origin",
+//  ((a, b), (c, d)) => "two points",
+//};
+
+
+// ==========================================
+// MATCH - STRUCT DESTRUCTURING
+// ==========================================
+
+// Struct with specific field values
+//let person_check = match person {
+//  Person { name: "Alice", age: _ } => "It's Alice!",
+//  Person { name: "Bob", age: 30 } => "Bob is 30",
+//  Person { name: n, age: a } => "Someone else",
+//};
+
+// match person {
+//   (1, 2, 3) => "low",
+// };
+
+
+//match person {
+//  Person { name: "Alice", age } => {
+//    let x = 1;
+//  },  
+//  Person { name, age: 18 } => {
+//    let mut x = 1;
 //  },
-}
+//  1..=3 => {},
+//  _ => {},
+//}
+
+//let hi = match person {
+//  1 | 2 | 3 => "low",
+//};
+
+
+// Partial struct matching with guard
+//let age_check = match user {
+//  User { age: 18, name: _ } => "Just turned 18",
+//  User { age: a, name: _ } if a >= 21 => "Can drink",
+//  User { age: a, name: _ } => "Too young",
+//};
+
+
+// Nested struct patterns
+//let company_check = match employee {
+//  Employee { 
+//    name: n, 
+//    company: Company { name: "Google", location: _ } 
+//  } => "Works at Google",
+//  Employee { name: n, company: c } => "Works elsewhere",
+//};
+
+
+// ==========================================
+// MATCH - ADVANCED PATTERNS
+// ==========================================
+
+// Or patterns
+//let digit_name = match num {
+//  1 | 2 | 3 => "low",
+//  4 | 5 | 6 => "mid",
+//  7 | 8 | 9 => "high",
+//  _ => "other",
+//};
+
+
+// Range patterns
+//let grade = match score {
+//  90..=100 => "A",
+//  80..=89 => "B",
+//  70..=79 => "C",
+//  60..=69 => "D",
+//  _ => "F",
+//};
+
+
+// Complex guards with tuples
+//let classification = match (age, income) {
+//  (a, i) if a < 18 => "minor",
+//  (a, i) if a >= 18 && i > 50000 => "adult with good income",
+//  (a, i) if a >= 65 => "senior",
+//  _ => "adult",
+//};
+
+
+// Rest pattern in tuple
+//let first_last = match tuple {
+//  (first, _, last) => "got first and last",
+//  _ => "other",
+//};
+
+//let first_last = match tuple {
+//  (..) => "got first and last",
+//  _ => "other",
+//};
+
+
+// ==========================================
+// COMPLEX NESTED EXAMPLES
+// ==========================================
+
+// Match inside lambda
+//let classifier = fn(value: int) -> string {
+//  match value {
+//    0 => "zero",
+//    n if n > 0 => "positive",
+//    n => "negative",
+//  }
+//};
+
+
+// Nested matches
+//let nested_match = match outer {
+//  Some(inner_val) => match inner_val {
+//    0 => "some zero",
+//    n => "some other",
+//  },
+//  None => "none",
+//};
+
+
+// Nested matches with multiple patterns
+//let nested_match = match outer {
+//  Some(inner_val, inner_val2) => match inner_val {
+//    0 => "some zero",
+//    n => "some other",
+//  },
+//  None => "none",
+//};
+
+
+// Tuple of structs with guard
+let pair_check = match (user1, user2) {
+  // (User { age: 18, name: _ }, User { age: 18, name: _ }) => "both 18",
+   (User { age: a1, name: _ }}) if a1 == a2 => "same age",
+  _ => "different ages",
+};
+//
+//
+//// ==========================================
+//// EDGE CASES
+//// ==========================================
+//
+//// Empty array
+//let empty: [int] = [];
+//
+//
+//// Single element tuple
+//let single_tuple: (int,) = (42,);
+//
+//
+//// Unit struct
+//let unit = UnitStruct {};
+//
+//
+//// Match with only wildcard
+//let always_match = match anything {
+//  _ => "matched",
+//};
+//
+//
+//// Deeply nested tuple
+//let deep = ((1, 2), (3, (4, 5)));
+//
+
+// ==========================================
+// TEST COVERAGE SUMMARY
+// ==========================================
+
+/*
+Variables: let, const, mut, type annotations, arrays, generics, structs
+Lambdas: params, return types, defaults, multi-statement bodies
+Match Literals: int, bool, string, wildcard
+Match Identifiers: binding, mixed with literals
+Match Tuples: basic, guards, nested
+Match Structs: fields, partial, nested
+Match Advanced: or (|), range (..), guards, rest (...)
+Complex: nested match, match in lambda, tuple of structs
+Edge Cases: empty collections, unit structs, deep nesting
+*/

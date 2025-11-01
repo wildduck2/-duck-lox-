@@ -25,7 +25,7 @@ impl Lexer {
       '^' => Some(TokenKind::Caret),
       ';' => Some(TokenKind::Semicolon),
       ',' => Some(TokenKind::Comma),
-      '.' => Some(TokenKind::Dot),
+      '.' => self.lex_dot(),
       ':' => Some(TokenKind::Colon),
       '?' => Some(TokenKind::Question),
       '/' => self.lex_divide(),
@@ -34,7 +34,7 @@ impl Lexer {
       '<' => self.lex_less(),
       '>' => self.lex_greater(),
       '&' => self.lex_and(engine),
-      '|' => self.lex_or(engine),
+      '|' => self.lex_or(),
       '\n' => {
         self.line += 1;
         self.column = 0;
@@ -64,6 +64,18 @@ impl Lexer {
     }
   }
 
+  fn lex_dot(&mut self) -> Option<TokenKind> {
+    if self.match_char(self.peek(), '.') {
+      self.advance(); // consume the '..'
+      return Some(TokenKind::DotDot);
+    } else if self.get_current_lexeme() == "." {
+      self.advance(); // consume the '.'
+      return Some(TokenKind::Dot);
+    } else {
+      return None;
+    }
+  }
+
   /// Lexes `/`, distinguishing between division tokens and comment delimiters.
   fn lex_divide(&mut self) -> Option<TokenKind> {
     if self.match_char(self.peek(), '/') {
@@ -87,7 +99,6 @@ impl Lexer {
         break;
       }
     }
-    println!("{:?}", self.column);
     Some(TokenKind::SingleLineComment)
   }
 
@@ -161,19 +172,31 @@ impl Lexer {
   }
 
   /// Lexes `||`, emitting a diagnostic when a second `|` is missing.
-  fn lex_or(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
+  fn lex_or(&mut self) -> Option<TokenKind> {
     if self.match_char(self.peek(), '|') {
-      self.advance(); // consume the '='
+      self.advance(); // consume the '|'
       return Some(TokenKind::Or);
     } else {
-      self.emit_error_unexpected_character(engine);
-      None
+      return Some(TokenKind::Pipe);
     }
   }
 
   /// Consumes an identifier or keyword, returning the proper token kind.
 
   fn lex_keywords(&mut self) -> Option<TokenKind> {
+    let next_char = match self.peek() {
+      Some(ch) => ch.to_string(),
+      None => "".to_string(),
+    };
+
+    if self.get_current_lexeme() == "_"
+      && !next_char.chars().next().unwrap().is_ascii_alphabetic()
+      && next_char != ","
+    {
+      self.advance();
+      return Some(TokenKind::Underscore);
+    }
+
     // Consume valid identifier characters
     while let Some(ch) = self.peek() {
       if !ch.is_ascii_alphanumeric() && ch != '_' {
@@ -239,16 +262,33 @@ impl Lexer {
 
   /// Parses an integer or floating-point literal.
   fn lex_number(&mut self) -> Option<TokenKind> {
-    while let Some(char) = self.peek() {
-      if !char.is_ascii_digit() {
+    // Consume integer part
+    while let Some(c) = self.peek() {
+      if c.is_ascii_digit() {
+        self.advance();
+      } else {
         break;
       }
-
-      self.advance();
     }
 
-    if self.get_current_lexeme().contains(".") {
-      return Some(TokenKind::Float);
+    // Check for decimal part
+    if self.peek() == Some('.') {
+      // Look ahead to see if next is a digit, otherwise it's not a float (could be a range, for example)
+      if let Some(next) = self.peek_next() {
+        if next.is_ascii_digit() {
+          // Consume '.'
+          self.advance();
+          // Consume fractional part
+          while let Some(c) = self.peek() {
+            if c.is_ascii_digit() {
+              self.advance();
+            } else {
+              break;
+            }
+          }
+          return Some(TokenKind::Float);
+        }
+      }
     }
 
     Some(TokenKind::Int)

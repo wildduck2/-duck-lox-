@@ -77,7 +77,6 @@ impl Lexer {
   /// Returns the next character without consuming it, or `None` at end of input.
   fn peek(&self) -> Option<char> {
     if self.is_eof() {
-      println!("EOF");
       return None;
     }
 

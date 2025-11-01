@@ -224,7 +224,7 @@ impl Parser {
       self.advance(engine);
       let rhs = self.parse_assignment(engine)?;
 
-      if let Expr::Identifier { name, span } = lhs.clone() {
+      if let Expr::Identifier { name: _, span } = lhs.clone() {
         self.expect(TokenKind::Semicolon, engine)?; // consume the ";"
         return Ok(Expr::Assign {
           target: Box::new(lhs),
@@ -648,7 +648,9 @@ impl Parser {
       // handle the case where the token is a keyword
       TokenKind::Identifier => {
         self.advance(engine); // consume this token
-        if self.current_token().kind == TokenKind::LeftBrace {
+        if self.current_token().kind == TokenKind::LeftBrace
+          && self.tokens[self.current - 2].kind != TokenKind::Match
+        {
           return self.parse_object(token, engine);
         }
 
@@ -696,30 +698,255 @@ impl Parser {
 
   fn parse_match(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let token = self.expect(TokenKind::Match, engine)?; // consume the "match"
-    let expr = self.parse_expr(engine)?;
+
+    let expr = self.parse_primary(engine)?;
     self.expect(TokenKind::LeftBrace, engine)?; // consume the "("
-
     let arms = self.parse_arms(engine)?;
+    self.expect(TokenKind::RightBrace, engine)?; // consume the ")"
 
-    println!("{:?}", self.current_token());
+    // println!(
+    //   "{:#?}",
+    //   Expr::Match {
+    //     expr: Box::new(expr.clone()),
+    //     arms: arms.clone(),
+    //     span: token.span.clone(),
+    //   }
+    // );
 
-    Err(())
+    Ok(Expr::Match {
+      expr: Box::new(expr),
+      arms,
+      span: token.span,
+    })
   }
 
   fn parse_arms(&mut self, engine: &mut DiagnosticEngine) -> Result<Vec<MatchArm>, ()> {
     let mut arms = Vec::<MatchArm>::new();
 
-    while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::RightParen) {
-      // let pattern = self.parse_pattern(engine)?;
+    while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::RightBrace) {
+      let pattern = self.parse_pattern(engine)?;
+
+      let guard = if self.current_token().kind == TokenKind::If {
+        self.advance(engine); // consume the "if"
+        let guard = self.parse_logical_or(engine)?;
+        Some(guard)
+      } else {
+        None
+      };
+
+      // TODO: make FatArrow a TokenKind
+      self.expect(TokenKind::Equal, engine)?; // consume the "="
+      self.expect(TokenKind::Greater, engine)?; // consume the ">"
+
+      // Parse body (either block or single expression)
+      let body = if self.current_token().kind == TokenKind::LeftBrace {
+        self.parse_block(engine)?
+      } else {
+        // Single expression - wrap in statement
+        let expr = self.parse_expr(engine)?;
+        vec![Stmt::Expr(expr)]
+      };
+
+      arms.push(MatchArm {
+        pattern,
+        guard,
+        body,
+      });
+
+      // Optional comma between arms
+      if self.current_token().kind == TokenKind::Comma {
+        self.advance(engine);
+      }
     }
 
-    Err(())
+    Ok(arms)
   }
 
   fn parse_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
-    let token = self.current_token();
+    self.parse_or_pattern(engine)
+  }
 
-    Err(())
+  fn parse_or_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
+    let mut patterns = vec![self.parse_single_pattern(engine)?];
+
+    while self.current_token().kind == TokenKind::Pipe {
+      self.advance(engine); // consume '|'
+      patterns.push(self.parse_single_pattern(engine)?);
+    }
+
+    if patterns.len() == 1 {
+      Ok(patterns.into_iter().next().unwrap())
+    } else {
+      Ok(Pattern::Or(patterns))
+    }
+  }
+
+  fn parse_single_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
+    let token = self.current_token();
+    match token.kind {
+      // Wildcard: _
+      TokenKind::Underscore => {
+        self.advance(engine);
+        Ok(Pattern::Wildcard)
+      },
+
+      // Literals: 42, "hello", true, false
+      TokenKind::Int
+      | TokenKind::Float
+      | TokenKind::String
+      | TokenKind::True
+      | TokenKind::False
+      | TokenKind::Nil => {
+        if self.peek().kind == TokenKind::DotDot {
+          self.advance(engine); // consume the "consume the token
+          let start = Expr::Integer {
+            value: token.lexeme.parse().unwrap(),
+            span: token.span,
+          };
+
+          self.expect(TokenKind::DotDot, engine)?; // consume the ".."
+          self.expect(TokenKind::Equal, engine)?; // consume the "="
+          let end = self.parse_primary(engine)?;
+
+          return Ok(Pattern::Range { start, end });
+        }
+
+        let expr = self.parse_primary(engine)?;
+        Ok(Pattern::Literal(expr))
+      },
+
+      TokenKind::LeftParen => {
+        let tuple = self.parse_tuple(engine)?;
+        Ok(Pattern::Literal(tuple))
+      },
+
+      // Identifier or Struct: x or Person { ... }
+      TokenKind::Identifier => {
+        let struct_name = self.current_token();
+        self.advance(engine); // consume the "struct name"
+        let mut fields = Vec::<(String, Pattern)>::new();
+
+        let is_struct = self.current_token().kind == TokenKind::LeftBrace;
+
+        if self.current_token().kind == TokenKind::LeftBrace
+          || self.current_token().kind == TokenKind::LeftParen
+        {
+          self.advance(engine); // consume the "{"
+          while !self.is_eof()
+            && self.current_token().kind != TokenKind::RightBrace
+            && self.current_token().kind != TokenKind::RightParen
+          {
+            let field_name = self.current_token();
+            self.advance(engine);
+
+            let field_pattern = if self.current_token().kind == TokenKind::Colon {
+              self.advance(engine);
+              self.parse_pattern(engine)?
+            } else {
+              Pattern::Identifier(field_name.lexeme.clone())
+            };
+
+            fields.push((field_name.lexeme, field_pattern));
+
+            if self.current_token().kind == TokenKind::Comma {
+              self.advance(engine);
+            }
+          }
+
+          if is_struct {
+            self.expect(TokenKind::RightBrace, engine)?;
+            Ok(Pattern::Struct {
+              name: struct_name.lexeme,
+              fields,
+            })
+          } else {
+            // TODO: make this work you idiot
+            self.expect(TokenKind::RightParen, engine)?;
+            Ok(Pattern::Enum {
+              name: struct_name.lexeme,
+              variant: variant_name.lexeme,
+              patterns,
+            })
+          }
+        } else {
+          Ok(Pattern::Identifier(struct_name.lexeme))
+        }
+      },
+
+      _ => {
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+          format!("Unexpected token {:?}", token.lexeme),
+          "duck.lox".to_string(),
+        )
+        .with_label(
+          Span::new(token.span.line + 1, token.span.col + 1, token.span.len),
+          Some(format!(
+            "Expected a primary expression, found {:?}",
+            token.lexeme
+          )),
+          LabelStyle::Primary,
+        );
+
+        engine.add(diagnostic);
+
+        Err(())
+      },
+    }
+  }
+
+  fn parse_tuple(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let token = self.expect(TokenKind::LeftParen, engine)?; // consume the "("
+
+    let mut fields = Vec::<(String, Pattern)>::new();
+    let is_struct = self.current_token().kind == TokenKind::LeftBrace;
+
+    while !self.is_eof()
+      && self.current_token().kind != TokenKind::RightParen
+      && self.current_token().kind != TokenKind::RightBrace
+    {
+      if self.current_token().kind != TokenKind::Underscore {
+        self.advance(engine); // consume the "_"
+        continue;
+      }
+      let expr = if self.current_token().kind == TokenKind::Underscore {
+        self.advance(engine); // consume the "_"
+        Expr::Identifier {
+          name: "_".to_string(),
+          span: self.current_token().span,
+        }
+      } else {
+        self.parse_expr(engine)?
+      };
+
+      fields.push((expr, None));
+
+      if self.current_token().kind != TokenKind::Comma {
+        break;
+      }
+
+      self.advance(engine); // consume the ","
+    }
+
+    if is_struct {
+      self.expect(TokenKind::RightBrace, engine)?;
+      Ok(Pattern::Struct {
+        name: "tuple".to_string(),
+        fields: elements,
+      })
+    } else {
+      self.expect(TokenKind::RightParen, engine)?;
+      Ok(Pattern::Enum {
+        name: "tuple".to_string(),
+        fields: elements,
+      })
+    }
+    // self.expect(TokenKind::RightParen, engine)?; // consume the ")"
+    //
+    // Ok(Expr::Tuple {
+    //   elements,
+    //   span: self.current_token().span,
+    // })
   }
 
   fn parse_lambda(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
@@ -730,6 +957,7 @@ impl Parser {
     let params = self.parse_parameters(engine)?;
     self.expect(TokenKind::RightParen, engine)?; // consume the ")"
     let return_type = if matches!(self.current_token().kind, TokenKind::Minus) {
+      // TODO: make FatArrow a TokenKind
       self.expect(TokenKind::Minus, engine)?; // consume the "-"
       self.expect(TokenKind::Greater, engine)?; // consume the ">"
       let r_type = self.parse_type(engine)?;
@@ -766,7 +994,7 @@ impl Parser {
     while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::RightParen) {
       let param_name = self.parse_primary(engine)?;
       let param_name = match param_name {
-        Expr::Identifier { name, span } => name,
+        Expr::Identifier { name, .. } => name,
         _ => {
           let diagnostic = Diagnostic::new(
             DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
@@ -787,8 +1015,22 @@ impl Parser {
         },
       };
 
-      self.expect(TokenKind::Colon, engine)?; // consume the ":"
-      let typee = self.parse_type(engine)?;
+      let typee = if matches!(self.current_token().kind, TokenKind::Colon) {
+        self.expect(TokenKind::Colon, engine)?; // consume the ":"
+        let typee = self.parse_type(engine)?;
+        Some(typee)
+      } else {
+        None
+      };
+
+      let default_value = if matches!(self.current_token().kind, TokenKind::Equal) {
+        self.expect(TokenKind::Equal, engine)?; // consume the "="
+        let default_value = self.parse_assignment(engine)?;
+        Some(default_value)
+      } else {
+        None
+      };
+
       if !matches!(self.current_token().kind, TokenKind::RightParen) {
         self.expect(TokenKind::Comma, engine)?; // consume the ","
       }
@@ -796,7 +1038,7 @@ impl Parser {
       params.push(Param {
         name: param_name,
         type_annotation: typee,
-        default_value: None,
+        default_value,
       });
     }
 
@@ -812,7 +1054,7 @@ impl Parser {
     while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::RightBrace) {
       let name = self.parse_primary(engine)?;
       let name = match name {
-        Expr::Identifier { name, span } => name,
+        Expr::Identifier { name, .. } => name,
         _ => {
           let diagnostic = Diagnostic::new(
             DiagnosticCode::Error(DiagnosticError::UnexpectedToken),

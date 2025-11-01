@@ -1,7 +1,7 @@
 
 class Animal {
-  weight() {
-    print("Animal weight is 0");
+  weight(w) {
+    print("Animal weight is " + w);
   }
 }
 
@@ -9,11 +9,11 @@ class Dog < Animal {
   init() {
   }
 
-  weight() {
-    super.weight();
-    print("Dog weight is 10");
+  weight(w) {
+    super.weight(w);
+    print("Dog weight is " + w /2);
   }
 }
 
 var dog = Dog();
-dog.weight();
+dog.weight(1000);
