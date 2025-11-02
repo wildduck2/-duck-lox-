@@ -116,6 +116,13 @@ pub enum Expr {
     else_branch: Box<Expr>,
     span: Span,
   },
+
+  If {
+    condition: Box<Expr>,
+    then_branch: Vec<Stmt>,
+    else_branch: Option<Vec<Stmt>>,
+    span: Span,
+  },
 }
 
 #[derive(Debug, Clone)]
@@ -441,6 +448,15 @@ impl fmt::Display for Expr {
       Expr::Match { expr, arms, .. } => {
         write!(f, "match {} {{ {} arms }}", expr, arms.len())
       },
+
+      Expr::If {
+        condition,
+        then_branch,
+        else_branch,
+        ..
+      } => {
+        write!(f, "if {} {{ {} stmts }}", condition, then_branch.len())
+      },
     }
   }
 }
@@ -692,6 +708,26 @@ impl Expr {
             for (j, stmt) in arm.body.iter().enumerate() {
               stmt.build_tree(&body_prefix, j == arm.body.len() - 1);
             }
+          }
+        }
+      },
+
+      Expr::If {
+        condition,
+        then_branch,
+        else_branch,
+        ..
+      } => {
+        print_node!("If");
+        condition.build_tree(&new_prefix, false);
+        for (i, stmt) in then_branch.iter().enumerate() {
+          stmt.build_tree(&new_prefix, i == then_branch.len() - 1);
+        }
+        if let Some(ref else_branch) = else_branch {
+          println!("{}└── else:", new_prefix);
+          let else_prefix = format!("{}    ", new_prefix);
+          for (i, stmt) in else_branch.iter().enumerate() {
+            stmt.build_tree(&else_prefix, i == else_branch.len() - 1);
           }
         }
       },

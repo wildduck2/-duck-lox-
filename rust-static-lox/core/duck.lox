@@ -1,8 +1,67 @@
+//// 1. Basic if
+//if true {
+//  let x = 1;
+//}
+//
+//// 2. If + else
+//if false {
+//  let x = 1;
+//} else {
+//  let x = 2;
+//}
+//
+//// 3. If + else if
+//if true {
+//  let a = 10;
+//} else if false {
+//  let b = 20;
+//}
+//
+//// 4. If + else if + else
+//if true {
+//  let v = 1;
+//} else if false {
+//  let v = 2;
+//} else {
+//  let v = 3;
+//}
+//
+//// 5. Multiple else-if chain
+//if cond1 {
+//  let a = 1;
+//} else if cond2 {
+//  let a = 2;
+//} else if cond3 {
+//  let a = 3;
+//} else {
+//  let a = 4;
+//}
+//
+//// 6. Nested if (if inside if)
+//if a {
+//  if b {
+//    let x = 1;
+//  } else {
+//    let y = 2;
+//  }
+//}
+//
+//// 7. If with complex expression condition
+//if 1 + 2 * 3 > 5 {
+//  let n = 10;
+//}
+//
+//// 8. If using function call in condition
+//if check_value(42) {
+//  let result = "ok";
+//} else {
+//  let result = "fail";
+//}
 
-if Hello && World {
-
-} else if Hello || World {
-    
+// 10. If as an expression (Rust-style)
+let x = if user {
+  10
 } else {
+  20
+};
 
-}

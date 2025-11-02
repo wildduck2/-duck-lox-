@@ -149,6 +149,14 @@ use crate::{
   Parser,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ExprContext {
+  Default,           // Normal expression parsing
+  IfCondition,       // Parsing condition of if statement
+  MatchDiscriminant, // Parsing match expression (before arms)
+  WhileCondition,    // Parsing condition of while statement
+}
+
 impl Parser {
   /// Parses the top-level production, collecting statements until EOF.
   pub fn parse_program(&mut self, engine: &mut DiagnosticEngine) {
@@ -190,11 +198,21 @@ impl Parser {
   }
 
   /* --------------------------------------------------------------------------------------------*/
-  /*                                         If Statement                                        */
+  /*                                         While Statement                                     */
   /* --------------------------------------------------------------------------------------------*/
 
   fn parse_whie_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
-    Err(())
+    let token = self.current_token();
+    self.advance(engine);
+
+    let condition = self.parse_expr_stmt_with_context(engine, ExprContext::WhileCondition)?;
+    let body = self.parse_block(engine)?;
+
+    Ok(Stmt::While {
+      condition: Box::new(condition),
+      body,
+      span: token.span,
+    })
   }
 
   /* --------------------------------------------------------------------------------------------*/
@@ -202,11 +220,9 @@ impl Parser {
   /* --------------------------------------------------------------------------------------------*/
 
   fn parse_if_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
-    self.is_in_if = true;
     let token = self.current_token();
     self.advance(engine); // consume the 'if' token
-    let condition = self.parse_expr_stmt(engine)?;
-    self.is_in_if = false;
+    let condition = self.parse_expr_stmt_with_context(engine, ExprContext::IfCondition)?;
     let then_branch = self.parse_block(engine)?;
 
     if !matches!(self.current_token().kind, TokenKind::Else) {
@@ -256,7 +272,7 @@ impl Parser {
     };
 
     let identifier_token = self.current_token();
-    let lhs = self.parse_primary(engine)?;
+    let lhs = self.parse_primary(engine, ExprContext::Default)?;
     let name = match lhs {
       #[allow(unused_variables)]
       Expr::Identifier { name, span } => {
@@ -308,6 +324,7 @@ impl Parser {
       },
     };
 
+    // Optional explicit type annotation following the binding name.
     let type_annotation = if self.current_token().kind == TokenKind::Colon {
       self.advance(engine); // consume ':'
       let rhs = self.parse_type(engine)?;
@@ -316,14 +333,16 @@ impl Parser {
       None
     };
 
+    // Optional initializer uses the general expression context to allow any value.
     let initializer = if self.current_token().kind == TokenKind::Equal {
       self.advance(engine); // consume '='
-      let rhs = self.parse_assignment(engine)?;
+      let rhs = self.parse_assignment(engine, ExprContext::Default)?;
       Some(rhs)
     } else {
       None
     };
 
+    // Declarations must be terminated explicitly so recovery stays predictable.
     self.expect(TokenKind::Semicolon, engine)?; // ensure the declaration is terminated
 
     Ok(Stmt::Decl {
@@ -341,10 +360,23 @@ impl Parser {
   /* -------------------------------------------------------------------------------------------- */
 
   /// Parses a general expression entrypoint.
+  // fn parse_expr_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+  //   let expr = self.parse_comma(engine)?;
+  //
+  //   Ok(expr)
+  // }
   fn parse_expr_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let expr = self.parse_comma(engine)?;
+    self.parse_expr_stmt_with_context(engine, ExprContext::Default)
+  }
 
-    Ok(expr)
+  // Internal version that accepts context
+  fn parse_expr_stmt_with_context(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+    context: ExprContext,
+  ) -> Result<Expr, ()> {
+    // All expression parsing funnels through the comma production so we only gate in one place.
+    self.parse_comma(engine, context)
   }
 
   /* -------------------------------------------------------------------------------------------- */
@@ -352,20 +384,24 @@ impl Parser {
   /* -------------------------------------------------------------------------------------------- */
 
   /// Parses comma-separated expressions, emitting `Expr::Binary` nodes.
-  fn parse_comma(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+  fn parse_comma(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+    context: ExprContext,
+  ) -> Result<Expr, ()> {
     let token = self.current_token();
     let mut expressions = Vec::<Expr>::new();
-    let lhs = self.parse_assignment(engine)?;
+    let lhs = self.parse_assignment(engine, context)?;
     expressions.push(lhs);
 
-    while !self.is_eof() || matches!(self.current_token().kind, TokenKind::Comma) {
+    while !self.is_eof() && matches!(self.current_token().kind, TokenKind::Comma) {
       let token = self.current_token();
 
       match token.kind {
         TokenKind::Comma => {
           self.advance(engine);
 
-          let rhs = self.parse_assignment(engine)?;
+          let rhs = self.parse_assignment(engine, context)?;
           expressions.push(rhs);
         },
         _ => break,
@@ -388,13 +424,18 @@ impl Parser {
   /* -------------------------------------------------------------------------------------------- */
 
   /// Parses assignment expressions and verifies the left side is assignable.
-  fn parse_assignment(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+  fn parse_assignment(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+    context: ExprContext,
+  ) -> Result<Expr, ()> {
+    // Carry the current expression context downward so later productions can tailor behavior.
     let token = self.current_token();
-    let lhs = self.parse_ternary(engine)?;
+    let lhs = self.parse_ternary(engine, context)?;
 
     if !self.is_eof() && matches!(self.current_token().kind, TokenKind::Equal) {
       self.advance(engine); // consume the '='
-      let rhs = self.parse_assignment(engine)?;
+      let rhs = self.parse_assignment(engine, context)?;
 
       match rhs.clone() {
         Expr::Integer { value: _, span }
@@ -438,13 +479,18 @@ impl Parser {
   /*                                         Ternary                                              */
   /* -------------------------------------------------------------------------------------------- */
   /// Parses ternary expressions of the form `cond ? a : b`.
-  fn parse_ternary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+  fn parse_ternary(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+    context: ExprContext,
+  ) -> Result<Expr, ()> {
     let token = self.current_token();
-    let condition = self.parse_logical_or(engine)?;
+    let condition = self.parse_logical_or(engine, context)?;
 
     if !self.is_eof() && matches!(self.current_token().kind, TokenKind::Question) {
       self.advance(engine); // consume the (?)
-      let then_branch = self.parse_expr_stmt(engine)?;
+      // The consequent is evaluated in the default context because it stands on its own.
+      let then_branch = self.parse_expr_stmt_with_context(engine, ExprContext::Default)?;
 
       if self.is_eof() || !matches!(self.current_token().kind, TokenKind::Colon) {
         // Colon is mandatory for ternary expressions; report the omission.
@@ -486,7 +532,8 @@ impl Parser {
       }
 
       self.advance(engine); // consume the (:)
-      let else_branch = self.parse_ternary(engine)?;
+      // Else branch inherits the current context so surrounding constructs keep their guarantees.
+      let else_branch = self.parse_ternary(engine, context)?;
 
       // Form the ternary expression once all components have been parsed.
       return Ok(Expr::Ternary {
@@ -505,8 +552,12 @@ impl Parser {
   /* -------------------------------------------------------------------------------------------- */
 
   /// Parses logical OR chains (`expr or expr`).
-  fn parse_logical_or(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let mut lhs = self.parse_logical_and(engine)?;
+  fn parse_logical_or(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+    context: ExprContext,
+  ) -> Result<Expr, ()> {
+    let mut lhs = self.parse_logical_and(engine, context)?;
 
     while !self.is_eof() {
       let operator = self.current_token();
@@ -514,7 +565,7 @@ impl Parser {
       match operator.kind {
         TokenKind::Or => {
           self.advance(engine); // consume 'or'
-          let rhs = self.parse_logical_and(engine)?;
+          let rhs = self.parse_logical_and(engine, context)?;
           // Represent `lhs or rhs` as a binary operation node.
           lhs = Expr::Binary {
             op: BinaryOp::Or,
@@ -535,8 +586,12 @@ impl Parser {
   /* -------------------------------------------------------------------------------------------- */
 
   /// Parses logical AND chains (`expr and expr`).
-  fn parse_logical_and(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let mut lhs = self.parse_equality(engine)?;
+  fn parse_logical_and(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+    context: ExprContext,
+  ) -> Result<Expr, ()> {
+    let mut lhs = self.parse_equality(engine, context)?;
 
     while !self.is_eof() {
       let operator = self.current_token();
@@ -544,7 +599,7 @@ impl Parser {
       match operator.kind {
         TokenKind::And => {
           self.advance(engine); // consume 'and'
-          let rhs = self.parse_equality(engine)?;
+          let rhs = self.parse_equality(engine, context)?;
           // Build a binary node for each logical conjunction.
           lhs = Expr::Binary {
             op: BinaryOp::And,
@@ -565,8 +620,12 @@ impl Parser {
   /* -------------------------------------------------------------------------------------------- */
 
   /// Parses equality comparisons (`==` and `!=`).
-  fn parse_equality(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let mut lhs = self.parse_comparison(engine)?;
+  fn parse_equality(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+    context: ExprContext,
+  ) -> Result<Expr, ()> {
+    let mut lhs = self.parse_comparison(engine, context)?;
 
     while !self.is_eof() {
       let operator = self.current_token();
@@ -574,7 +633,7 @@ impl Parser {
       match operator.kind {
         TokenKind::EqualEqual | TokenKind::BangEqual => {
           self.advance(engine); // consume comparison operator
-          let rhs = self.parse_comparison(engine)?;
+          let rhs = self.parse_comparison(engine, context)?;
           // Map the lexeme to the appropriate equality variant.
           lhs = Expr::Binary {
             op: match operator.lexeme.as_str() {
@@ -598,8 +657,12 @@ impl Parser {
   /*                                         Relational                                           */
   /* -------------------------------------------------------------------------------------------- */
   /// Parses relational comparisons (`<`, `<=`, `>`, `>=`).
-  fn parse_comparison(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let mut lhs = self.parse_term(engine)?;
+  fn parse_comparison(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+    context: ExprContext,
+  ) -> Result<Expr, ()> {
+    let mut lhs = self.parse_term(engine, context)?;
 
     while !self.is_eof() {
       let operator = self.current_token();
@@ -607,7 +670,7 @@ impl Parser {
       match operator.kind {
         TokenKind::Greater | TokenKind::GreaterEqual | TokenKind::Less | TokenKind::LessEqual => {
           self.advance(engine); // consume relational operator
-          let rhs = self.parse_term(engine)?;
+          let rhs = self.parse_term(engine, context)?;
           // Convert the operator lexeme into the matching binary enum variant.
           lhs = Expr::Binary {
             op: match operator.lexeme.as_str() {
@@ -633,8 +696,12 @@ impl Parser {
   /*                                         Additive                                             */
   /* -------------------------------------------------------------------------------------------- */
   /// Parses additive expressions (`+` and `-` sequences).
-  fn parse_term(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let mut lhs = self.parse_factor(engine)?;
+  fn parse_term(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+    context: ExprContext,
+  ) -> Result<Expr, ()> {
+    let mut lhs = self.parse_factor(engine, context)?;
 
     while !self.is_eof() {
       let operator = self.current_token();
@@ -642,7 +709,7 @@ impl Parser {
       match operator.kind {
         TokenKind::Plus | TokenKind::Minus => {
           self.advance(engine); // consume '+' or '-'
-          let rhs = self.parse_factor(engine)?;
+          let rhs = self.parse_factor(engine, context)?;
           // Maintain left-associativity for additive chains.
           lhs = Expr::Binary {
             op: match operator.lexeme.as_str() {
@@ -666,8 +733,12 @@ impl Parser {
   /*                                         Multiplicative                                       */
   /* -------------------------------------------------------------------------------------------- */
   /// Parses multiplicative expressions (`*`, `/`, `%`).
-  fn parse_factor(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let mut lhs = self.parse_unary(engine)?;
+  fn parse_factor(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+    context: ExprContext,
+  ) -> Result<Expr, ()> {
+    let mut lhs = self.parse_unary(engine, context)?;
 
     while !self.is_eof() {
       let operator = self.current_token();
@@ -675,7 +746,7 @@ impl Parser {
       match operator.kind {
         TokenKind::Percent | TokenKind::Slash | TokenKind::Star => {
           self.advance(engine); // consume multiplicative operator
-          let rhs = self.parse_unary(engine)?;
+          let rhs = self.parse_unary(engine, context)?;
           // Promote each operator to its binary expression counterpart.
           lhs = Expr::Binary {
             op: match operator.lexeme.as_str() {
@@ -700,13 +771,17 @@ impl Parser {
   /*                                         Prefix Unary                                         */
   /* -------------------------------------------------------------------------------------------- */
   /// Parses prefix unary operators and defers to the next precedence level.
-  fn parse_unary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+  fn parse_unary(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+    context: ExprContext,
+  ) -> Result<Expr, ()> {
     let operator = self.current_token();
 
     match operator.kind {
       TokenKind::Minus | TokenKind::Bang => {
         self.advance(engine); // consume unary operator
-        let rhs = self.parse_unary(engine)?;
+        let rhs = self.parse_unary(engine, context)?;
 
         // Convert the operator lexeme into the proper unary AST node.
         Ok(Expr::Unary {
@@ -720,7 +795,7 @@ impl Parser {
         })
       },
       // Fall through to call/primary parsing when no unary operator is present.
-      _ => self.parse_call(engine),
+      _ => self.parse_call(engine, context),
     }
   }
 
@@ -728,10 +803,15 @@ impl Parser {
   /*                                         Call                                                 */
   /* -------------------------------------------------------------------------------------------- */
   /// Parses function calls and dotted access chains.
-  fn parse_call(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+  fn parse_call(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+    context: ExprContext,
+  ) -> Result<Expr, ()> {
     let start_token = self.current_token();
-    let mut callee = self.parse_primary(engine)?;
+    let mut callee = self.parse_primary(engine, context)?;
 
+    // Chain together call/member/index operations that appear on the same source line.
     while !self.is_eof()
       && start_token.kind == TokenKind::Identifier
       && start_token.span.line == self.current_token().span.line
@@ -749,6 +829,7 @@ impl Parser {
           span: token.span,
         };
       } else if matches!(self.current_token().kind, TokenKind::Dot) {
+        // Desugar `object.field` into a member access node.
         self.advance(engine); // consume the "."
         let token = self.current_token();
         self.advance(engine); // consume the "token"
@@ -765,8 +846,11 @@ impl Parser {
           span: token.span,
         };
       } else if matches!(self.current_token().kind, TokenKind::LeftBracket) {
+        // Map subscripts like `foo[bar]` onto an indexing expression.
         let token = self.current_token();
-        let index = self.parse_expr_stmt(engine)?;
+        self.advance(engine); // consume '['
+        let index = self.parse_expr_stmt_with_context(engine, context)?;
+        self.expect(TokenKind::RightBracket, engine)?; // consume ']'
 
         callee = Expr::Index {
           object: Box::new(callee),
@@ -788,9 +872,10 @@ impl Parser {
   fn parser_arguments(&mut self, engine: &mut DiagnosticEngine) -> Result<Vec<Expr>, ()> {
     let mut args = Vec::<Expr>::new();
     while !self.is_eof() && self.current_token().kind != TokenKind::RightParen {
-      let expr = self.parse_ternary(engine)?;
+      let expr = self.parse_ternary(engine, ExprContext::Default)?;
       args.push(expr);
 
+      // Allow trailing argument without a comma, otherwise expect another value.
       if self.current_token().kind != TokenKind::Comma {
         break;
       }
@@ -827,7 +912,11 @@ impl Parser {
   /* -------------------------------------------------------------------------------------------- */
 
   /// Parses primary expressions: literals, identifiers, and grouped expressions.
-  fn parse_primary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+  fn parse_primary(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+    context: ExprContext,
+  ) -> Result<Expr, ()> {
     let token = self.current_token();
     match token.kind {
       // handle string literals
@@ -893,12 +982,28 @@ impl Parser {
       // handle the case where match is declared
       TokenKind::Match => self.parse_match(engine),
 
+      // handle the case where match is declared
+      TokenKind::If => match self.parse_if_stmt(engine)? {
+        Stmt::If {
+          condition,
+          then_branch,
+          else_branch,
+          span,
+        } => Ok(Expr::If {
+          condition,
+          then_branch,
+          else_branch,
+          span,
+        }),
+        _ => Err(()),
+      },
+
       // handle the case where the token is a keyword
       TokenKind::Identifier => {
         self.advance(engine); // consume this token
 
-        if self.current_token().kind == TokenKind::LeftBrace && !self.is_in_if && !self.is_in_match
-        {
+        // Only treat `identifier { ... }` as an object literal in neutral contexts.
+        if context == ExprContext::Default && self.current_token().kind == TokenKind::LeftBrace {
           return self.parse_object(token, engine);
         }
 
@@ -954,8 +1059,9 @@ impl Parser {
     engine: &mut DiagnosticEngine,
   ) -> Result<Vec<(String, Expr)>, ()> {
     let mut fields = Vec::<(String, Expr)>::new();
+    // Consume repeated `key: value` pairs until we reach the closing brace.
     while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::RightBrace) {
-      let name = self.parse_primary(engine)?;
+      let name = self.parse_primary(engine, ExprContext::Default)?;
       let name = match name {
         Expr::Identifier { name, .. } => name,
         _ => {
@@ -979,7 +1085,7 @@ impl Parser {
       };
 
       self.expect(TokenKind::Colon, engine)?; // consume ':'
-      let value = self.parse_primary(engine)?;
+      let value = self.parse_primary(engine, ExprContext::Default)?;
       if !matches!(self.current_token().kind, TokenKind::RightBrace) {
         self.expect(TokenKind::Comma, engine)?; // consume ',' between fields
       }
@@ -1045,7 +1151,7 @@ impl Parser {
     let mut params = Vec::<Param>::new();
 
     while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::RightParen) {
-      let param_name = self.parse_primary(engine)?;
+      let param_name = self.parse_primary(engine, ExprContext::Default)?;
       let param_name = match param_name {
         Expr::Identifier { name, .. } => name,
         _ => {
@@ -1079,7 +1185,7 @@ impl Parser {
 
       let default_value = if matches!(self.current_token().kind, TokenKind::Equal) {
         self.expect(TokenKind::Equal, engine)?; // consume '='
-        let default_value = self.parse_assignment(engine)?;
+        let default_value = self.parse_assignment(engine, ExprContext::Default)?;
         Some(default_value)
       } else {
         None
@@ -1221,9 +1327,10 @@ impl Parser {
   /* --------------------------------------------------------------------------------------------*/
 
   fn parse_match(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    // Track when we are inside a match expression so pattern helpers can tighten rules.
     self.is_in_match = true;
     self.expect(TokenKind::Match, engine)?; // consume the "match"
-    let expr = self.parse_primary(engine)?; // expression being matched
+    let expr = self.parse_primary(engine, ExprContext::MatchDiscriminant)?;
 
     self.expect(TokenKind::LeftBrace, engine)?; // consume '{'
     let token = self.current_token();
@@ -1248,6 +1355,7 @@ impl Parser {
 
     self.expect(TokenKind::RightBrace, engine)?; // consume '}'
 
+    // Reset the match tracking flag once the expression is complete.
     self.is_in_match = false;
     Ok(Expr::Match {
       expr: Box::new(expr),
@@ -1269,7 +1377,8 @@ impl Parser {
 
       let guard = if self.current_token().kind == TokenKind::If {
         self.advance(engine); // consume 'if'
-        let guard = self.parse_logical_or(engine)?;
+        // Guards are plain logical expressions evaluated in the default context.
+        let guard = self.parse_logical_or(engine, ExprContext::Default)?;
         Some(guard)
       } else {
         None
@@ -1283,7 +1392,8 @@ impl Parser {
         self.parse_block(engine)?
       } else {
         // Single expression - wrap in statement
-        let expr = self.parse_ternary(engine)?;
+        // Single-expression arms are wrapped in a tiny block for uniform handling.
+        let expr = self.parse_ternary(engine, ExprContext::Default)?;
         vec![Stmt::Expr(expr)]
       };
 
@@ -1409,6 +1519,7 @@ impl Parser {
         }
 
         let mut paths = Vec::<String>::new();
+        // Seed the fully-qualified path with namespace and variant names.
         paths.push(struct_name.lexeme);
         paths.push(path_name.lexeme);
 
@@ -1452,6 +1563,7 @@ impl Parser {
         })
       },
       TokenKind::LeftBrace => {
+        // Struct-style destructuring: `Foo { .. }`.
         let path_struct = self.parse_struct_pattern(engine)?;
         return Ok(Pattern::Struct {
           name: struct_name.lexeme,
@@ -1507,6 +1619,7 @@ impl Parser {
     engine: &mut DiagnosticEngine,
   ) -> Result<Pattern, ()> {
     if self.peek().kind == TokenKind::DotDot {
+      // Interpret `start..=end` as a closed range pattern.
       self.advance(engine); // consume the literal start
       let start = Expr::Integer {
         value: token.lexeme.parse().unwrap(),
@@ -1515,12 +1628,13 @@ impl Parser {
 
       self.expect(TokenKind::DotDot, engine)?; // consume the ".."
       self.expect(TokenKind::Equal, engine)?; // consume the "="
-      let end = self.parse_primary(engine)?;
+      let end = self.parse_primary(engine, ExprContext::Default)?;
 
       return Ok(Pattern::Range { start, end });
     }
 
-    let expr = self.parse_primary(engine)?;
+    // Fallback to a simple literal pattern when no range operator is present.
+    let expr = self.parse_primary(engine, ExprContext::Default)?;
     Ok(Pattern::Literal(expr))
   }
 
@@ -1535,7 +1649,12 @@ impl Parser {
 
     while !self.is_eof() && self.current_token().kind != TokenKind::RightParen {
       if self.current_token().kind == TokenKind::Underscore {
-        self.advance(engine); // consume '_' wildcard
+        // Allow `_` placeholders to short-circuit parsing for the current slot.
+        self.advance(engine);
+        fields.push(Pattern::Wildcard);
+        if self.current_token().kind == TokenKind::Comma {
+          self.advance(engine);
+        }
         continue;
       }
 

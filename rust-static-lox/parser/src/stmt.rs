@@ -20,6 +20,12 @@ pub enum Stmt {
     else_branch: Option<Vec<Stmt>>,
     span: Span,
   },
+
+  While {
+    condition: Box<Expr>,
+    body: Vec<Stmt>,
+    span: Span,
+  },
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -138,6 +144,11 @@ impl fmt::Display for Stmt {
           condition, then_branch, else_branch
         )
       },
+      Stmt::While {
+        condition, body, ..
+      } => {
+        write!(f, "While(condition: {}, body: {:?})", condition, body)
+      },
     }
   }
 }
@@ -239,6 +250,17 @@ impl Stmt {
           for stmt in else_branch {
             stmt.build_tree(&else_prefix, true);
           }
+        }
+      },
+      Stmt::While {
+        condition, body, ..
+      } => {
+        println!("{}{}While", prefix, connector);
+        condition.build_tree(&new_prefix, true);
+        println!("{}{}body:", new_prefix, "└── ");
+        let body_prefix = format!("{}    ", new_prefix);
+        for stmt in body {
+          stmt.build_tree(&body_prefix, true);
         }
       },
     }

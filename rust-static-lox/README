@@ -7,6 +7,10 @@ There is a [plan](./plan.md) for this language, so do not worry.
 
 Change Log
 ----------
+2025-11-02
+- Documented parser internals with targeted inline comments and clarified expression-context threading throughout the recursive-descent helpers.
+- Fixed expression parsing to propagate the `ExprContext` parameter correctly so contextual constructs (objects, discriminants, guards) honor surrounding grammar rules.
+
 2025-11-01
 - Expanded the grammar with tuple literals/expressions, tuple pattern destructuring, and unified handling for `let`/`const` declarations across lexer and parser.
 - Introduced comprehensive pattern matching and lambda expression support, covering anonymous functions and match arms.
