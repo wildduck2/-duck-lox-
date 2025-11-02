@@ -175,6 +175,10 @@ impl Parser {
   fn parse_declaration(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     match self.current_token().kind {
       TokenKind::Let | TokenKind::Const => self.parse_variable_declaration(engine),
+      TokenKind::LeftBrace => {
+        let stmt = self.parse_block(engine)?;
+        Ok(Stmt::Block(stmt))
+      },
       _ => self.parse_stmt(engine),
     }
   }

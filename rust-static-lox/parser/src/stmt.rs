@@ -6,6 +6,7 @@ use crate::expr::Expr;
 #[derive(Debug, Clone)]
 pub enum Stmt {
   Expr(Expr),
+
   Decl {
     name: String,
     kind: DeclKind, // Let | Const
@@ -14,6 +15,7 @@ pub enum Stmt {
     is_mutable: bool,
     span: Span,
   },
+
   If {
     condition: Box<Expr>,
     then_branch: Vec<Stmt>,
@@ -26,6 +28,8 @@ pub enum Stmt {
     body: Vec<Stmt>,
     span: Span,
   },
+
+  Block(Vec<Stmt>),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -149,6 +153,9 @@ impl fmt::Display for Stmt {
       } => {
         write!(f, "While(condition: {}, body: {:?})", condition, body)
       },
+      Stmt::Block(stmts) => {
+        write!(f, "Block({:?})", stmts)
+      },
     }
   }
 }
@@ -160,14 +167,17 @@ impl Stmt {
 
   pub fn build_tree(&self, prefix: &str, is_last: bool) {
     let connector = if is_last { "└── " } else { "├── " };
-    let extension = if is_last { "    " } else { "│   " };
-    let new_prefix = format!("{}{}", prefix, extension);
+    println!("{}{}{}", prefix, connector, self.label());
+
+    let new_prefix = format!("{}{}", prefix, if is_last { "    " } else { "│   " });
 
     match self {
+      // ───────────────────────────────
       Stmt::Expr(expr) => {
-        println!("{}{}ExprStmt", prefix, connector);
         expr.build_tree(&new_prefix, true);
       },
+
+      // ───────────────────────────────
       Stmt::Decl {
         name,
         kind,
@@ -176,93 +186,88 @@ impl Stmt {
         is_mutable,
         ..
       } => {
-        println!("{}{}Decl({:?})", prefix, connector, kind);
-
-        // Count how many children we have
-        let has_type = type_annotation.is_some();
-        let has_init = initializer.is_some();
-        let total_fields = 2 + (if has_type { 1 } else { 0 }) + (if has_init { 1 } else { 0 });
-        let mut field_count = 0;
-
-        field_count += 1;
-        let is_last_field = field_count == total_fields && !has_init;
-        println!(
-          "{}{}name: {}",
-          new_prefix,
-          if is_last_field {
-            "└── "
-          } else {
-            "├── "
-          },
-          name
-        );
-
-        field_count += 1;
-        let is_last_field = field_count == total_fields && !has_init;
-        println!(
-          "{}{}mutable: {}",
-          new_prefix,
-          if is_last_field {
-            "└── "
-          } else {
-            "├── "
-          },
-          is_mutable
-        );
-
+        let mut fields = Vec::new();
+        fields.push(format!("name: {}", name));
+        fields.push(format!("mutable: {}", is_mutable));
         if let Some(ty) = type_annotation {
-          field_count += 1;
-          let is_last_field = field_count == total_fields && !has_init;
-          println!(
-            "{}{}type: {}",
-            new_prefix,
-            if is_last_field {
-              "└── "
-            } else {
-              "├── "
-            },
-            ty
-          );
+          fields.push(format!("type: {}", ty));
         }
 
+        // Print all fields except initializer
+        for (i, field) in fields.iter().enumerate() {
+          let last = i == fields.len() - 1 && initializer.is_none();
+          let conn = if last { "└── " } else { "├── " };
+          println!("{}{}{}", new_prefix, conn, field);
+        }
+
+        // Handle initializer if present
         if let Some(init) = initializer {
-          println!("{}{}initializer:", new_prefix, "└── ");
-          let init_prefix = format!("{}    ", new_prefix);
-          init.build_tree(&init_prefix, true);
+          println!("{}└── initializer:", new_prefix);
+          init.build_tree(&format!("{}    ", new_prefix), true);
         }
       },
+
+      // ───────────────────────────────
       Stmt::If {
         condition,
         then_branch,
         else_branch,
         ..
       } => {
-        println!("{}{}If", prefix, connector);
-        condition.build_tree(&new_prefix, true);
-        println!("{}{}then_branch:", new_prefix, "└── ");
-        let then_prefix = format!("{}    ", new_prefix);
-        for stmt in then_branch {
-          stmt.build_tree(&then_prefix, true);
+        // Condition
+        println!("{}├── condition:", new_prefix);
+        condition.build_tree(&format!("{}│   ", new_prefix), true);
+
+        // Then branch
+        println!("{}├── then_branch:", new_prefix);
+        let then_prefix = format!("{}│   ", new_prefix);
+        for (i, stmt) in then_branch.iter().enumerate() {
+          stmt.build_tree(
+            &then_prefix,
+            i == then_branch.len() - 1 && else_branch.is_none(),
+          );
         }
+
+        // Else branch (optional)
         if let Some(else_branch) = else_branch {
-          println!("{}{}else_branch:", new_prefix, "└── ");
+          println!("{}└── else_branch:", new_prefix);
           let else_prefix = format!("{}    ", new_prefix);
-          for stmt in else_branch {
-            stmt.build_tree(&else_prefix, true);
+          for (i, stmt) in else_branch.iter().enumerate() {
+            stmt.build_tree(&else_prefix, i == else_branch.len() - 1);
           }
         }
       },
+
+      // ───────────────────────────────
       Stmt::While {
         condition, body, ..
       } => {
-        println!("{}{}While", prefix, connector);
-        condition.build_tree(&new_prefix, true);
-        println!("{}{}body:", new_prefix, "└── ");
+        println!("{}├── condition:", new_prefix);
+        condition.build_tree(&format!("{}│   ", new_prefix), true);
+
+        println!("{}└── body:", new_prefix);
         let body_prefix = format!("{}    ", new_prefix);
-        for stmt in body {
-          stmt.build_tree(&body_prefix, true);
+        for (i, stmt) in body.iter().enumerate() {
+          stmt.build_tree(&body_prefix, i == body.len() - 1);
         }
       },
+
+      // ───────────────────────────────
+      Stmt::Block(stmts) => {
+        for (i, stmt) in stmts.iter().enumerate() {
+          stmt.build_tree(&new_prefix, i == stmts.len() - 1);
+        }
+      },
+    }
+  }
+
+  fn label(&self) -> String {
+    match self {
+      Stmt::Expr(_) => "ExprStmt".to_string(),
+      Stmt::Decl { kind, .. } => format!("Decl({:?})", kind),
+      Stmt::If { .. } => "If".to_string(),
+      Stmt::While { .. } => "While".to_string(),
+      Stmt::Block(_) => "Block".to_string(),
     }
   }
 }
