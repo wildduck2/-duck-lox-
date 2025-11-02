@@ -219,41 +219,54 @@ impl Parser {
     Ok(lhs)
   }
 
+  // expression     → assignment ;
+  // assignment     → ( call "." )? IDENTIFIER "=" assignment | logicOr ;
+
   /// Parses assignment expressions and verifies the left side is assignable.
   fn parse_assignment(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let token = self.current_token();
-    let lhs = self.parse_ternary(engine)?;
+
+    let lhs = self.parse_call(engine)?;
 
     if !self.is_eof() && matches!(self.current_token().kind, TokenKind::Equal) {
-      self.advance(engine);
+      self.advance(engine); // consume the '='
       let rhs = self.parse_assignment(engine)?;
 
-      if let Expr::Identifier { name: _, span } = lhs.clone() {
-        // Assignment succeeds only when the left-hand side is an identifier.
-        self.expect(TokenKind::Semicolon, engine)?; // enforce trailing ';' for now
-        return Ok(Expr::Assign {
-          target: Box::new(lhs),
-          value: Box::new(rhs),
-          span,
-        });
-      } else {
-        let diagnostic = Diagnostic::new(
-          DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
-          "Expected identifier after '='".to_string(),
-          "duck.lox".to_string(),
-        )
-        .with_label(
-          Span::new(token.span.line + 1, token.span.col + 1, token.span.len),
-          Some("expected identifier here".to_string()),
-          LabelStyle::Primary,
-        )
-        .with_help("use '=' for assignment".to_string());
+      match rhs.clone() {
+        Expr::Integer { value: _, span }
+        | Expr::Nil { span }
+        | Expr::Float { value: _, span }
+        | Expr::Bool { value: _, span }
+        | Expr::String { value: _, span }
+        | Expr::Identifier { name: _, span } => {
+          // Assignment succeeds only when the left-hand side is an identifier.
+          self.expect(TokenKind::Semicolon, engine)?; // enforce trailing ';' for now
+          return Ok(Expr::Assign {
+            target: Box::new(lhs),
+            value: Box::new(rhs),
+            span,
+          });
+        },
+        _ => {
+          let diagnostic = Diagnostic::new(
+            DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+            "Expected identifier after '='".to_string(),
+            "duck.lox".to_string(),
+          )
+          .with_label(
+            Span::new(token.span.line + 1, token.span.col + 1, token.span.len),
+            Some("expected identifier here".to_string()),
+            LabelStyle::Primary,
+          )
+          .with_help("use '=' for assignment".to_string());
 
-        engine.add(diagnostic);
+          engine.add(diagnostic);
 
-        // Abort this production so the caller can attempt recovery.
-        return Err(());
+          // Abort this production so the caller can attempt recovery.
+          return Err(());
+        },
       }
+
       // NOTE: please check this later when we sclare the parser
       // } else if !self.is_eof()
       //   && !matches!(self.current_token().kind, TokenKind::Semicolon)
@@ -545,19 +558,59 @@ impl Parser {
 
   /// Parses function calls and dotted access chains.
   fn parse_call(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let callee = self.parse_primary(engine)?;
+    let mut callee = self.parse_primary(engine)?;
 
-    if !self.is_eof() && matches!(self.current_token().kind, TokenKind::LeftParen) {
-      let token = self.current_token();
-      self.advance(engine); // consume the "("
-      let args = self.parser_arguments(engine)?;
+    while !self.is_eof() {
+      if matches!(self.current_token().kind, TokenKind::LeftParen) {
+        let token = self.current_token();
+        self.advance(engine); // consume the "("
 
-      // Record the call along with the source span of the opening parenthesis.
-      return Ok(Expr::Call {
-        callee: Box::new(callee),
-        args,
-        span: token.span,
-      });
+        let mut args = Vec::<Expr>::new();
+        while !self.is_eof() && self.current_token().kind != TokenKind::RightParen {
+          let expr = self.parse_assignment(engine)?;
+          args.push(expr);
+
+          if self.current_token().kind != TokenKind::Comma {
+            break;
+          }
+          self.advance(engine); // consume the ","
+        }
+
+        self.expect(TokenKind::RightParen, engine)?; // consume the ")"
+
+        callee = Expr::Call {
+          callee: Box::new(callee),
+          args,
+          span: token.span,
+        };
+      } else if matches!(self.current_token().kind, TokenKind::Dot) {
+        self.advance(engine); // consume the "."
+        let token = self.current_token();
+        self.advance(engine); // consume the "token"
+
+        let field = if matches!(token.kind, TokenKind::Identifier) {
+          token.lexeme
+        } else {
+          return Err(());
+        };
+
+        callee = Expr::Member {
+          object: Box::new(callee),
+          field,
+          span: token.span,
+        };
+      } else if matches!(self.current_token().kind, TokenKind::LeftBracket) {
+        let token = self.current_token();
+        let index = self.parse_primary(engine)?;
+
+        callee = Expr::Index {
+          object: Box::new(callee),
+          index: Box::new(index),
+          span: token.span,
+        }
+      } else {
+        break;
+      }
     }
 
     Ok(callee)

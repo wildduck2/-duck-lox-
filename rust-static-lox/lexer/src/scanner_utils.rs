@@ -68,12 +68,9 @@ impl Lexer {
     if self.match_char(self.peek(), '.') {
       self.advance(); // consume the '..'
       return Some(TokenKind::DotDot);
-    } else if self.get_current_lexeme() == "." {
-      self.advance(); // consume the '.'
-      return Some(TokenKind::Dot);
-    } else {
-      return None;
     }
+
+    return Some(TokenKind::Dot);
   }
 
   /// Lexes `/`, distinguishing between division tokens and comment delimiters.
