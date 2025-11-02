@@ -14,10 +14,10 @@ pub enum Stmt {
     is_mutable: bool,
     span: Span,
   },
-  ConstDecl {
-    name: String,
-    type_annotation: Option<Type>,
-    initializer: Option<Expr>,
+  If {
+    condition: Box<Expr>,
+    then_branch: Vec<Stmt>,
+    else_branch: Option<Vec<Stmt>>,
     span: Span,
   },
 }
@@ -126,24 +126,16 @@ impl fmt::Display for Stmt {
             .unwrap_or_else(|| "none".to_string())
         )
       },
-      Stmt::ConstDecl {
-        name,
-        type_annotation,
-        initializer,
+      Stmt::If {
+        condition,
+        then_branch,
+        else_branch,
         ..
       } => {
         write!(
           f,
-          "ConstDecl(name: {}, type: {}, init: {})",
-          name,
-          type_annotation
-            .as_ref()
-            .map(|t| t.to_string())
-            .unwrap_or_else(|| "none".to_string()),
-          initializer
-            .as_ref()
-            .map(|e| e.to_string())
-            .unwrap_or_else(|| "none".to_string())
+          "If(condition: {}, then_branch: {:?}, else_branch: {:?})",
+          condition, then_branch, else_branch
         )
       },
     }
@@ -228,51 +220,25 @@ impl Stmt {
           init.build_tree(&init_prefix, true);
         }
       },
-      Stmt::ConstDecl {
-        name,
-        type_annotation,
-        initializer,
+      Stmt::If {
+        condition,
+        then_branch,
+        else_branch,
         ..
       } => {
-        println!("{}{}ConstDecl", prefix, connector);
-
-        let has_type = type_annotation.is_some();
-        let has_init = initializer.is_some();
-        let total_fields = 1 + (if has_type { 1 } else { 0 }) + (if has_init { 1 } else { 0 });
-        let mut field_count = 0;
-
-        field_count += 1;
-        let is_last_field = field_count == total_fields && !has_init;
-        println!(
-          "{}{}name: {}",
-          new_prefix,
-          if is_last_field {
-            "└── "
-          } else {
-            "├── "
-          },
-          name
-        );
-
-        if let Some(ty) = type_annotation {
-          field_count += 1;
-          let is_last_field = field_count == total_fields && !has_init;
-          println!(
-            "{}{}type: {}",
-            new_prefix,
-            if is_last_field {
-              "└── "
-            } else {
-              "├── "
-            },
-            ty
-          );
+        println!("{}{}If", prefix, connector);
+        condition.build_tree(&new_prefix, true);
+        println!("{}{}then_branch:", new_prefix, "└── ");
+        let then_prefix = format!("{}    ", new_prefix);
+        for stmt in then_branch {
+          stmt.build_tree(&then_prefix, true);
         }
-
-        if let Some(init) = initializer {
-          println!("{}{}initializer:", new_prefix, "└── ");
-          let init_prefix = format!("{}    ", new_prefix);
-          init.build_tree(&init_prefix, true);
+        if let Some(else_branch) = else_branch {
+          println!("{}{}else_branch:", new_prefix, "└── ");
+          let else_prefix = format!("{}    ", new_prefix);
+          for stmt in else_branch {
+            stmt.build_tree(&else_prefix, true);
+          }
         }
       },
     }

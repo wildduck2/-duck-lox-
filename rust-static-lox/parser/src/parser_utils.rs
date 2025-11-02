@@ -182,6 +182,7 @@ impl Parser {
       _ => {
         // Fallback to an expression statement when no declaration keyword is found.
         let expr = self.parse_expr_stmt(engine)?;
+        // NOTE: i need to handle the semicolon here
         Ok(Stmt::Expr(expr))
       },
     }
@@ -192,7 +193,34 @@ impl Parser {
   /* --------------------------------------------------------------------------------------------*/
 
   fn parse_if_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
-    Err(())
+    let token = self.current_token();
+    self.advance(engine); // consume the 'if' token
+    let condition = self.parse_expr_stmt(engine)?;
+    let then_branch = self.parse_block(engine)?;
+
+    if !matches!(self.current_token().kind, TokenKind::Else) {
+      return Ok(Stmt::If {
+        condition: Box::new(condition),
+        then_branch,
+        else_branch: None,
+        span: token.span,
+      });
+    }
+
+    self.expect(TokenKind::Else, engine)?;
+
+    let else_branch = if matches!(self.current_token().kind, TokenKind::If) {
+      vec![self.parse_if_stmt(engine)?]
+    } else {
+      self.parse_block(engine)?
+    };
+
+    Ok(Stmt::If {
+      condition: Box::new(condition),
+      then_branch,
+      else_branch: Some(else_branch),
+      span: token.span,
+    })
   }
 
   /* -------------------------------------------------------------------------------------------- */
@@ -990,7 +1018,7 @@ impl Parser {
     let mut stmts = Vec::<Stmt>::new();
 
     while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::RightBrace) {
-      let stmt = self.parse_stmt(engine)?;
+      let stmt = self.parse_declaration(engine)?;
       stmts.push(stmt);
     }
     self.expect(TokenKind::RightBrace, engine)?; // consume '}'
