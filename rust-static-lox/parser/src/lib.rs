@@ -17,6 +17,8 @@ pub struct Parser {
   pub tokens: Vec<Token>,
   pub ast: Vec<Stmt>,
   pub current: usize,
+  pub is_in_if: bool,
+  pub is_in_match: bool,
 }
 
 impl Parser {
@@ -31,6 +33,8 @@ impl Parser {
       tokens,
       ast: Vec::new(),
       current: 0,
+      is_in_if: false,
+      is_in_match: false,
     }
   }
 

@@ -179,6 +179,7 @@ impl Parser {
   fn parse_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     match self.current_token().kind {
       TokenKind::If => self.parse_if_stmt(engine),
+      TokenKind::While => self.parse_whie_stmt(engine),
       _ => {
         // Fallback to an expression statement when no declaration keyword is found.
         let expr = self.parse_expr_stmt(engine)?;
@@ -192,10 +193,20 @@ impl Parser {
   /*                                         If Statement                                        */
   /* --------------------------------------------------------------------------------------------*/
 
+  fn parse_whie_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    Err(())
+  }
+
+  /* --------------------------------------------------------------------------------------------*/
+  /*                                         If Statement                                        */
+  /* --------------------------------------------------------------------------------------------*/
+
   fn parse_if_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    self.is_in_if = true;
     let token = self.current_token();
     self.advance(engine); // consume the 'if' token
     let condition = self.parse_expr_stmt(engine)?;
+    self.is_in_if = false;
     let then_branch = self.parse_block(engine)?;
 
     if !matches!(self.current_token().kind, TokenKind::Else) {
@@ -870,22 +881,6 @@ impl Parser {
         })
       },
 
-      // handle the case where the token is a keyword
-      TokenKind::Identifier => {
-        self.advance(engine); // consume this token
-        if self.current_token().kind == TokenKind::LeftBrace
-          && self.tokens[self.current - 2].kind != TokenKind::Match
-        {
-          return self.parse_object(token, engine);
-        }
-
-        // handle the case where object is declared
-        Ok(Expr::Identifier {
-          name: token.lexeme,
-          span: token.span,
-        })
-      },
-
       // handle the case where lambda is declared
       TokenKind::Fn => self.parse_lambda(engine),
 
@@ -897,6 +892,22 @@ impl Parser {
 
       // handle the case where match is declared
       TokenKind::Match => self.parse_match(engine),
+
+      // handle the case where the token is a keyword
+      TokenKind::Identifier => {
+        self.advance(engine); // consume this token
+
+        if self.current_token().kind == TokenKind::LeftBrace && !self.is_in_if && !self.is_in_match
+        {
+          return self.parse_object(token, engine);
+        }
+
+        // handle the case where object is declared
+        Ok(Expr::Identifier {
+          name: token.lexeme,
+          span: token.span,
+        })
+      },
 
       // handle any other token
       _ => {
@@ -1210,6 +1221,7 @@ impl Parser {
   /* --------------------------------------------------------------------------------------------*/
 
   fn parse_match(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    self.is_in_match = true;
     self.expect(TokenKind::Match, engine)?; // consume the "match"
     let expr = self.parse_primary(engine)?; // expression being matched
 
@@ -1230,11 +1242,13 @@ impl Parser {
       );
 
       engine.add(diagnostic);
+      self.is_in_match = false;
       return Err(());
     }
 
     self.expect(TokenKind::RightBrace, engine)?; // consume '}'
 
+    self.is_in_match = false;
     Ok(Expr::Match {
       expr: Box::new(expr),
       arms,
