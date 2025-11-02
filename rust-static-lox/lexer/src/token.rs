@@ -92,9 +92,11 @@ pub enum TokenKind {
   DotDot,       // ..
   Comma,        // ,
   Colon,        // :
+  ColonColon,   // ::
   Semicolon,    // ;
   Question,     // ?
   Underscore,   // _
+  FatArrow,     // ->
 
   // 5️⃣ Comments
   SingleLineComment, // //

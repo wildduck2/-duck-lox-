@@ -1,11 +1,8 @@
-// User.name.hello.world
-// Uuser[name][hello][world]
-//user(1, 2, 3).hello.world[1][2][3]
-//user.name = "Alice";
-//user.name = 1.94;
-//user.name = 100;
-//user.name = x;
-//user.name = true;
-//user.name = false;
 
+
+let x = match value {
+  0 => "zero",
+  1 => "one",
+  _ => "other",  
+};
 

@@ -14,6 +14,7 @@ pub enum DiagnosticError {
   MissingClosingParen,
   WrongNumberOfArguments,
   MissingClosingBracket,
+  EmptyMatch,
 }
 
 impl DiagnosticError {
@@ -31,6 +32,7 @@ impl DiagnosticError {
       Self::MissingClosingParen => "E0605",
       Self::WrongNumberOfArguments => "E0606",
       Self::MissingClosingBracket => "E0607",
+      Self::EmptyMatch => "E0608",
     }
   }
 

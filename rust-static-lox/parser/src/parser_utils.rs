@@ -1,51 +1,137 @@
 /*!
-
 ### Grammar (BNF-style)
 
-program        → declaration* EOF ;
+program          → declaration* EOF ;
 
-declaration    → varDecl | fnDecl | structDecl | traitDecl | implBlock | statement ;
+// Declarations
+declaration      → varDecl
+                 | constDecl
+                 | fnDecl
+                 | structDecl
+                 | traitDecl
+                 | implBlock
+                 | statement ;
 
-varDecl        → ("let" | "const") IDENTIFIER ( ":" type )? ( "=" expression )? ";" ;
+varDecl          → "let" "mut"? IDENTIFIER ( ":" type )? "=" expression ";" ;
+constDecl        → "const" IDENTIFIER ":" type "=" expression ";" ;
 
-fnDecl         → "fn" IDENTIFIER "(" parameters? ")" "->" type block ;
-structDecl     → "struct" IDENTIFIER "{" fields "}" ;
-traitDecl      → "trait" IDENTIFIER "{" fnSignatures "}" ;
-implBlock      → "impl" IDENTIFIER ("for" IDENTIFIER)? "{" fnDecl* "}" ;
+fnDecl           → "fn" IDENTIFIER "(" parameters? ")" ( "->" type )? block ;
+parameters       → parameter ( "," parameter )* ;
+parameter        → IDENTIFIER ":" type ( "=" expression )? ;
 
-statement      → exprStmt | ifStmt | whileStmt | forStmt | returnStmt | block ;
+structDecl       → "struct" IDENTIFIER "{" fields? "}" ;
+fields           → field ( "," field )* ","? ;
+field            → IDENTIFIER ":" type ( "=" expression )? ;
 
-exprStmt       → expression ";" ;
-ifStmt         → "if" expression block ( "else" block )? ;
-whileStmt      → "while" expression block ;
-forStmt        → "for" IDENTIFIER "in" expression block ;
-returnStmt     → "return" expression? ";" ;
-block          → "{" declaration* "}" ;
+traitDecl        → "trait" IDENTIFIER "{" fnSignatures "}" ;
+fnSignatures     → fnSignature* ;
+fnSignature      → "fn" IDENTIFIER "(" parameters? ")" ( "->" type )? ";" ;
 
-expression     → assignment ;
-assignment     → ( call "." )? IDENTIFIER "=" assignment | logicOr ;
-logicOr        → logicAnd ( "or" logicAnd )* ;
-logicAnd       → equality ( "and" equality )* ;
-equality       → comparison ( ( "==" | "!=" ) comparison )* ;
-comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
-term           → factor ( ( "+" | "-" ) factor )* ;
-factor         → unary ( ( "*" | "/" | "%" ) unary )* ;
-unary          → ( "!" | "-" ) unary | call ;
-call           → primary ( "(" arguments? ")" | "." IDENTIFIER | "[" expression "]" )* ;
+implBlock        → "impl" IDENTIFIER ( "for" IDENTIFIER )? "{" fnDecl* "}" ;
 
-primary        → INTEGER | FLOAT | STRING | "true" | "false" | "nil"
-               | IDENTIFIER
-               | "(" tupleOrGrouping ")"
-               | array | object | lambda | match ;
+// Statements
+statement        → exprStmt
+                 | ifStmt
+                 | whileStmt
+                 | forStmt
+                 | returnStmt
+                 | breakStmt
+                 | continueStmt
+                 | block ;
 
-tupleOrGrouping → expression ( "," expression )* ;
+exprStmt         → expression ";" ;
+ifStmt           → "if" expression block ( "else" ( ifStmt | block ) )? ;
+whileStmt        → "while" expression block ;
+forStmt          → "for" IDENTIFIER "in" expression block ;
+returnStmt       → "return" expression? ";" ;
+breakStmt        → "break" ";" ;
+continueStmt     → "continue" ";" ;
+block            → "{" declaration* "}" ;
 
-type           → "int" | "float" | "string" | "bool" | "void"
-               | "[" type "]"
-               | "(" type ( "," type )* ")" "->" type
-               | IDENTIFIER
-               | IDENTIFIER "<" type ( "," type )* ">" ;
+// Expressions
+expression       → assignment ;
 
+assignment       → assignable "=" assignment | ternary ;
+assignable       → IDENTIFIER
+                 | call "." IDENTIFIER
+                 | call "[" expression "]" ;
+
+ternary          → logicOr ( "?" expression ":" ternary )? ;
+logicOr          → logicAnd ( "or" logicAnd )* ;
+logicAnd         → equality ( "and" equality )* ;
+equality         → comparison ( ( "==" | "!=" ) comparison )* ;
+comparison       → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
+term             → factor ( ( "+" | "-" ) factor )* ;
+factor           → power ( ( "*" | "/" | "%" ) power )* ;
+power            → unary ( "^" unary )* ;
+unary            → ( "!" | "-" ) unary | call ;
+
+call             → primary ( "(" arguments? ")"
+                 | "." IDENTIFIER
+                 | "[" expression "]" )* ;
+
+arguments        → expression ( "," expression )* ","? ;
+
+primary          → INTEGER
+                 | FLOAT
+                 | STRING
+                 | "true"
+                 | "false"
+                 | "nil"
+                 | IDENTIFIER
+                 | "(" tupleOrGrouping ")"
+                 | "[" arrayElements? "]"
+                 | object
+                 | lambda
+                 | match ;
+
+tupleOrGrouping  → expression ( "," expression )* ","? ;
+arrayElements    → expression ( "," expression )* ","? ;
+
+object           → IDENTIFIER "{" objectFields? "}" ;
+objectFields     → IDENTIFIER ":" expression ( "," IDENTIFIER ":" expression )* ","? ;
+
+lambda           → "fn" "(" parameters? ")" ( "->" type )? block ;
+
+match            → "match" expression "{" matchArm* "}" ;
+matchArm         → pattern ( "if" expression )? "=>" ( block | expression "," ) ;
+
+// Patterns
+pattern          → orPattern ;
+orPattern        → singlePattern ( "|" singlePattern )* ;
+singlePattern    → wildcardPattern
+                 | literalPattern
+                 | rangePattern
+                 | identifierPattern
+                 | tuplePattern
+                 | arrayPattern
+                 | structPattern
+                 | tupleStructPattern
+                 | pathPattern ;
+
+wildcardPattern     → "_" ;
+literalPattern      → INTEGER | FLOAT | STRING | "true" | "false" | "nil" ;
+rangePattern        → expression ".." expression ;
+identifierPattern   → IDENTIFIER ;
+tuplePattern        → "(" pattern ( "," pattern )* ","? ")" ;
+arrayPattern        → "[" pattern ( "," pattern )* ","? "]" ;
+structPattern       → IDENTIFIER "{" structPatternFields? "}" ;
+structPatternFields → IDENTIFIER ( ":" pattern )? ( "," IDENTIFIER ( ":" pattern )? )* ","? ;
+tupleStructPattern  → IDENTIFIER "(" pattern ( "," pattern )* ","? ")" ;
+pathPattern         → IDENTIFIER ( "::" IDENTIFIER )+ ( "(" pattern ( "," pattern )* ","? ")" )? ;
+
+// Types
+type             → primitiveType
+                 | arrayType
+                 | tupleType
+                 | fnType
+                 | namedType ;
+
+primitiveType    → "int" | "float" | "string" | "bool" | "void" | "nil" ;
+arrayType        → "[" type "]" ;
+tupleType        → "(" type ( "," type )* ","? ")" ;
+fnType           → "fn" "(" ( type ( "," type )* )? ")" ( "->" type )? ;
+namedType        → IDENTIFIER ( "<" type ( "," type )* ">" )? ;
 
 */
 
@@ -90,10 +176,15 @@ impl Parser {
       _ => {
         // Fallback to an expression statement when no declaration keyword is found.
         let expr = self.parse_expr(engine)?;
+
         Ok(Stmt::Expr(expr))
       },
     }
   }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Variable Declaration                                 */
+  /* -------------------------------------------------------------------------------------------- */
 
   fn parse_variable_declaration(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     let declaration_kind = self.current_token();
@@ -193,40 +284,61 @@ impl Parser {
     })
   }
 
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Expr                                                 */
+  /* -------------------------------------------------------------------------------------------- */
+
   /// Parses a general expression entrypoint.
-  fn parse_expr(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    self.parse_comma(engine)
+  pub fn parse_expr(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let expr = self.parse_comma(engine)?;
+
+    Ok(expr)
   }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Comma                                                */
+  /* -------------------------------------------------------------------------------------------- */
 
   /// Parses comma-separated expressions, emitting `Expr::Binary` nodes.
   fn parse_comma(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let mut lhs = self.parse_assignment(engine)?;
+    let token = self.current_token();
+    let mut expressions = Vec::<Expr>::new();
+    let lhs = self.parse_assignment(engine)?;
+    expressions.push(lhs);
 
-    // TODO: Re-enable once comma expressions are fully defined in the grammar.
-    // while !self.is_eof() || !matches!(self.current_token().kind, TokenKind::Comma) {
-    //   let token = self.current_token();
-    //
-    //   match token.kind {
-    //     TokenKind::Comma => {
-    //       self.advance(engine);
-    //
-    //       let rhs = self.parse_assignment(engine)?;
-    //     },
-    //     _ => break,
-    //   }
-    // }
+    while !self.is_eof() || matches!(self.current_token().kind, TokenKind::Comma) {
+      let token = self.current_token();
 
-    Ok(lhs)
+      match token.kind {
+        TokenKind::Comma => {
+          self.advance(engine);
+
+          let rhs = self.parse_assignment(engine)?;
+          expressions.push(rhs);
+        },
+        _ => break,
+      }
+    }
+
+    if expressions.len() == 1 {
+      return Ok(expressions[0].clone());
+    } else {
+      // Multiple expressions represent a tuple literal.
+      return Ok(Expr::Comma {
+        expressions: expressions,
+        span: token.span,
+      });
+    }
   }
 
-  // expression     → assignment ;
-  // assignment     → ( call "." )? IDENTIFIER "=" assignment | logicOr ;
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Assignment                                            */
+  /* -------------------------------------------------------------------------------------------- */
 
   /// Parses assignment expressions and verifies the left side is assignable.
   fn parse_assignment(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let token = self.current_token();
-
-    let lhs = self.parse_call(engine)?;
+    let lhs = self.parse_ternary(engine)?;
 
     if !self.is_eof() && matches!(self.current_token().kind, TokenKind::Equal) {
       self.advance(engine); // consume the '='
@@ -240,7 +352,6 @@ impl Parser {
         | Expr::String { value: _, span }
         | Expr::Identifier { name: _, span } => {
           // Assignment succeeds only when the left-hand side is an identifier.
-          self.expect(TokenKind::Semicolon, engine)?; // enforce trailing ';' for now
           return Ok(Expr::Assign {
             target: Box::new(lhs),
             value: Box::new(rhs),
@@ -266,33 +377,14 @@ impl Parser {
           return Err(());
         },
       }
-
-      // NOTE: please check this later when we sclare the parser
-      // } else if !self.is_eof()
-      //   && !matches!(self.current_token().kind, TokenKind::Semicolon)
-      //   && !matches!(self.current_token().kind, TokenKind::Comma)
-      //   && !matches!(self.current_token().kind, TokenKind::LeftParen)
-      // {
-      //   let diagnostic = Diagnostic::new(
-      //     DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
-      //     "Expected '=' or ';' after identifier, found '='".to_string(),
-      //     "duck.lox".to_string(),
-      //   )
-      //   .with_label(
-      //     Span::new(self.current_token().span.line + 1, 2, 2),
-      //     Some("expected '=' or ';' here".to_string()),
-      //     LabelStyle::Primary,
-      //   )
-      //   .with_help("use '=' for assignment".to_string());
-      //
-      //   engine.add(diagnostic);
-      //
-      //   return Err(());
     }
 
     Ok(lhs)
   }
 
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Ternary                                              */
+  /* -------------------------------------------------------------------------------------------- */
   /// Parses ternary expressions of the form `cond ? a : b`.
   fn parse_ternary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let token = self.current_token();
@@ -356,6 +448,10 @@ impl Parser {
     Ok(condition)
   }
 
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Logical OR                                           */
+  /* -------------------------------------------------------------------------------------------- */
+
   /// Parses logical OR chains (`expr or expr`).
   fn parse_logical_or(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_logical_and(engine)?;
@@ -382,6 +478,10 @@ impl Parser {
     Ok(lhs)
   }
 
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Logical AND                                          */
+  /* -------------------------------------------------------------------------------------------- */
+
   /// Parses logical AND chains (`expr and expr`).
   fn parse_logical_and(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_equality(engine)?;
@@ -407,6 +507,10 @@ impl Parser {
 
     Ok(lhs)
   }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Equality                                             */
+  /* -------------------------------------------------------------------------------------------- */
 
   /// Parses equality comparisons (`==` and `!=`).
   fn parse_equality(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
@@ -438,6 +542,9 @@ impl Parser {
     Ok(lhs)
   }
 
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Relational                                           */
+  /* -------------------------------------------------------------------------------------------- */
   /// Parses relational comparisons (`<`, `<=`, `>`, `>=`).
   fn parse_comparison(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_term(engine)?;
@@ -470,6 +577,9 @@ impl Parser {
     Ok(lhs)
   }
 
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Additive                                             */
+  /* -------------------------------------------------------------------------------------------- */
   /// Parses additive expressions (`+` and `-` sequences).
   fn parse_term(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_factor(engine)?;
@@ -500,6 +610,9 @@ impl Parser {
     Ok(lhs)
   }
 
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Multiplicative                                       */
+  /* -------------------------------------------------------------------------------------------- */
   /// Parses multiplicative expressions (`*`, `/`, `%`).
   fn parse_factor(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_unary(engine)?;
@@ -531,6 +644,9 @@ impl Parser {
     Ok(lhs)
   }
 
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Prefix Unary                                         */
+  /* -------------------------------------------------------------------------------------------- */
   /// Parses prefix unary operators and defers to the next precedence level.
   fn parse_unary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let operator = self.current_token();
@@ -556,26 +672,23 @@ impl Parser {
     }
   }
 
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Call                                                 */
+  /* -------------------------------------------------------------------------------------------- */
   /// Parses function calls and dotted access chains.
   fn parse_call(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let start_token = self.current_token();
     let mut callee = self.parse_primary(engine)?;
 
-    while !self.is_eof() {
+    while !self.is_eof()
+      && start_token.kind == TokenKind::Identifier
+      && start_token.span.line == self.current_token().span.line
+    {
       if matches!(self.current_token().kind, TokenKind::LeftParen) {
         let token = self.current_token();
         self.advance(engine); // consume the "("
 
-        let mut args = Vec::<Expr>::new();
-        while !self.is_eof() && self.current_token().kind != TokenKind::RightParen {
-          let expr = self.parse_assignment(engine)?;
-          args.push(expr);
-
-          if self.current_token().kind != TokenKind::Comma {
-            break;
-          }
-          self.advance(engine); // consume the ","
-        }
-
+        let args = self.parser_arguments(engine)?;
         self.expect(TokenKind::RightParen, engine)?; // consume the ")"
 
         callee = Expr::Call {
@@ -601,7 +714,7 @@ impl Parser {
         };
       } else if matches!(self.current_token().kind, TokenKind::LeftBracket) {
         let token = self.current_token();
-        let index = self.parse_primary(engine)?;
+        let index = self.parse_expr(engine)?;
 
         callee = Expr::Index {
           object: Box::new(callee),
@@ -616,17 +729,21 @@ impl Parser {
     Ok(callee)
   }
 
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Arguments                                            */
+  /* -------------------------------------------------------------------------------------------- */
+
   /// Parses a comma-separated argument list for function calls.
   fn parser_arguments(&mut self, engine: &mut DiagnosticEngine) -> Result<Vec<Expr>, ()> {
     let mut args = Vec::<Expr>::new();
-    let expr = self.parse_assignment(engine)?;
-    args.push(expr);
-
-    while !self.is_eof() && matches!(self.current_token().kind, TokenKind::Comma) {
-      self.advance(engine); // consume the comma
-
-      let expr = self.parse_assignment(engine)?;
+    while !self.is_eof() && self.current_token().kind != TokenKind::RightParen {
+      let expr = self.parse_ternary(engine)?;
       args.push(expr);
+
+      if self.current_token().kind != TokenKind::Comma {
+        break;
+      }
+      self.advance(engine); // consume the ","
     }
 
     if args.len() >= 255 {
@@ -651,18 +768,15 @@ impl Parser {
       return Err(());
     }
 
-    self.expect(TokenKind::RightParen, engine)?; // ensure the argument list is closed
-
     Ok(args)
   }
 
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Primary                                              */
+  /* -------------------------------------------------------------------------------------------- */
+
   /// Parses primary expressions: literals, identifiers, and grouped expressions.
   fn parse_primary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    // primary        → INTEGER | FLOAT | STRING | "true" | "false" | "nil"
-    //                | IDENTIFIER
-    //                | "(" tupleOrGrouping ")"
-    //                | array | object | lambda | match ;
-
     let token = self.current_token();
     match token.kind {
       // handle string literals
@@ -732,15 +846,16 @@ impl Parser {
         })
       },
 
+      // handle the case where lambda is declared
+      TokenKind::Fn => self.parse_lambda(engine),
+
       // handle the case where group is used also for tuple
       TokenKind::LeftParen => self.parse_grouping(engine),
 
       // handle the case where array is declared
       TokenKind::LeftBracket => self.parse_array(engine),
 
-      // handle the case where lambda is declared
-      TokenKind::Fn => self.parse_lambda(engine),
-
+      // handle the case where match is declared
       TokenKind::Match => self.parse_match(engine),
 
       // handle any other token
@@ -767,212 +882,66 @@ impl Parser {
     }
   }
 
-  fn parse_match(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let token = self.expect(TokenKind::Match, engine)?; // consume the "match"
+  /* --------------------------------------------------------------------------------------------*/
+  /*                                         Object                                              */
+  /* --------------------------------------------------------------------------------------------*/
 
-    let expr = self.parse_primary(engine)?; // expression being matched
+  fn parse_object(&mut self, token: Token, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     self.expect(TokenKind::LeftBrace, engine)?; // consume '{'
-    let arms = self.parse_arms(engine)?;
+    let fields = self.parse_object_fields(engine)?;
     self.expect(TokenKind::RightBrace, engine)?; // consume '}'
 
-    // println!(
-    //   "{:#?}",
-    //   Expr::Match {
-    //     expr: Box::new(expr.clone()),
-    //     arms: arms.clone(),
-    //     span: token.span.clone(),
-    //   }
-    // );
-
-    Ok(Expr::Match {
-      expr: Box::new(expr),
-      arms,
+    Ok(Expr::Object {
+      type_name: token.lexeme,
+      fields,
       span: token.span,
     })
   }
 
-  fn parse_arms(&mut self, engine: &mut DiagnosticEngine) -> Result<Vec<MatchArm>, ()> {
-    let mut arms = Vec::<MatchArm>::new();
-
+  fn parse_object_fields(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Vec<(String, Expr)>, ()> {
+    let mut fields = Vec::<(String, Expr)>::new();
     while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::RightBrace) {
-      // Parse the pattern for this arm.
-      let pattern = self.parse_pattern(engine)?;
-
-      let guard = if self.current_token().kind == TokenKind::If {
-        self.advance(engine); // consume 'if'
-        let guard = self.parse_logical_or(engine)?;
-        Some(guard)
-      } else {
-        None
+      let name = self.parse_primary(engine)?;
+      let name = match name {
+        Expr::Identifier { name, .. } => name,
+        _ => {
+          let diagnostic = Diagnostic::new(
+            DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+            "Expected identifier after '{'".to_string(),
+            "duck.lox".to_string(),
+          )
+          .with_label(
+            Span::new(
+              self.current_token().span.line + 1,
+              self.current_token().span.col + 1,
+              self.current_token().span.len,
+            ),
+            Some("expected identifier here".to_string()),
+            LabelStyle::Primary,
+          );
+          engine.add(diagnostic);
+          return Err(());
+        },
       };
 
-      // TODO: make FatArrow a TokenKind
-      self.expect(TokenKind::Equal, engine)?; // consume '='
-      self.expect(TokenKind::Greater, engine)?; // consume '>'
-
-      // Parse body (either block or single expression)
-      let body = if self.current_token().kind == TokenKind::LeftBrace {
-        self.parse_block(engine)?
-      } else {
-        // Single expression - wrap in statement
-        let expr = self.parse_expr(engine)?;
-        vec![Stmt::Expr(expr)]
-      };
-
-      arms.push(MatchArm {
-        pattern,
-        guard,
-        body,
-      });
-
-      // Optional comma between arms
-      if self.current_token().kind == TokenKind::Comma {
-        self.advance(engine); // consume trailing comma separating arms
-      }
-    }
-
-    Ok(arms)
-  }
-
-  fn parse_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
-    // Dispatch through the precedence of pattern constructs.
-    self.parse_or_pattern(engine)
-  }
-
-  fn parse_or_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
-    let mut patterns = vec![self.parse_single_pattern(engine)?];
-
-    while self.current_token().kind == TokenKind::Pipe {
-      self.advance(engine); // consume '|'
-      patterns.push(self.parse_single_pattern(engine)?);
-    }
-
-    if patterns.len() == 1 {
-      Ok(patterns.into_iter().next().unwrap())
-    } else {
-      Ok(Pattern::Or(patterns))
-    }
-  }
-
-  fn parse_single_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
-    let token = self.current_token();
-    match token.kind {
-      // Wildcard: _
-      TokenKind::Underscore => {
-        self.advance(engine); // consume '_'
-        Ok(Pattern::Wildcard)
-      },
-
-      // Literals: 42, "hello", true, false
-      TokenKind::Int
-      | TokenKind::Float
-      | TokenKind::String
-      | TokenKind::True
-      | TokenKind::False
-      | TokenKind::Nil => {
-        if self.peek().kind == TokenKind::DotDot {
-          self.advance(engine); // consume the literal start
-          let start = Expr::Integer {
-            value: token.lexeme.parse().unwrap(),
-            span: token.span,
-          };
-
-          self.expect(TokenKind::DotDot, engine)?; // consume the ".."
-          self.expect(TokenKind::Equal, engine)?; // consume the "="
-          let end = self.parse_primary(engine)?;
-
-          return Ok(Pattern::Range { start, end });
-        }
-
-        let expr = self.parse_primary(engine)?;
-        Ok(Pattern::Literal(expr))
-      },
-
-      TokenKind::LeftParen => self.parse_tuple(engine),
-
-      // Identifier or Struct: x or Person { ... }
-      TokenKind::Identifier => {
-        let struct_name = self.current_token();
-        self.advance(engine); // consume the identifier
-        let mut fields = Vec::<(String, Pattern)>::new();
-
-        if self.current_token().kind == TokenKind::LeftBrace {
-          self.advance(engine); // consume '{'
-          while !self.is_eof() && self.current_token().kind != TokenKind::RightBrace {
-            let field_name = self.current_token();
-            self.advance(engine);
-
-            let field_pattern = if self.current_token().kind == TokenKind::Colon {
-              self.advance(engine); // consume ':'
-              self.parse_pattern(engine)?
-            } else {
-              Pattern::Identifier(field_name.lexeme.clone())
-            };
-
-            fields.push((field_name.lexeme, field_pattern));
-
-            if self.current_token().kind == TokenKind::Comma {
-              self.advance(engine);
-            }
-          }
-
-          self.expect(TokenKind::RightBrace, engine)?;
-          Ok(Pattern::Struct {
-            name: struct_name.lexeme,
-            fields,
-          })
-        } else {
-          Ok(Pattern::Identifier(struct_name.lexeme))
-        }
-      },
-
-      _ => {
-        let diagnostic = Diagnostic::new(
-          DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
-          format!("Unexpected token {:?}", token.lexeme),
-          "duck.lox".to_string(),
-        )
-        .with_label(
-          Span::new(token.span.line + 1, token.span.col + 1, token.span.len),
-          Some(format!(
-            "Expected a primary expression, found {:?}",
-            token.lexeme
-          )),
-          LabelStyle::Primary,
-        );
-
-        engine.add(diagnostic);
-
-        Err(())
-      },
-    }
-  }
-
-  fn parse_tuple(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
-    self.expect(TokenKind::LeftParen, engine)?; // consume '('
-
-    let mut fields = Vec::<Pattern>::new();
-
-    while !self.is_eof() && self.current_token().kind != TokenKind::RightParen {
-      if self.current_token().kind == TokenKind::Underscore {
-        self.advance(engine); // consume '_' wildcard
-        continue;
+      self.expect(TokenKind::Colon, engine)?; // consume ':'
+      let value = self.parse_primary(engine)?;
+      if !matches!(self.current_token().kind, TokenKind::RightBrace) {
+        self.expect(TokenKind::Comma, engine)?; // consume ',' between fields
       }
 
-      let field = self.parse_pattern(engine)?;
-
-      fields.push(field);
-
-      if self.current_token().kind != TokenKind::Comma {
-        break;
-      }
-
-      self.advance(engine); // consume ','
+      fields.push((name, value));
     }
 
-    self.expect(TokenKind::RightParen, engine)?; // consume ')'
-    Ok(Pattern::Tuple(fields))
+    Ok(fields)
   }
+
+  /* --------------------------------------------------------------------------------------------*/
+  /*                                         Lambda                                              */
+  /* --------------------------------------------------------------------------------------------*/
 
   fn parse_lambda(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let token = self.current_token();
@@ -981,15 +950,14 @@ impl Parser {
     self.expect(TokenKind::LeftParen, engine)?; // consume '('
     let params = self.parse_parameters(engine)?;
     self.expect(TokenKind::RightParen, engine)?; // consume ')'
-    let return_type = if matches!(self.current_token().kind, TokenKind::Minus) {
-      // TODO: make FatArrow a TokenKind
-      self.expect(TokenKind::Minus, engine)?; // consume the "-"
-      self.expect(TokenKind::Greater, engine)?; // consume the ">"
+    let return_type = if matches!(self.current_token().kind, TokenKind::FatArrow) {
+      self.expect(TokenKind::FatArrow, engine)?; // consume the "->"
       let r_type = self.parse_type(engine)?;
       Some(r_type)
     } else {
       None
     };
+
     let body = self.parse_block(engine)?;
 
     // Compose the lambda expression from the parsed components.
@@ -1000,6 +968,10 @@ impl Parser {
       span: token.span,
     })
   }
+
+  /* --------------------------------------------------------------------------------------------*/
+  /*                                         Block                                              */
+  /* --------------------------------------------------------------------------------------------*/
 
   fn parse_block(&mut self, engine: &mut DiagnosticEngine) -> Result<Vec<Stmt>, ()> {
     self.expect(TokenKind::LeftBrace, engine)?; // consume '{'
@@ -1013,6 +985,10 @@ impl Parser {
 
     Ok(stmts)
   }
+
+  /* --------------------------------------------------------------------------------------------*/
+  /*                                         Parameters                                            */
+  /* --------------------------------------------------------------------------------------------*/
 
   fn parse_parameters(&mut self, engine: &mut DiagnosticEngine) -> Result<Vec<Param>, ()> {
     let mut params = Vec::<Param>::new();
@@ -1072,52 +1048,77 @@ impl Parser {
     Ok(params)
   }
 
-  fn parse_object(&mut self, token: Token, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    self.expect(TokenKind::LeftBrace, engine)?; // consume '{'
+  /* --------------------------------------------------------------------------------------------*/
+  /*                                         Grouping                                            */
+  /* --------------------------------------------------------------------------------------------*/
 
-    let mut fields = Vec::<(String, Expr)>::new();
+  fn parse_grouping(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let token = self.expect(TokenKind::LeftParen, engine)?; // consume '('
 
-    // Parse fields
-    while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::RightBrace) {
-      let name = self.parse_primary(engine)?;
-      let name = match name {
-        Expr::Identifier { name, .. } => name,
-        _ => {
-          let diagnostic = Diagnostic::new(
-            DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
-            "Expected identifier after '{'".to_string(),
-            "duck.lox".to_string(),
-          )
-          .with_label(
-            Span::new(
-              self.current_token().span.line + 1,
-              self.current_token().span.col + 1,
-              self.current_token().span.len,
-            ),
-            Some("expected identifier here".to_string()),
-            LabelStyle::Primary,
-          );
-          engine.add(diagnostic);
-          return Err(());
-        },
+    let mut tuple = Vec::<Expr>::new();
+    let expr = self.parse_expr(engine)?;
+    tuple.push(expr);
+
+    // parse comma-separated expressions, to handle (1, 2, 3)
+    // if self.current_token().kind == TokenKind::Comma {
+    //   while !self.is_eof() && self.current_token().kind != TokenKind::RightParen {
+    //     self.advance(engine); // consume ','
+    //
+    //     let expr = self.parse_ternary(engine)?;
+    //     tuple.push(expr);
+    //   }
+    // }
+
+    if self.is_eof() || self.current_token().kind != TokenKind::RightParen {
+      let current = self.current_token();
+
+      // For EOF, use the PREVIOUS token's end position
+      let error_span = if self.is_eof() {
+        let prev_token = &self.tokens[self.current - 1];
+        Span {
+          line: prev_token.span.line,
+          col: prev_token.span.col + prev_token.lexeme.len(),
+          len: 1,
+        }
+      } else {
+        current.span.clone()
       };
 
-      self.expect(TokenKind::Colon, engine)?; // consume ':'
-      let value = self.parse_primary(engine)?;
-      if !matches!(self.current_token().kind, TokenKind::RightBrace) {
-        self.expect(TokenKind::Comma, engine)?; // consume ',' between fields
-      }
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::MissingClosingParen),
+        "Expected ')' after expr".to_string(),
+        "duck.lox".to_string(),
+      )
+      .with_label(
+        Span::new(error_span.line + 1, error_span.col + 1, error_span.len),
+        Some("expected ')' here".to_string()),
+        LabelStyle::Primary,
+      );
 
-      fields.push((name, value));
+      engine.add(diagnostic);
+      return Err(());
     }
-    self.expect(TokenKind::RightBrace, engine)?; // consume '}'
 
-    Ok(Expr::Object {
-      type_name: String::from(""),
-      fields,
-      span: token.span,
-    })
+    self.advance(engine); // consume ')'
+
+    if tuple.len() == 1 {
+      // A single expression represents a grouped expression.
+      return Ok(Expr::Grouping {
+        expr: Box::new(tuple[0].clone()),
+        span: token.span,
+      });
+    } else {
+      // Multiple expressions represent a tuple literal.
+      return Ok(Expr::Tuple {
+        elements: tuple,
+        span: token.span,
+      });
+    }
   }
+
+  /* --------------------------------------------------------------------------------------------*/
+  /*                                         Array                                                */
+  /* --------------------------------------------------------------------------------------------*/
 
   fn parse_array(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let token = self.expect(TokenKind::LeftBracket, engine)?; // consume '['
@@ -1174,45 +1175,23 @@ impl Parser {
     }
   }
 
-  fn parse_grouping(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let token = self.expect(TokenKind::LeftParen, engine)?; // consume '('
+  fn parse_match(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    self.expect(TokenKind::Match, engine)?; // consume the "match"
+    let expr = self.parse_primary(engine)?; // expression being matched
 
-    let mut tuple = Vec::<Expr>::new();
-    let expr = self.parse_expr(engine)?;
-    tuple.push(expr);
+    self.expect(TokenKind::LeftBrace, engine)?; // consume '{'
+    let token = self.current_token();
+    let arms = self.parse_arms(engine)?;
 
-    // parse comma-separated expressions, to handle (1, 2, 3)
-    if self.current_token().kind == TokenKind::Comma {
-      while !self.is_eof() && self.current_token().kind != TokenKind::RightParen {
-        self.advance(engine); // consume ','
-        let expr = self.parse_expr(engine)?;
-        tuple.push(expr);
-      }
-    }
-
-    if self.is_eof() || self.current_token().kind != TokenKind::RightParen {
-      let current = self.current_token();
-
-      // For EOF, use the PREVIOUS token's end position
-      let error_span = if self.is_eof() {
-        let prev_token = &self.tokens[self.current - 1];
-        Span {
-          line: prev_token.span.line,
-          col: prev_token.span.col + prev_token.lexeme.len(),
-          len: 1,
-        }
-      } else {
-        current.span.clone()
-      };
-
+    if arms.is_empty() {
       let diagnostic = Diagnostic::new(
-        DiagnosticCode::Error(DiagnosticError::MissingClosingParen),
-        "Expected ')' after expr".to_string(),
+        DiagnosticCode::Error(DiagnosticError::EmptyMatch),
+        "Empty match".to_string(),
         "duck.lox".to_string(),
       )
       .with_label(
-        Span::new(error_span.line + 1, error_span.col + 1, error_span.len),
-        Some("expected ')' here".to_string()),
+        Span::new(token.span.line, token.span.col + 1, token.span.len),
+        Some("Empty match".to_string()),
         LabelStyle::Primary,
       );
 
@@ -1220,21 +1199,283 @@ impl Parser {
       return Err(());
     }
 
-    self.advance(engine); // consume ')'
+    self.expect(TokenKind::RightBrace, engine)?; // consume '}'
 
-    if tuple.len() == 1 {
-      // A single expression represents a grouped expression.
-      return Ok(Expr::Grouping {
-        expr: Box::new(tuple[0].clone()),
-        span: token.span,
+    Ok(Expr::Match {
+      expr: Box::new(expr),
+      arms,
+      span: token.span,
+    })
+  }
+
+  fn parse_arms(&mut self, engine: &mut DiagnosticEngine) -> Result<Vec<MatchArm>, ()> {
+    let mut arms = Vec::<MatchArm>::new();
+
+    while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::RightBrace) {
+      // Parse the pattern for this arm.
+      let pattern = self.parse_pattern(engine)?;
+
+      let guard = if self.current_token().kind == TokenKind::If {
+        self.advance(engine); // consume 'if'
+        let guard = self.parse_logical_or(engine)?;
+        Some(guard)
+      } else {
+        None
+      };
+
+      self.expect(TokenKind::Equal, engine)?; // consume '='
+      self.expect(TokenKind::Greater, engine)?; // consume '>'
+
+      // Parse body (either block or single expression)
+      let body = if self.current_token().kind == TokenKind::LeftBrace {
+        self.parse_block(engine)?
+      } else {
+        // Single expression - wrap in statement
+        let expr = self.parse_ternary(engine)?;
+        vec![Stmt::Expr(expr)]
+      };
+
+      arms.push(MatchArm {
+        pattern,
+        guard,
+        body,
       });
-    } else {
-      // Multiple expressions represent a tuple literal.
-      return Ok(Expr::Tuple {
-        elements: tuple,
-        span: token.span,
-      });
+
+      // Optional comma between arms
+      if self.current_token().kind == TokenKind::Comma {
+        self.advance(engine); // consume trailing comma separating arms
+      }
     }
+
+    Ok(arms)
+  }
+
+  fn parse_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
+    // Dispatch through the precedence of pattern constructs.
+    self.parse_or_pattern(engine)
+  }
+
+  fn parse_or_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
+    let mut patterns = vec![self.parse_single_pattern(engine)?];
+
+    while self.current_token().kind == TokenKind::Pipe {
+      self.advance(engine); // consume '|'
+      patterns.push(self.parse_single_pattern(engine)?);
+    }
+
+    if patterns.len() == 1 {
+      Ok(patterns.into_iter().next().unwrap())
+    } else {
+      Ok(Pattern::Or(patterns))
+    }
+  }
+
+  fn parse_single_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
+    let token = self.current_token();
+    match token.kind {
+      // Wildcard: _
+      TokenKind::Underscore => {
+        self.advance(engine); // consume '_'
+        Ok(Pattern::Wildcard)
+      },
+
+      TokenKind::Int
+      | TokenKind::Float
+      | TokenKind::String
+      | TokenKind::True
+      | TokenKind::False
+      | TokenKind::Nil => self.parse_literal_pattern(token, engine),
+
+      TokenKind::LeftParen => {
+        let tuple = self.parse_tuple_pattern(engine)?;
+        Ok(Pattern::Tuple(tuple))
+      },
+
+      TokenKind::Identifier => self.parse_identifier_pattern(engine),
+
+      _ => {
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+          format!("Unexpected token {:?}", token.lexeme),
+          "duck.lox".to_string(),
+        )
+        .with_label(
+          Span::new(token.span.line + 1, token.span.col + 1, token.span.len),
+          Some(format!(
+            "Expected a primary expression, found {:?}",
+            token.lexeme
+          )),
+          LabelStyle::Primary,
+        );
+
+        engine.add(diagnostic);
+
+        Err(())
+      },
+    }
+  }
+
+  fn parse_identifier_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
+    let struct_name = self.current_token();
+    self.advance(engine); // consume the identifier
+
+    match self.current_token().kind {
+      TokenKind::ColonColon => {
+        self.expect(TokenKind::ColonColon, engine)?; // consume the "::"
+
+        let path_name = self.current_token();
+        self.advance(engine); // consume the identifier
+        if path_name.kind != TokenKind::Identifier {
+          let diagnostic = Diagnostic::new(
+            DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+            "Expected identifier after '::'".to_string(),
+            "duck.lox".to_string(),
+          )
+          .with_label(
+            Span::new(
+              path_name.span.line + 1,
+              path_name.span.col + 1,
+              path_name.span.len,
+            ),
+            Some("expected identifier here".to_string()),
+            LabelStyle::Primary,
+          );
+          engine.add(diagnostic);
+          return Err(());
+        }
+
+        let mut paths = Vec::<String>::new();
+        paths.push(struct_name.lexeme);
+        paths.push(path_name.lexeme);
+
+        if self.current_token().kind == TokenKind::LeftBrace {
+          let path_struct = self.parse_struct_pattern(engine)?;
+          return Ok(Pattern::PathStruct {
+            path: paths,
+            fields: path_struct,
+          });
+        } else if self.current_token().kind == TokenKind::LeftParen {
+          let tuple = self.parse_tuple_pattern(engine)?;
+          Ok(Pattern::PathTuple {
+            path: paths,
+            patterns: tuple,
+          })
+        } else {
+          let diagnostic = Diagnostic::new(
+            DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+            "Expected identifier after '::'".to_string(),
+            "duck.lox".to_string(),
+          )
+          .with_label(
+            Span::new(
+              path_name.span.line + 1,
+              path_name.span.col + 1,
+              path_name.span.len,
+            ),
+            Some("expected identifier here".to_string()),
+            LabelStyle::Primary,
+          );
+          engine.add(diagnostic);
+          Err(())
+        }
+      },
+
+      TokenKind::LeftParen => {
+        let tuple = self.parse_tuple_pattern(engine)?;
+        Ok(Pattern::TupleStruct {
+          name: struct_name.lexeme,
+          patterns: tuple,
+        })
+      },
+      TokenKind::LeftBrace => {
+        let path_struct = self.parse_struct_pattern(engine)?;
+        return Ok(Pattern::Struct {
+          name: struct_name.lexeme,
+          fields: path_struct,
+        });
+      },
+
+      _ => Ok(Pattern::Identifier(struct_name.lexeme)),
+    }
+  }
+
+  fn parse_struct_pattern(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Vec<(String, Pattern)>, ()> {
+    let mut fields = Vec::<(String, Pattern)>::new();
+    self.advance(engine); // consume '{'
+
+    while !self.is_eof() && self.current_token().kind != TokenKind::RightBrace {
+      let field_name = self.current_token();
+      self.advance(engine);
+
+      let field_pattern = if self.current_token().kind == TokenKind::Colon {
+        self.advance(engine); // consume ':'
+        self.parse_pattern(engine)?
+      } else {
+        Pattern::Identifier(field_name.lexeme.clone())
+      };
+
+      fields.push((field_name.lexeme, field_pattern));
+
+      if self.current_token().kind == TokenKind::Comma {
+        self.advance(engine);
+      }
+    }
+
+    self.expect(TokenKind::RightBrace, engine)?;
+
+    return Ok(fields);
+  }
+
+  fn parse_literal_pattern(
+    &mut self,
+    token: Token,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Pattern, ()> {
+    if self.peek().kind == TokenKind::DotDot {
+      self.advance(engine); // consume the literal start
+      let start = Expr::Integer {
+        value: token.lexeme.parse().unwrap(),
+        span: token.span,
+      };
+
+      self.expect(TokenKind::DotDot, engine)?; // consume the ".."
+      self.expect(TokenKind::Equal, engine)?; // consume the "="
+      let end = self.parse_primary(engine)?;
+
+      return Ok(Pattern::Range { start, end });
+    }
+
+    let expr = self.parse_primary(engine)?;
+    Ok(Pattern::Literal(expr))
+  }
+
+  fn parse_tuple_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Vec<Pattern>, ()> {
+    self.expect(TokenKind::LeftParen, engine)?; // consume '('
+
+    let mut fields = Vec::<Pattern>::new();
+
+    while !self.is_eof() && self.current_token().kind != TokenKind::RightParen {
+      if self.current_token().kind == TokenKind::Underscore {
+        self.advance(engine); // consume '_' wildcard
+        continue;
+      }
+
+      let field = self.parse_pattern(engine)?;
+
+      fields.push(field);
+
+      if self.current_token().kind != TokenKind::Comma {
+        break;
+      }
+
+      self.advance(engine); // consume ','
+    }
+
+    self.expect(TokenKind::RightParen, engine)?; // consume ')'
+    Ok(fields)
   }
 
   fn parse_type(&mut self, engine: &mut DiagnosticEngine) -> Result<Type, ()> {
@@ -1268,11 +1509,42 @@ impl Parser {
       TokenKind::True => Ok(Type::Named(token.lexeme)),
       TokenKind::False => Ok(Type::Named(token.lexeme)),
       TokenKind::Void => Ok(Type::Void),
-      TokenKind::LeftBracket => self.parse_array_type(engine),
       TokenKind::LeftParen => self.parse_tuple_type(engine),
+      TokenKind::LeftBracket => self.parse_array_type(engine),
       TokenKind::Identifier => self.parse_named_type(token, engine),
+      TokenKind::Fn => self.parse_fn_type(engine),
       _ => Err(()),
     }
+  }
+
+  fn parse_fn_type(&mut self, engine: &mut DiagnosticEngine) -> Result<Type, ()> {
+    self.expect(TokenKind::LeftParen, engine)?; // consume the "fn"
+    let mut params = Vec::<Type>::new();
+
+    while !self.is_eof() && self.current_token().kind != TokenKind::RightParen {
+      let param = self.parse_type(engine)?;
+      params.push(param);
+
+      if self.current_token().kind != TokenKind::Comma {
+        break;
+      }
+
+      self.advance(engine); // consume the ","
+    }
+
+    self.expect(TokenKind::RightParen, engine)?; // consume the ")"
+    let return_type = if matches!(self.current_token().kind, TokenKind::Minus) {
+      self.expect(TokenKind::FatArrow, engine)?; // consume the "->"
+      let r_type = self.parse_type(engine)?;
+      Some(r_type)
+    } else {
+      None
+    };
+
+    Ok(Type::Function {
+      params,
+      return_type: Box::new(return_type.unwrap_or(Type::Void)),
+    })
   }
 
   fn parse_named_type(&mut self, name: Token, engine: &mut DiagnosticEngine) -> Result<Type, ()> {

@@ -19,14 +19,14 @@ impl Lexer {
       ']' => Some(TokenKind::RightBracket),
 
       '+' => Some(TokenKind::Plus),
-      '-' => Some(TokenKind::Minus),
+      '-' => self.parse_minus(),
       '*' => Some(TokenKind::Star),
       '%' => Some(TokenKind::Percent),
       '^' => Some(TokenKind::Caret),
       ';' => Some(TokenKind::Semicolon),
       ',' => Some(TokenKind::Comma),
       '.' => self.lex_dot(),
-      ':' => Some(TokenKind::Colon),
+      ':' => self.parse_colon(),
       '?' => Some(TokenKind::Question),
       '/' => self.lex_divide(),
       '=' => self.lex_equal(),
@@ -62,6 +62,22 @@ impl Lexer {
         None
       },
     }
+  }
+
+  fn parse_minus(&mut self) -> Option<TokenKind> {
+    if self.match_char(self.peek(), '>') {
+      self.advance(); // consume the '-'
+      return Some(TokenKind::FatArrow);
+    }
+    Some(TokenKind::Minus)
+  }
+
+  fn parse_colon(&mut self) -> Option<TokenKind> {
+    if self.match_char(self.peek(), ':') {
+      self.advance(); // consume the ':'
+      return Some(TokenKind::ColonColon);
+    }
+    Some(TokenKind::Colon)
   }
 
   fn lex_dot(&mut self) -> Option<TokenKind> {
@@ -232,7 +248,7 @@ impl Lexer {
 
       // Declaration & Module Keywords
       "let" => Some(TokenKind::Let),
-      "mut" => Some(TokenKind::Mut), // ✅ New: mutable variable bindings
+      "mut" => Some(TokenKind::Mut),
       "const" => Some(TokenKind::Const),
       "fn" => Some(TokenKind::Fn),
       "function" => Some(TokenKind::Function),

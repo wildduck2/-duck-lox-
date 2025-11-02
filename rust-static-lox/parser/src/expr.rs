@@ -105,6 +105,11 @@ pub enum Expr {
     span: Span,
   },
 
+  Comma {
+    expressions: Vec<Expr>,
+    span: Span,
+  },
+
   Ternary {
     condition: Box<Expr>,
     then_branch: Box<Expr>,
@@ -160,20 +165,27 @@ pub enum Pattern {
     patterns: Vec<Pattern>,
   },
 
-  // For enum with path: Option::Some(x)
-  Path {
-    path: Vec<String>,      // ["Option", "Some"]
-    patterns: Vec<Pattern>, // [Identifier("x")]
+  // Path with tuple: Option::Some(x), Result::Ok(val)
+  PathTuple {
+    path: Vec<String>, // ["Option", "Some"]
+    patterns: Vec<Pattern>,
+  },
+
+  // Path with struct: User::Name { first, last }
+  PathStruct {
+    path: Vec<String>, // ["User", "Name"]
+    fields: Vec<(String, Pattern)>,
   },
 
   Array(Vec<Pattern>), // [first, second, rest @ ..]
+
   // Rest,                                      // ... or @ rest
   Or(Vec<Pattern>), // 1 | 2 | 3
 
   Range {
     start: Expr,
     end: Expr,
-  }, // 1..10
+  }, // 1..=10
 }
 
 #[derive(Debug, Clone)]
@@ -272,7 +284,7 @@ impl fmt::Display for Pattern {
       },
 
       // Path: Option::Some(x)
-      Pattern::Path { path, patterns } => {
+      Pattern::PathTuple { path, patterns } => {
         let path_str = path.join("::");
         if patterns.is_empty() {
           write!(f, "{}", path_str)
@@ -284,6 +296,16 @@ impl fmt::Display for Pattern {
             .join(", ");
           write!(f, "{}({})", path_str, pattern_str)
         }
+      },
+
+      Pattern::PathStruct { path, fields } => {
+        let path_str = path.join("::");
+        let field_str = fields
+          .iter()
+          .map(|(k, v)| format!("{}: {}", k, v))
+          .collect::<Vec<_>>()
+          .join(", ");
+        write!(f, "{}::{{ {} }}", path_str, field_str)
       },
 
       Pattern::Array(patterns) => {
@@ -352,6 +374,15 @@ impl fmt::Display for Expr {
         else_branch,
         ..
       } => write!(f, "({} ? {} : {})", condition, then_branch, else_branch),
+
+      Expr::Comma { expressions, .. } => {
+        let element_str = expressions
+          .iter()
+          .map(|e| e.to_string())
+          .collect::<Vec<_>>()
+          .join(", ");
+        write!(f, "({})", element_str)
+      },
 
       Expr::Array { elements, .. } => {
         let element_str = elements
@@ -535,6 +566,18 @@ impl Expr {
             if is_last_field { "    " } else { "│   " }
           );
           field_value.build_tree(&field_prefix, true);
+        }
+      },
+
+      Expr::Comma { expressions, .. } => {
+        let element_str = expressions
+          .iter()
+          .map(|e| e.to_string())
+          .collect::<Vec<_>>()
+          .join(", ");
+        print_node!("Comma", element_str);
+        for (i, element) in expressions.iter().enumerate() {
+          element.build_tree(&new_prefix, i == expressions.len() - 1);
         }
       },
 
