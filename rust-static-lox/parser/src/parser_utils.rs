@@ -191,7 +191,8 @@ impl Parser {
       _ => {
         // Fallback to an expression statement when no declaration keyword is found.
         let expr = self.parse_expr_stmt(engine)?;
-        // NOTE: i need to handle the semicolon here
+        self.expect(TokenKind::Semicolon, engine)?; // ensure the statement is terminated
+
         Ok(Stmt::Expr(expr))
       },
     }
@@ -430,7 +431,6 @@ impl Parser {
     context: ExprContext,
   ) -> Result<Expr, ()> {
     // Carry the current expression context downward so later productions can tailor behavior.
-    let token = self.current_token();
     let lhs = self.parse_ternary(engine, context)?;
 
     if !self.is_eof() && matches!(self.current_token().kind, TokenKind::Equal) {
@@ -438,36 +438,33 @@ impl Parser {
       let rhs = self.parse_assignment(engine, context)?;
 
       match rhs.clone() {
-        Expr::Integer { value: _, span }
+        Expr::Integer { span, .. }
+        | Expr::Float { span, .. }
+        | Expr::String { span, .. }
+        | Expr::Bool { span, .. }
         | Expr::Nil { span }
-        | Expr::Float { value: _, span }
-        | Expr::Bool { value: _, span }
-        | Expr::String { value: _, span }
-        | Expr::Identifier { name: _, span } => {
+        | Expr::Binary { span, .. }
+        | Expr::Unary { span, .. }
+        | Expr::Call { span, .. }
+        | Expr::Member { span, .. }
+        | Expr::Index { span, .. }
+        | Expr::Assign { span, .. }
+        | Expr::Array { span, .. }
+        | Expr::Object { span, .. }
+        | Expr::Lambda { span, .. }
+        | Expr::Match { span, .. }
+        | Expr::If { span, .. }
+        | Expr::Grouping { span, .. }
+        | Expr::Ternary { span, .. }
+        | Expr::Tuple { span, .. }
+        | Expr::Comma { span, .. }
+        | Expr::Identifier { span, .. } => {
           // Assignment succeeds only when the left-hand side is an identifier.
           return Ok(Expr::Assign {
             target: Box::new(lhs),
             value: Box::new(rhs),
             span,
           });
-        },
-        _ => {
-          let diagnostic = Diagnostic::new(
-            DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
-            "Expected identifier after '='".to_string(),
-            "duck.lox".to_string(),
-          )
-          .with_label(
-            Span::new(token.span.line + 1, token.span.col + 1, token.span.len),
-            Some("expected identifier here".to_string()),
-            LabelStyle::Primary,
-          )
-          .with_help("use '=' for assignment".to_string());
-
-          engine.add(diagnostic);
-
-          // Abort this production so the caller can attempt recovery.
-          return Err(());
         },
       }
     }
@@ -489,7 +486,7 @@ impl Parser {
 
     if !self.is_eof() && matches!(self.current_token().kind, TokenKind::Question) {
       self.advance(engine); // consume the (?)
-      // The consequent is evaluated in the default context because it stands on its own.
+                            // The consequent is evaluated in the default context because it stands on its own.
       let then_branch = self.parse_expr_stmt_with_context(engine, ExprContext::Default)?;
 
       if self.is_eof() || !matches!(self.current_token().kind, TokenKind::Colon) {
@@ -532,7 +529,7 @@ impl Parser {
       }
 
       self.advance(engine); // consume the (:)
-      // Else branch inherits the current context so surrounding constructs keep their guarantees.
+                            // Else branch inherits the current context so surrounding constructs keep their guarantees.
       let else_branch = self.parse_ternary(engine, context)?;
 
       // Form the ternary expression once all components have been parsed.
@@ -1328,7 +1325,6 @@ impl Parser {
 
   fn parse_match(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     // Track when we are inside a match expression so pattern helpers can tighten rules.
-    self.is_in_match = true;
     self.expect(TokenKind::Match, engine)?; // consume the "match"
     let expr = self.parse_primary(engine, ExprContext::MatchDiscriminant)?;
 
@@ -1349,14 +1345,11 @@ impl Parser {
       );
 
       engine.add(diagnostic);
-      self.is_in_match = false;
       return Err(());
     }
 
     self.expect(TokenKind::RightBrace, engine)?; // consume '}'
 
-    // Reset the match tracking flag once the expression is complete.
-    self.is_in_match = false;
     Ok(Expr::Match {
       expr: Box::new(expr),
       arms,
@@ -1377,7 +1370,7 @@ impl Parser {
 
       let guard = if self.current_token().kind == TokenKind::If {
         self.advance(engine); // consume 'if'
-        // Guards are plain logical expressions evaluated in the default context.
+                              // Guards are plain logical expressions evaluated in the default context.
         let guard = self.parse_logical_or(engine, ExprContext::Default)?;
         Some(guard)
       } else {
