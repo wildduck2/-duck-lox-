@@ -165,21 +165,34 @@ impl Parser {
 
   /// Parses a declaration, currently delegating to statement parsing.
   fn parse_declaration(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
-    // Declarations currently share the statement parsing pipeline.
-    self.parse_stmt(engine)
+    match self.current_token().kind {
+      TokenKind::Let | TokenKind::Const => self.parse_variable_declaration(engine),
+      _ => self.parse_stmt(engine),
+    }
   }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Statements                                           */
+  /* -------------------------------------------------------------------------------------------- */
 
   /// Parses a single statement node (stubbed for future grammar branches).
   fn parse_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     match self.current_token().kind {
-      TokenKind::Let | TokenKind::Const => self.parse_variable_declaration(engine),
+      TokenKind::If => self.parse_if_stmt(engine),
       _ => {
         // Fallback to an expression statement when no declaration keyword is found.
-        let expr = self.parse_expr(engine)?;
-
+        let expr = self.parse_expr_stmt(engine)?;
         Ok(Stmt::Expr(expr))
       },
     }
+  }
+
+  /* --------------------------------------------------------------------------------------------*/
+  /*                                         If Statement                                        */
+  /* --------------------------------------------------------------------------------------------*/
+
+  fn parse_if_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    Err(())
   }
 
   /* -------------------------------------------------------------------------------------------- */
@@ -289,7 +302,7 @@ impl Parser {
   /* -------------------------------------------------------------------------------------------- */
 
   /// Parses a general expression entrypoint.
-  pub fn parse_expr(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+  fn parse_expr_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let expr = self.parse_comma(engine)?;
 
     Ok(expr)
@@ -392,7 +405,7 @@ impl Parser {
 
     if !self.is_eof() && matches!(self.current_token().kind, TokenKind::Question) {
       self.advance(engine); // consume the (?)
-      let then_branch = self.parse_expr(engine)?;
+      let then_branch = self.parse_expr_stmt(engine)?;
 
       if self.is_eof() || !matches!(self.current_token().kind, TokenKind::Colon) {
         // Colon is mandatory for ternary expressions; report the omission.
@@ -714,7 +727,7 @@ impl Parser {
         };
       } else if matches!(self.current_token().kind, TokenKind::LeftBracket) {
         let token = self.current_token();
-        let index = self.parse_expr(engine)?;
+        let index = self.parse_expr_stmt(engine)?;
 
         callee = Expr::Index {
           object: Box::new(callee),
@@ -732,7 +745,6 @@ impl Parser {
   /* -------------------------------------------------------------------------------------------- */
   /*                                         Arguments                                            */
   /* -------------------------------------------------------------------------------------------- */
-
   /// Parses a comma-separated argument list for function calls.
   fn parser_arguments(&mut self, engine: &mut DiagnosticEngine) -> Result<Vec<Expr>, ()> {
     let mut args = Vec::<Expr>::new();
@@ -1056,18 +1068,8 @@ impl Parser {
     let token = self.expect(TokenKind::LeftParen, engine)?; // consume '('
 
     let mut tuple = Vec::<Expr>::new();
-    let expr = self.parse_expr(engine)?;
+    let expr = self.parse_expr_stmt(engine)?;
     tuple.push(expr);
-
-    // parse comma-separated expressions, to handle (1, 2, 3)
-    // if self.current_token().kind == TokenKind::Comma {
-    //   while !self.is_eof() && self.current_token().kind != TokenKind::RightParen {
-    //     self.advance(engine); // consume ','
-    //
-    //     let expr = self.parse_ternary(engine)?;
-    //     tuple.push(expr);
-    //   }
-    // }
 
     if self.is_eof() || self.current_token().kind != TokenKind::RightParen {
       let current = self.current_token();
@@ -1125,7 +1127,7 @@ impl Parser {
 
     let mut elements = Vec::<Expr>::new();
     if self.current_token().kind != TokenKind::RightBracket {
-      let expr = self.parse_expr(engine)?;
+      let expr = self.parse_expr_stmt(engine)?;
       elements.push(expr);
     }
 
@@ -1133,7 +1135,7 @@ impl Parser {
     if self.current_token().kind == TokenKind::Comma {
       while !self.is_eof() && self.current_token().kind != TokenKind::RightBracket {
         self.advance(engine); // consume ','
-        let expr = self.parse_expr(engine)?;
+        let expr = self.parse_expr_stmt(engine)?;
         elements.push(expr);
       }
     }
@@ -1175,6 +1177,10 @@ impl Parser {
     }
   }
 
+  /* --------------------------------------------------------------------------------------------*/
+  /*                                         Match Expression                                    */
+  /* --------------------------------------------------------------------------------------------*/
+
   fn parse_match(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     self.expect(TokenKind::Match, engine)?; // consume the "match"
     let expr = self.parse_primary(engine)?; // expression being matched
@@ -1207,6 +1213,10 @@ impl Parser {
       span: token.span,
     })
   }
+
+  /* --------------------------------------------------------------------------------------------*/
+  /*                                         Match Arms                                          */
+  /* --------------------------------------------------------------------------------------------*/
 
   fn parse_arms(&mut self, engine: &mut DiagnosticEngine) -> Result<Vec<MatchArm>, ()> {
     let mut arms = Vec::<MatchArm>::new();
@@ -1250,6 +1260,10 @@ impl Parser {
     Ok(arms)
   }
 
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Patterns                                             */
+  /* -------------------------------------------------------------------------------------------- */
+
   fn parse_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
     // Dispatch through the precedence of pattern constructs.
     self.parse_or_pattern(engine)
@@ -1269,6 +1283,10 @@ impl Parser {
       Ok(Pattern::Or(patterns))
     }
   }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Single Pattern                                        */
+  /* -------------------------------------------------------------------------------------------- */
 
   fn parse_single_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
     let token = self.current_token();
@@ -1314,6 +1332,10 @@ impl Parser {
       },
     }
   }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Identifier Pattern                                   */
+  /* -------------------------------------------------------------------------------------------- */
 
   fn parse_identifier_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
     let struct_name = self.current_token();
@@ -1399,6 +1421,10 @@ impl Parser {
     }
   }
 
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Struct Pattern                                       */
+  /* -------------------------------------------------------------------------------------------- */
+
   fn parse_struct_pattern(
     &mut self,
     engine: &mut DiagnosticEngine,
@@ -1429,6 +1455,10 @@ impl Parser {
     return Ok(fields);
   }
 
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Literal Pattern                                      */
+  /* -------------------------------------------------------------------------------------------- */
+
   fn parse_literal_pattern(
     &mut self,
     token: Token,
@@ -1451,6 +1481,10 @@ impl Parser {
     let expr = self.parse_primary(engine)?;
     Ok(Pattern::Literal(expr))
   }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Tuple Pattern                                        */
+  /* -------------------------------------------------------------------------------------------- */
 
   fn parse_tuple_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Vec<Pattern>, ()> {
     self.expect(TokenKind::LeftParen, engine)?; // consume '('
@@ -1477,6 +1511,10 @@ impl Parser {
     self.expect(TokenKind::RightParen, engine)?; // consume ')'
     Ok(fields)
   }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Type                                                  */
+  /* -------------------------------------------------------------------------------------------- */
 
   fn parse_type(&mut self, engine: &mut DiagnosticEngine) -> Result<Type, ()> {
     let token = self.current_token();
@@ -1517,6 +1555,10 @@ impl Parser {
     }
   }
 
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Fn Type                                               */
+  /* -------------------------------------------------------------------------------------------- */
+
   fn parse_fn_type(&mut self, engine: &mut DiagnosticEngine) -> Result<Type, ()> {
     self.expect(TokenKind::LeftParen, engine)?; // consume the "fn"
     let mut params = Vec::<Type>::new();
@@ -1546,6 +1588,10 @@ impl Parser {
       return_type: Box::new(return_type.unwrap_or(Type::Void)),
     })
   }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Named Type                                           */
+  /* -------------------------------------------------------------------------------------------- */
 
   fn parse_named_type(&mut self, name: Token, engine: &mut DiagnosticEngine) -> Result<Type, ()> {
     if matches!(self.current_token().kind, TokenKind::Less) {
@@ -1594,6 +1640,10 @@ impl Parser {
     Ok(Type::Named(name.lexeme))
   }
 
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Array Type                                           */
+  /* -------------------------------------------------------------------------------------------- */
+
   fn parse_array_type(&mut self, engine: &mut DiagnosticEngine) -> Result<Type, ()> {
     let element_type = self.parse_type(engine)?;
 
@@ -1621,6 +1671,10 @@ impl Parser {
 
     Err(())
   }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Tuple Type                                           */
+  /* -------------------------------------------------------------------------------------------- */
 
   fn parse_tuple_type(&mut self, engine: &mut DiagnosticEngine) -> Result<Type, ()> {
     let mut types = Vec::<Type>::new();
