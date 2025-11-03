@@ -3,6 +3,7 @@ use diagnostic::diagnostic::Span;
 
 use crate::stmt::{Stmt, Type};
 
+#[repr(u8)]
 #[derive(Debug, Clone)]
 pub enum Expr {
   Integer {
@@ -160,6 +161,7 @@ pub struct MatchArm {
   pub body: Vec<Stmt>,
 }
 
+#[repr(u8)]
 #[derive(Debug, Clone)]
 pub enum Pattern {
   Wildcard,           // _
@@ -203,6 +205,7 @@ pub enum Pattern {
   }, // 1..=10 | 1..10
 }
 
+#[repr(u8)]
 #[derive(Debug, Clone)]
 pub enum BinaryOp {
   Add,
@@ -221,6 +224,7 @@ pub enum BinaryOp {
   Or,
 }
 
+#[repr(u8)]
 #[derive(Debug, Clone)]
 pub enum UnaryOp {
   Neg, // -x

@@ -3,6 +3,7 @@ use std::fmt;
 
 use crate::expr::Expr;
 
+#[repr(u8)]
 #[derive(Debug, Clone)]
 pub enum Stmt {
   Expr(Expr),
@@ -37,14 +38,31 @@ pub enum Stmt {
   },
 
   Block(Vec<Stmt>),
+
+  Return {
+    value: Option<Expr>,
+    span: Span,
+  },
+
+  Break {
+    label: Option<Expr>,
+    span: Span,
+  },
+
+  Continue {
+    label: Option<Expr>,
+    span: Span,
+  },
 }
 
+#[repr(u8)]
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum DeclKind {
   Let,
   Const,
 }
 
+#[repr(u8)]
 #[derive(Debug, Clone)]
 pub enum Type {
   Int,
@@ -175,6 +193,15 @@ impl fmt::Display for Stmt {
           initializer, collection, body
         )
       },
+      Stmt::Return { value, .. } => {
+        write!(f, "Return(value: {:?})", value)
+      },
+      Stmt::Break { label, .. } => {
+        write!(f, "Break(label: {:?})", label)
+      },
+      Stmt::Continue { label, .. } => {
+        write!(f, "Continue(label: {:?})", label)
+      },
     }
   }
 }
@@ -191,12 +218,10 @@ impl Stmt {
     let new_prefix = format!("{}{}", prefix, if is_last { "    " } else { "│   " });
 
     match self {
-      // ───────────────────────────────
       Stmt::Expr(expr) => {
         expr.build_tree(&new_prefix, true);
       },
 
-      // ───────────────────────────────
       Stmt::Decl {
         name,
         kind,
@@ -206,8 +231,14 @@ impl Stmt {
         ..
       } => {
         let mut fields = Vec::new();
+
+        // Include kind (e.g. "var", "const", "let")
+        fields.push(format!("kind: {:?}", kind));
+
+        // Core declaration info
         fields.push(format!("name: {}", name));
         fields.push(format!("mutable: {}", is_mutable));
+
         if let Some(ty) = type_annotation {
           fields.push(format!("type: {}", ty));
         }
@@ -226,7 +257,6 @@ impl Stmt {
         }
       },
 
-      // ───────────────────────────────
       Stmt::If {
         condition,
         then_branch,
@@ -257,7 +287,6 @@ impl Stmt {
         }
       },
 
-      // ───────────────────────────────
       Stmt::While {
         condition, body, ..
       } => {
@@ -271,12 +300,12 @@ impl Stmt {
         }
       },
 
-      // ───────────────────────────────
       Stmt::Block(stmts) => {
         for (i, stmt) in stmts.iter().enumerate() {
           stmt.build_tree(&new_prefix, i == stmts.len() - 1);
         }
       },
+
       Stmt::For {
         initializer,
         collection,
@@ -293,6 +322,38 @@ impl Stmt {
           stmt.build_tree(&body_prefix, i == body.len() - 1);
         }
       },
+
+      Stmt::Return { value, .. } => {
+        // Label the node
+        let label = if let Some(value) = value {
+          format!("Return(value: {})", value)
+        } else {
+          "Return".to_string()
+        };
+        println!("{}{}{}", prefix, connector, label);
+
+        // Print value if present
+        if let Some(value) = value {
+          println!("{}└── value:", new_prefix);
+          value.build_tree(&format!("{}    ", new_prefix), true);
+        }
+      },
+
+      Stmt::Break { label, .. } => {
+        if let Some(lbl) = label {
+          println!("{}{}Break (label: {})", prefix, connector, lbl);
+        } else {
+          println!("{}{}Break", prefix, connector);
+        }
+      },
+
+      Stmt::Continue { label, .. } => {
+        if let Some(lbl) = label {
+          println!("{}{}Continue (label: {})", prefix, connector, lbl);
+        } else {
+          println!("{}{}Continue", prefix, connector);
+        }
+      },
     }
   }
 
@@ -304,6 +365,9 @@ impl Stmt {
       Stmt::While { .. } => "While".to_string(),
       Stmt::Block(_) => "Block".to_string(),
       Stmt::For { .. } => "For".to_string(),
+      Stmt::Return { .. } => "Return".to_string(),
+      Stmt::Break { .. } => "Break".to_string(),
+      Stmt::Continue { .. } => "Continue".to_string(),
     }
   }
 }

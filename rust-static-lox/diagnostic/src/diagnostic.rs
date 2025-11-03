@@ -11,6 +11,7 @@ pub struct Label {
   pub style: LabelStyle,
 }
 
+#[repr(u8)]
 #[derive(Debug, Clone, Copy)]
 pub enum LabelStyle {
   Primary,   // ^^^ in red

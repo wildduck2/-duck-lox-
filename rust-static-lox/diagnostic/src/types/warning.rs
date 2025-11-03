@@ -1,5 +1,6 @@
 use crate::types::Severity;
 
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiagnosticWarning {
   UnusedVariable,

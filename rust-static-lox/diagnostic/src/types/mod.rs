@@ -1,3 +1,4 @@
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {
   Error,

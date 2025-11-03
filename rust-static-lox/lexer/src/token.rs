@@ -7,6 +7,7 @@ pub struct Token {
   pub span: Span,
 }
 
+#[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TokenKind {
   // 1️⃣ Keywords

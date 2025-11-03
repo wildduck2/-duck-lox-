@@ -1,5 +1,6 @@
 use crate::types::{error::DiagnosticError, warning::DiagnosticWarning, Severity};
 
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiagnosticCode {
   Error(DiagnosticError),

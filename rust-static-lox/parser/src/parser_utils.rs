@@ -153,6 +153,7 @@ use crate::{
   Parser,
 };
 
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum ExprContext {
   Default,           // Normal expression parsing
@@ -179,12 +180,16 @@ impl Parser {
   fn parse_declaration(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     match self.current_token().kind {
       TokenKind::Let | TokenKind::Const => self.parse_variable_declaration(engine),
-      TokenKind::LeftBrace => {
-        let stmt = self.parse_block(engine)?;
-        Ok(Stmt::Block(stmt))
-      },
+      TokenKind::Fn => self.parse_fn_decl(engine),
       _ => self.parse_stmt(engine),
     }
+  }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Fn Declaration                                       */
+  /* -------------------------------------------------------------------------------------------- */
+  fn parse_fn_decl(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    Err(())
   }
 
   /* -------------------------------------------------------------------------------------------- */
@@ -197,6 +202,13 @@ impl Parser {
       TokenKind::If => self.parse_if_stmt(engine),
       TokenKind::While => self.parse_whie_stmt(engine),
       TokenKind::For => self.parse_for_stmt(engine),
+      TokenKind::Return => self.parse_return_stmt(engine),
+      TokenKind::Break => self.parse_break_stmt(engine),
+      TokenKind::Continue => self.parse_continue_stmt(engine),
+      TokenKind::LeftBrace => {
+        let stmt = self.parse_block(engine)?;
+        Ok(Stmt::Block(stmt))
+      },
       _ => {
         // Fallback to an expression statement when no declaration keyword is found.
         let expr = self.parse_expr_stmt(engine)?;
@@ -205,6 +217,66 @@ impl Parser {
         Ok(Stmt::Expr(expr))
       },
     }
+  }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Break Statement                                       */
+  /* -------------------------------------------------------------------------------------------- */
+
+  fn parse_break_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    let token = self.current_token();
+    self.advance(engine); // consume the break keyword
+    let label = if self.current_token().kind == TokenKind::Semicolon {
+      None
+    } else {
+      Some(self.parse_primary(engine, ExprContext::Default)?)
+    };
+    self.expect(TokenKind::Semicolon, engine)?; // ensure the statement is terminated
+
+    Ok(Stmt::Break {
+      label,
+      span: token.span,
+    })
+  }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Continue Statement                                    */
+  /* -------------------------------------------------------------------------------------------- */
+
+  fn parse_continue_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    let token = self.current_token();
+    self.advance(engine); // consume the continue keyword
+    let label = if self.current_token().kind == TokenKind::Semicolon {
+      None
+    } else {
+      Some(self.parse_primary(engine, ExprContext::Default)?)
+    };
+    self.expect(TokenKind::Semicolon, engine)?; // ensure the statement is terminated
+
+    Ok(Stmt::Continue {
+      label,
+      span: token.span,
+    })
+  }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Return Statement                                     */
+  /* -------------------------------------------------------------------------------------------- */
+
+  fn parse_return_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    let token = self.current_token();
+    self.advance(engine); // consume the return keyword
+    let value = if self.current_token().kind == TokenKind::Semicolon {
+      None
+    } else {
+      Some(self.parse_expr_stmt(engine)?)
+    };
+    self.expect(TokenKind::Semicolon, engine)?; // ensure the statement is terminated
+
+    Ok(Stmt::Return {
+      value,
+      span: token.span,
+    })
   }
 
   /* --------------------------------------------------------------------------------------------*/
@@ -782,7 +854,7 @@ impl Parser {
         start: Box::new(start),
         end: Box::new(end),
         inclusive,
-        span: op_token.span,
+        span: token.span,
       })
     } else {
       Ok(start)
