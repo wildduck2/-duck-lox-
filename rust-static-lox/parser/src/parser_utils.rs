@@ -60,7 +60,8 @@ ternary          → logicOr ( "?" expression ":" ternary )? ;
 logicOr          → logicAnd ( "or" logicAnd )* ;
 logicAnd         → equality ( "and" equality )* ;
 equality         → comparison ( ( "==" | "!=" ) comparison )* ;
-comparison       → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
+comparison       → range ( ( ">" | ">=" | "<" | "<=" ) range )* ;
+range            → term ( ( ".." | "..=" ) term )? ;
 term             → factor ( ( "+" | "-" ) factor )* ;
 factor           → power ( ( "*" | "/" | "%" ) power )* ;
 power            → unary ( "^" unary )* ;
@@ -83,7 +84,8 @@ primary          → INTEGER
                  | "[" arrayElements? "]"
                  | object
                  | lambda
-                 | match ;
+                 | match
+                 | ifExpr ;
 
 tupleOrGrouping  → expression ( "," expression )* ","? ;
 arrayElements    → expression ( "," expression )* ","? ;
@@ -95,6 +97,8 @@ lambda           → "fn" "(" parameters? ")" ( "->" type )? block ;
 
 match            → "match" expression "{" matchArm* "}" ;
 matchArm         → pattern ( "if" expression )? "=>" ( block | expression "," ) ;
+
+ifExpr           → "if" expression block ( "else" ( ifExpr | block ) )? ;
 
 // Patterns
 pattern          → orPattern ;
@@ -111,7 +115,7 @@ singlePattern    → wildcardPattern
 
 wildcardPattern     → "_" ;
 literalPattern      → INTEGER | FLOAT | STRING | "true" | "false" | "nil" ;
-rangePattern        → expression ".." expression ;
+rangePattern        → expression ( ".." | "..=" ) expression ;
 identifierPattern   → IDENTIFIER ;
 tuplePattern        → "(" pattern ( "," pattern )* ","? ")" ;
 arrayPattern        → "[" pattern ( "," pattern )* ","? "]" ;
@@ -192,6 +196,7 @@ impl Parser {
     match self.current_token().kind {
       TokenKind::If => self.parse_if_stmt(engine),
       TokenKind::While => self.parse_whie_stmt(engine),
+      TokenKind::For => self.parse_for_stmt(engine),
       _ => {
         // Fallback to an expression statement when no declaration keyword is found.
         let expr = self.parse_expr_stmt(engine)?;
@@ -200,6 +205,34 @@ impl Parser {
         Ok(Stmt::Expr(expr))
       },
     }
+  }
+
+  /* --------------------------------------------------------------------------------------------*/
+  /*                                         For Statement                                       */
+  /* --------------------------------------------------------------------------------------------*/
+
+  fn parse_for_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    let token = self.current_token();
+    self.expect(TokenKind::For, engine)?; // consume the "for"
+    let initializer = if self.current_token().kind == TokenKind::Underscore {
+      self.advance(engine); // consume the "_"
+      Expr::Identifier {
+        name: "_".to_string(),
+        span: token.span,
+      }
+    } else {
+      self.parse_primary(engine, ExprContext::WhileCondition)?
+    };
+    self.expect(TokenKind::In, engine)?; // consume the "in"
+    let collection = self.parse_expr_stmt_with_context(engine, ExprContext::WhileCondition)?;
+    let body = self.parse_block(engine)?;
+
+    Ok(Stmt::For {
+      initializer: Box::new(initializer),
+      collection: Box::new(collection),
+      body,
+      span: token.span,
+    })
   }
 
   /* --------------------------------------------------------------------------------------------*/
@@ -462,6 +495,7 @@ impl Parser {
         | Expr::Ternary { span, .. }
         | Expr::Tuple { span, .. }
         | Expr::Comma { span, .. }
+        | Expr::Range { span, .. }
         | Expr::Identifier { span, .. } => {
           // Assignment succeeds only when the left-hand side is an identifier.
           return Ok(Expr::Assign {
@@ -663,7 +697,7 @@ impl Parser {
     engine: &mut DiagnosticEngine,
     context: ExprContext,
   ) -> Result<Expr, ()> {
-    let mut lhs = self.parse_term(engine, context)?;
+    let mut lhs = self.parse_range(engine, context)?;
 
     while !self.is_eof() {
       let operator = self.current_token();
@@ -671,7 +705,7 @@ impl Parser {
       match operator.kind {
         TokenKind::Greater | TokenKind::GreaterEqual | TokenKind::Less | TokenKind::LessEqual => {
           self.advance(engine); // consume relational operator
-          let rhs = self.parse_term(engine, context)?;
+          let rhs = self.parse_range(engine, context)?;
           // Convert the operator lexeme into the matching binary enum variant.
           lhs = Expr::Binary {
             op: match operator.lexeme.as_str() {
@@ -691,6 +725,68 @@ impl Parser {
     }
 
     Ok(lhs)
+  }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Range Expression                                     */
+  /* -------------------------------------------------------------------------------------------- */
+
+  fn parse_range(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+    context: ExprContext,
+  ) -> Result<Expr, ()> {
+    let token = self.current_token();
+    let start = self.parse_term(engine, context)?;
+
+    if self.current_token().kind == TokenKind::DotDot {
+      let op_token = self.current_token();
+      self.advance(engine); // consume `..`
+
+      // Check for inclusive variant `..=`
+      let inclusive = if self.current_token().kind == TokenKind::Equal {
+        self.advance(engine); // consume '='
+        true
+      } else {
+        false
+      };
+
+      // Now parse the end term, or emit an error if missing
+      if self.is_eof()
+        || matches!(
+          self.current_token().kind,
+          TokenKind::Semicolon | TokenKind::RightBrace | TokenKind::RightParen
+        )
+      {
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+          "Expected expression after range operator".to_string(),
+          "duck.lox".to_string(),
+        )
+        .with_label(
+          Span::new(
+            op_token.span.line + 1,
+            op_token.span.col + 1,
+            op_token.span.len,
+          ),
+          Some("range must have an end expression".to_string()),
+          LabelStyle::Primary,
+        );
+        engine.add(diagnostic);
+        return Err(());
+      }
+
+      let end = self.parse_term(engine, context)?;
+
+      Ok(Expr::Range {
+        start: Box::new(start),
+        end: Box::new(end),
+        inclusive,
+        span: op_token.span,
+      })
+    } else {
+      Ok(start)
+    }
   }
 
   /* -------------------------------------------------------------------------------------------- */
@@ -1624,10 +1720,20 @@ impl Parser {
       };
 
       self.expect(TokenKind::DotDot, engine)?; // consume the ".."
-      self.expect(TokenKind::Equal, engine)?; // consume the "="
+      let inclusive = if self.current_token().kind == TokenKind::Equal {
+        self.advance(engine); // consume the '='
+        true
+      } else {
+        false
+      };
+
       let end = self.parse_primary(engine, ExprContext::Default)?;
 
-      return Ok(Pattern::Range { start, end });
+      return Ok(Pattern::Range {
+        start,
+        end,
+        inclusive,
+      });
     }
 
     // Fallback to a simple literal pattern when no range operator is present.

@@ -29,6 +29,13 @@ pub enum Stmt {
     span: Span,
   },
 
+  For {
+    initializer: Box<Expr>,
+    collection: Box<Expr>,
+    body: Vec<Stmt>,
+    span: Span,
+  },
+
   Block(Vec<Stmt>),
 }
 
@@ -156,6 +163,18 @@ impl fmt::Display for Stmt {
       Stmt::Block(stmts) => {
         write!(f, "Block({:?})", stmts)
       },
+      Stmt::For {
+        initializer,
+        collection,
+        body,
+        ..
+      } => {
+        write!(
+          f,
+          "For(initializer: {}, collection: {}, body: {:?})",
+          initializer, collection, body
+        )
+      },
     }
   }
 }
@@ -258,6 +277,22 @@ impl Stmt {
           stmt.build_tree(&new_prefix, i == stmts.len() - 1);
         }
       },
+      Stmt::For {
+        initializer,
+        collection,
+        body,
+        ..
+      } => {
+        println!("{}├── initializer:", new_prefix);
+        initializer.build_tree(&format!("{}│   ", new_prefix), true);
+        println!("{}├── collection:", new_prefix);
+        collection.build_tree(&format!("{}│   ", new_prefix), true);
+        println!("{}└── body:", new_prefix);
+        let body_prefix = format!("{}    ", new_prefix);
+        for (i, stmt) in body.iter().enumerate() {
+          stmt.build_tree(&body_prefix, i == body.len() - 1);
+        }
+      },
     }
   }
 
@@ -268,6 +303,7 @@ impl Stmt {
       Stmt::If { .. } => "If".to_string(),
       Stmt::While { .. } => "While".to_string(),
       Stmt::Block(_) => "Block".to_string(),
+      Stmt::For { .. } => "For".to_string(),
     }
   }
 }

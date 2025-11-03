@@ -239,6 +239,7 @@ impl Lexer {
       "else" => Some(TokenKind::Else),
       "while" => Some(TokenKind::While),
       "for" => Some(TokenKind::For),
+      "in" => Some(TokenKind::In),
       "loop" => Some(TokenKind::Loop),
       "match" => Some(TokenKind::Match),
       "break" => Some(TokenKind::Break),

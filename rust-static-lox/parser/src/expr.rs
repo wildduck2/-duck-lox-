@@ -123,6 +123,13 @@ pub enum Expr {
     else_branch: Option<Vec<Stmt>>,
     span: Span,
   },
+
+  Range {
+    start: Box<Expr>, // 0
+    end: Box<Expr>,   // 5
+    inclusive: bool,  // false for .., true for ..=
+    span: Span,
+  },
 }
 
 #[derive(Debug, Clone)]
@@ -192,7 +199,8 @@ pub enum Pattern {
   Range {
     start: Expr,
     end: Expr,
-  }, // 1..=10
+    inclusive: bool,
+  }, // 1..=10 | 1..10
 }
 
 #[derive(Debug, Clone)]
@@ -333,7 +341,11 @@ impl fmt::Display for Pattern {
         write!(f, "{}", pattern_str) // Remove extra parens
       },
 
-      Pattern::Range { start, end } => write!(f, "{}..{}", start, end),
+      Pattern::Range {
+        start,
+        end,
+        inclusive,
+      } => write!(f, "{}{}..{}", start, if *inclusive { "=" } else { "" }, end),
     }
   }
 }
@@ -456,6 +468,15 @@ impl fmt::Display for Expr {
         ..
       } => {
         write!(f, "if {} {{ {} stmts }}", condition, then_branch.len())
+      },
+
+      Expr::Range {
+        start,
+        end,
+        inclusive,
+        ..
+      } => {
+        write!(f, "{}..{}{}", start, if *inclusive { "=" } else { "" }, end)
       },
     }
   }
@@ -730,6 +751,31 @@ impl Expr {
             stmt.build_tree(&else_prefix, i == else_branch.len() - 1);
           }
         }
+      },
+
+      Expr::Range {
+        start,
+        end,
+        inclusive,
+        ..
+      } => {
+        // Label the node
+        let label = if *inclusive {
+          "Range(..=)"
+        } else {
+          "Range(..)"
+        };
+        print_node!(label);
+
+        // Print Start
+        println!("{}├── start:", new_prefix);
+        let start_prefix = format!("{}│   ", new_prefix);
+        start.build_tree(&start_prefix, true);
+
+        // Print End
+        println!("{}└── end:", new_prefix);
+        let end_prefix = format!("{}    ", new_prefix);
+        end.build_tree(&end_prefix, true);
       },
     }
   }
