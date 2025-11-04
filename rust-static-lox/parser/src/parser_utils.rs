@@ -35,7 +35,7 @@ interfaceMember  → IDENTIFIER "?" ":" type ";"
 typeAliasDecl    → "type" IDENTIFIER typeParams? "=" type ";" ;
 
 enumDecl         → "enum" IDENTIFIER "{" enumMember ( "," enumMember )* ","? "}" ;
-enumMember       → IDENTIFIER ( "=" ( INTEGER | STRING ) )? ;
+enumMember       → IDENTIFIER ( "=" ( NUMBER | STRING ) )? ;
 
 namespaceDecl    → "namespace" IDENTIFIER "{" declaration* "}" ;
 
@@ -114,10 +114,8 @@ call             → primary ( "(" arguments? ")"
 arguments        → argument ( "," argument )* ","? ;
 argument         → "..."? expression ;
 
-primary          → INTEGER
-                 | FLOAT
+primary          → NUMBER
                  | STRING
-                 | TEMPLATE_STRING
                  | "true"
                  | "false"
                  | "null"
@@ -161,7 +159,7 @@ primaryType      → primitiveType
                  | type "[" "]" ;
 
 primitiveType    → "number" | "string" | "boolean" | "void" | "any" | "unknown" | "never" | "null" | "undefined" | "symbol" | "bigint" ;
-literalType      → INTEGER | STRING | "true" | "false" ;
+literalType      → NUMBER | STRING | "true" | "false" ;
 arrayType        → type "[" "]" | "Array" "<" type ">" ;
 tupleType        → "[" type ( "," type )* ","? "]" ;
 functionType     → typeParams? "(" parameters? ")" "=>" type ;
@@ -179,14 +177,15 @@ use std::fmt::Arguments;
 
 use diagnostic::{
   code::DiagnosticCode,
-  diagnostic::{Diagnostic, LabelStyle, Span},
+  diagnostic::{Diagnostic, LabelStyle},
+  source_map,
   types::{error::DiagnosticError, warning::DiagnosticWarning},
-  DiagnosticEngine,
+  DiagnosticEngine, SourceFile, SourceMap,
 };
 use lexer::token::{Token, TokenKind};
 
 use crate::{
-  expr::{BinaryOp, Expr, Param, Stmt, Type, UnaryOp},
+  expr::{ArrayElement, BinaryOp, Expr, ObjectProperty, Param, PropertyKey, Stmt, Type, UnaryOp},
   Parser,
 };
 
@@ -205,7 +204,7 @@ impl Parser {
     while !self.is_eof() {
       match self.parse_declaration(engine) {
         Ok(stmt) => {
-          stmt.print_tree();
+          stmt.print_tree(&self.source_file);
           self.ast.push(stmt);
         },
         Err(_) => self.synchronize(engine),
@@ -224,7 +223,7 @@ impl Parser {
   /*                                         Fn Declaration                                       */
   /* -------------------------------------------------------------------------------------------- */
   fn parse_fn_decl(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
-    self.expect(TokenKind::Fn, engine)?; // consume the "fn"
+    // self.expect(TokenKind::Fn, engine)?; // consume the "fn"
 
     Err(())
   }
@@ -236,14 +235,7 @@ impl Parser {
   /// Parses a single statement node (stubbed for future grammar branches).
   fn parse_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     match self.current_token().kind {
-      _ => {
-        // Fallback to an expression statement when no declaration keyword is found.
-        // let expr = self.parse_expr_stmt(engine)?;
-        // self.expect(TokenKind::Semicolon, engine)?; // ensure the statement is terminated
-        //
-        // Ok(Stmt::Expr(expr))
-        Err(())
-      },
+      _ => self.parse_expr_stmt(engine),
     }
   }
 
@@ -272,6 +264,28 @@ impl Parser {
   }
 
   /* -------------------------------------------------------------------------------------------- */
+  /*                                    Expression Statement                                      */
+  /* -------------------------------------------------------------------------------------------- */
+  fn parse_expr_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    let expr = self.parse_expr(engine, ExprContext::Default)?;
+    self.expect(TokenKind::Semicolon, engine)?; // ensure the statement is terminated
+
+    Ok(Stmt::Expr(expr))
+  }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                    Expression Statement                                      */
+  /* -------------------------------------------------------------------------------------------- */
+
+  fn parse_expr(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+    context: ExprContext,
+  ) -> Result<Expr, ()> {
+    self.parse_primary(engine, context)
+  }
+
+  /* -------------------------------------------------------------------------------------------- */
   /*                                         Primary                                              */
   /* -------------------------------------------------------------------------------------------- */
 
@@ -284,24 +298,194 @@ impl Parser {
     let token = self.current_token();
     match token.kind {
       // handle any other token
+      TokenKind::String => {
+        self.advance(engine);
+        Ok(Expr::String { span: token.span })
+      },
+
+      TokenKind::Number => {
+        self.advance(engine);
+        Ok(Expr::Number { span: token.span })
+      },
+
+      TokenKind::True => {
+        self.advance(engine);
+        Ok(Expr::Bool { span: token.span })
+      },
+
+      TokenKind::False => {
+        self.advance(engine);
+        Ok(Expr::Bool { span: token.span })
+      },
+
+      TokenKind::Null => {
+        self.advance(engine);
+        Ok(Expr::Null { span: token.span })
+      },
+
+      TokenKind::Undefined => {
+        self.advance(engine);
+        Ok(Expr::Undefined { span: token.span })
+      },
+
+      TokenKind::This => {
+        self.advance(engine);
+        Ok(Expr::This { span: token.span })
+      },
+
+      TokenKind::Super => {
+        self.advance(engine);
+        Ok(Expr::Super { span: token.span })
+      },
+
+      TokenKind::Identifier => {
+        self.advance(engine);
+        Ok(Expr::Identifier { span: token.span })
+      },
+
+      TokenKind::LeftParen => {
+        self.advance(engine);
+        let expr = self.parse_expr(engine, ExprContext::Default)?;
+        self.expect(TokenKind::RightParen, engine)?;
+        Ok(expr)
+      },
+
+      TokenKind::LeftBracket => self.parse_array(engine),
+      TokenKind::LeftBrace => self.parse_object(engine),
+
       _ => {
+        let lexeme = self
+          .source_file
+          .src
+          .get(token.span.start..token.span.end)
+          .unwrap();
+
         // make some diagnostic here
         let diagnostic = Diagnostic::new(
           DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
-          format!("Unexpected token {:?}", token.lexeme),
-          "duck.lox".to_string(),
+          format!("Unexpected token {:?}", lexeme),
+          self.source_file.path.clone(),
         )
         .with_label(
-          Span::new(token.span.line + 1, 1, token.span.len),
-          Some(format!(
-            "Expected a primary expression, found {:?}",
-            token.lexeme
-          )),
+          token.span,
+          Some(format!("Expected a primary expression, found {:?}", lexeme)),
           LabelStyle::Primary,
         );
 
         engine.add(diagnostic);
 
+        Err(())
+      },
+    }
+  }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Array Literal                                        */
+  /* -------------------------------------------------------------------------------------------- */
+
+  fn parse_array(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let token = self.current_token();
+    self.advance(engine);
+    let mut elements = vec![];
+
+    while !self.is_eof() {
+      match self.current_token().kind {
+        TokenKind::RightBracket => {
+          self.advance(engine);
+          break;
+        },
+        TokenKind::DotDotDot => {
+          self.advance(engine);
+          let expr = self.parse_expr(engine, ExprContext::Default)?;
+          elements.push(ArrayElement::Spread(expr));
+        },
+        _ => {
+          let expr = self.parse_expr(engine, ExprContext::Default)?;
+          elements.push(ArrayElement::Expression(expr));
+
+          if self.current_token().kind == TokenKind::Comma {
+            self.expect(TokenKind::Comma, engine)?;
+          }
+        },
+      }
+    }
+
+    Ok(Expr::Array {
+      elements,
+      span: token.span,
+    })
+  }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Object Literal                                        */
+  /* -------------------------------------------------------------------------------------------- */
+
+  fn parse_object(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let token = self.current_token();
+    self.advance(engine);
+    let mut properties = vec![];
+
+    while !self.is_eof() {
+      match self.current_token().kind {
+        TokenKind::RightBrace => {
+          self.advance(engine);
+          break;
+        },
+        _ => {
+          let key = self.parse_property_key(engine)?;
+          self.expect(TokenKind::Colon, engine)?;
+          let value = self.parse_expr(engine, ExprContext::Default)?;
+          properties.push(ObjectProperty::Property { key, value });
+
+          if self.current_token().kind == TokenKind::Comma {
+            self.expect(TokenKind::Comma, engine)?;
+          }
+        },
+      }
+    }
+
+    Ok(Expr::Object {
+      properties,
+      span: token.span,
+    })
+  }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                         Property Key                                         */
+  /* -------------------------------------------------------------------------------------------- */
+
+  fn parse_property_key(&mut self, engine: &mut DiagnosticEngine) -> Result<PropertyKey, ()> {
+    let lexeme = self.source_file.src.clone();
+    let lexeme = lexeme
+      .get(self.current_token().span.start..self.current_token().span.end)
+      .unwrap();
+
+    match self.current_token().kind {
+      TokenKind::Identifier => {
+        self.advance(engine);
+        Ok(PropertyKey::Identifier(lexeme.to_string()))
+      },
+      TokenKind::String => {
+        self.advance(engine);
+        Ok(PropertyKey::String(lexeme.to_string()))
+      },
+      TokenKind::Number => {
+        self.advance(engine);
+        Ok(PropertyKey::Number(lexeme.parse::<f64>().unwrap()))
+      },
+      _ => {
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+          "Unexpected token".to_string(),
+          self.source_file.path.clone(),
+        )
+        .with_label(
+          self.current_token().span,
+          Some("Unexpected token".to_string()),
+          LabelStyle::Primary,
+        );
+
+        engine.add(diagnostic);
         Err(())
       },
     }

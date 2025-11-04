@@ -1,18 +1,15 @@
-use core::fmt;
-use diagnostic::diagnostic::Span;
-
 // ==================== EXPRESSIONS ====================
+
+use diagnostic::{SourceFile, SourceMap, Span};
 
 #[repr(u8)]
 #[derive(Debug, Clone)]
 pub enum Expr {
   // Literals
   Number {
-    value: f64,
     span: Span,
   },
   String {
-    value: String,
     span: Span,
   },
   Template {
@@ -21,7 +18,6 @@ pub enum Expr {
     span: Span,
   },
   Bool {
-    value: bool,
     span: Span,
   },
   Null {
@@ -33,7 +29,6 @@ pub enum Expr {
 
   // Identifiers and special
   Identifier {
-    name: String,
     span: Span,
   },
   This {
@@ -179,6 +174,7 @@ pub enum ObjectProperty {
 pub enum PropertyKey {
   Identifier(String),
   String(String),
+  Number(f64),
   Computed(Box<Expr>),
 }
 
@@ -615,7 +611,7 @@ macro_rules! print_node {
 }
 
 impl Expr {
-  pub fn build_tree(&self, prefix: &str, is_last: bool) {
+  pub fn build_tree(&self, prefix: &str, is_last: bool, source_file: &SourceFile) {
     let (connector, extension) = if is_last {
       ("└── ", "    ")
     } else {
@@ -625,12 +621,15 @@ impl Expr {
 
     match self {
       // ========== LITERALS ==========
-      Expr::Number { value, .. } => {
-        print_node!(prefix, connector, "Number", value);
+      Expr::Number { span } => {
+        let lexeme = source_file.src.get(span.start..span.end).unwrap();
+
+        print_node!(prefix, connector, "Number", lexeme);
       },
 
-      Expr::String { value, .. } => {
-        print_node!(prefix, connector, "String", format!("\"{}\"", value));
+      Expr::String { span } => {
+        let lexeme = source_file.src.get(span.start..span.end).unwrap();
+        print_node!(prefix, connector, "String", lexeme);
       },
 
       Expr::Template {
@@ -642,13 +641,15 @@ impl Expr {
           println!("{}└── expressions:", new_prefix);
           let expr_prefix = format!("{}    ", new_prefix);
           for (i, expr) in expressions.iter().enumerate() {
-            expr.build_tree(&expr_prefix, i == expressions.len() - 1);
+            expr.build_tree(&expr_prefix, i == expressions.len() - 1, source_file);
           }
         }
       },
 
-      Expr::Bool { value, .. } => {
-        print_node!(prefix, connector, "Bool", value);
+      Expr::Bool { span, .. } => {
+        let lexeme = source_file.src.get(span.start..span.end).unwrap();
+
+        print_node!(prefix, connector, "Bool", lexeme);
       },
 
       Expr::Null { .. } => {
@@ -660,8 +661,10 @@ impl Expr {
       },
 
       // ========== IDENTIFIERS & SPECIAL ==========
-      Expr::Identifier { name, .. } => {
-        print_node!(prefix, connector, "Identifier", name);
+      Expr::Identifier { span } => {
+        let lexeme = source_file.src.get(span.start..span.end).unwrap();
+
+        print_node!(prefix, connector, "Identifier", lexeme);
       },
 
       Expr::This { .. } => {
@@ -677,28 +680,28 @@ impl Expr {
         left, op, right, ..
       } => {
         print_node!(prefix, connector, "Binary", format!("{:?}", op));
-        left.build_tree(&new_prefix, false);
-        right.build_tree(&new_prefix, true);
+        left.build_tree(&new_prefix, false, source_file);
+        right.build_tree(&new_prefix, true, source_file);
       },
 
       Expr::Unary { op, expr, .. } => {
         print_node!(prefix, connector, "Unary", format!("{:?}", op));
-        expr.build_tree(&new_prefix, true);
+        expr.build_tree(&new_prefix, true, source_file);
       },
 
       Expr::Postfix { expr, op, .. } => {
         print_node!(prefix, connector, "Postfix", format!("{:?}", op));
-        expr.build_tree(&new_prefix, true);
+        expr.build_tree(&new_prefix, true, source_file);
       },
 
       // ========== ACCESS ==========
       Expr::Call { callee, args, .. } => {
         if args.is_empty() {
           print_node!(prefix, connector, "Call()");
-          callee.build_tree(&new_prefix, true);
+          callee.build_tree(&new_prefix, true, source_file);
         } else {
           print_node!(prefix, connector, "Call");
-          callee.build_tree(&new_prefix, false);
+          callee.build_tree(&new_prefix, false, source_file);
           println!("{}└── args:", new_prefix);
           let args_prefix = format!("{}    ", new_prefix);
           for (i, arg) in args.iter().enumerate() {
@@ -722,7 +725,7 @@ impl Expr {
                 "│   "
               }
             );
-            arg.expr.build_tree(&arg_prefix, true);
+            arg.expr.build_tree(&arg_prefix, true, source_file);
           }
         }
       },
@@ -735,13 +738,13 @@ impl Expr {
       } => {
         let op = if *optional { "?." } else { "." };
         print_node!(prefix, connector, "Member", format!("{}{}", op, property));
-        object.build_tree(&new_prefix, true);
+        object.build_tree(&new_prefix, true, source_file);
       },
 
       Expr::Index { object, index, .. } => {
         print_node!(prefix, connector, "Index");
-        object.build_tree(&new_prefix, false);
-        index.build_tree(&new_prefix, true);
+        object.build_tree(&new_prefix, false, source_file);
+        index.build_tree(&new_prefix, true, source_file);
       },
 
       // ========== ASSIGNMENT ==========
@@ -749,8 +752,8 @@ impl Expr {
         target, op, value, ..
       } => {
         print_node!(prefix, connector, "Assign", format!("{:?}", op));
-        target.build_tree(&new_prefix, false);
-        value.build_tree(&new_prefix, true);
+        target.build_tree(&new_prefix, false, source_file);
+        value.build_tree(&new_prefix, true, source_file);
       },
 
       // ========== LITERALS (COMPOSITE) ==========
@@ -759,7 +762,7 @@ impl Expr {
         for (i, elem) in elements.iter().enumerate() {
           match elem {
             ArrayElement::Expression(expr) => {
-              expr.build_tree(&new_prefix, i == elements.len() - 1);
+              expr.build_tree(&new_prefix, i == elements.len() - 1, source_file);
             },
             ArrayElement::Spread(expr) => {
               println!(
@@ -780,7 +783,7 @@ impl Expr {
                   "│   "
                 }
               );
-              expr.build_tree(&spread_prefix, true);
+              expr.build_tree(&spread_prefix, true, source_file);
             },
           }
         }
@@ -799,16 +802,17 @@ impl Expr {
                 PropertyKey::Identifier(s) => s.clone(),
                 PropertyKey::String(s) => format!("\"{}\"", s),
                 PropertyKey::Computed(_) => "[computed]".to_string(),
+                PropertyKey::Number(n) => format!("{}", n),
               };
               println!("{}{}{}: ", new_prefix, prop_connector, key_str);
-              value.build_tree(&prop_prefix, true);
+              value.build_tree(&prop_prefix, true, source_file);
             },
             ObjectProperty::Shorthand { name } => {
               println!("{}{}{} (shorthand)", new_prefix, prop_connector, name);
             },
             ObjectProperty::Spread { expr } => {
               println!("{}{}...spread:", new_prefix, prop_connector);
-              expr.build_tree(&prop_prefix, true);
+              expr.build_tree(&prop_prefix, true, source_file);
             },
             ObjectProperty::Method {
               key,
@@ -820,6 +824,7 @@ impl Expr {
                 PropertyKey::Identifier(s) => s.clone(),
                 PropertyKey::String(s) => format!("\"{}\"", s),
                 PropertyKey::Computed(_) => "[computed]".to_string(),
+                PropertyKey::Number(n) => format!("{}", n),
               };
               let async_str = if *is_async { "async " } else { "" };
               println!(
@@ -902,14 +907,14 @@ impl Expr {
           ArrowBody::Expression(expr) => {
             println!("{}└── expr:", new_prefix);
             let body_prefix = format!("{}    ", new_prefix);
-            expr.build_tree(&body_prefix, true);
+            expr.build_tree(&body_prefix, true, source_file);
           },
           ArrowBody::Block(stmts) => {
             if !stmts.is_empty() {
               println!("{}└── body:", new_prefix);
               let body_prefix = format!("{}    ", new_prefix);
               for (i, stmt) in stmts.iter().enumerate() {
-                stmt.build_tree(&body_prefix, i == stmts.len() - 1);
+                stmt.build_tree(&body_prefix, i == stmts.len() - 1, source_file);
               }
             }
           },
@@ -925,17 +930,17 @@ impl Expr {
       } => {
         print_node!(prefix, connector, "Ternary");
         println!("{}├── condition:", new_prefix);
-        condition.build_tree(&format!("{}│   ", new_prefix), true);
+        condition.build_tree(&format!("{}│   ", new_prefix), true, source_file);
         println!("{}├── then:", new_prefix);
-        then_expr.build_tree(&format!("{}│   ", new_prefix), true);
+        then_expr.build_tree(&format!("{}│   ", new_prefix), true, source_file);
         println!("{}└── else:", new_prefix);
-        else_expr.build_tree(&format!("{}    ", new_prefix), true);
+        else_expr.build_tree(&format!("{}    ", new_prefix), true, source_file);
       },
 
       Expr::Sequence { expressions, .. } => {
         print_node!(prefix, connector, "Sequence");
         for (i, expr) in expressions.iter().enumerate() {
-          expr.build_tree(&new_prefix, i == expressions.len() - 1);
+          expr.build_tree(&new_prefix, i == expressions.len() - 1, source_file);
         }
       },
 
@@ -943,12 +948,14 @@ impl Expr {
         constructor, args, ..
       } => {
         print_node!(prefix, connector, "New");
-        constructor.build_tree(&new_prefix, args.is_empty());
+        constructor.build_tree(&new_prefix, args.is_empty(), source_file);
         if !args.is_empty() {
           println!("{}└── args:", new_prefix);
           let args_prefix = format!("{}    ", new_prefix);
           for (i, arg) in args.iter().enumerate() {
-            arg.expr.build_tree(&args_prefix, i == args.len() - 1);
+            arg
+              .expr
+              .build_tree(&args_prefix, i == args.len() - 1, source_file);
           }
         }
       },
@@ -964,28 +971,28 @@ impl Expr {
           "TypeAssertion",
           format!("as {:?}", type_annotation)
         );
-        expr.build_tree(&new_prefix, true);
+        expr.build_tree(&new_prefix, true, source_file);
       },
 
       Expr::NonNull { expr, .. } => {
         print_node!(prefix, connector, "NonNull", "!");
-        expr.build_tree(&new_prefix, true);
+        expr.build_tree(&new_prefix, true, source_file);
       },
 
       Expr::Grouping { expr, .. } => {
         print_node!(prefix, connector, "Grouping");
-        expr.build_tree(&new_prefix, true);
+        expr.build_tree(&new_prefix, true, source_file);
       },
     }
   }
 }
 
 impl Stmt {
-  pub fn print_tree(&self) {
-    self.build_tree("", true);
+  pub fn print_tree(&self, source_file: &SourceFile) {
+    self.build_tree("", true, source_file);
   }
 
-  pub fn build_tree(&self, prefix: &str, is_last: bool) {
+  pub fn build_tree(&self, prefix: &str, is_last: bool, source_file: &SourceFile) {
     let (connector, extension) = if is_last {
       ("└── ", "    ")
     } else {
@@ -996,7 +1003,7 @@ impl Stmt {
     match self {
       Stmt::Expr(expr) => {
         print_node!(prefix, connector, "ExprStmt");
-        expr.build_tree(&new_prefix, true);
+        expr.build_tree(&new_prefix, true, source_file);
       },
 
       Stmt::VarDecl {
@@ -1017,7 +1024,7 @@ impl Stmt {
           format!("{:?} {}{}", kind, name, type_str)
         );
         if let Some(init) = initializer {
-          init.build_tree(&new_prefix, true);
+          init.build_tree(&new_prefix, true, source_file);
         }
       },
 
@@ -1058,7 +1065,7 @@ impl Stmt {
           println!("{}└── body:", new_prefix);
           let body_prefix = format!("{}    ", new_prefix);
           for (i, stmt) in body.iter().enumerate() {
-            stmt.build_tree(&body_prefix, i == body.len() - 1);
+            stmt.build_tree(&body_prefix, i == body.len() - 1, source_file);
           }
         }
       },
@@ -1313,7 +1320,7 @@ impl Stmt {
       Stmt::NamespaceDecl { name, body, .. } => {
         print_node!(prefix, connector, format!("namespace {}", name));
         for (i, stmt) in body.iter().enumerate() {
-          stmt.build_tree(&new_prefix, i == body.len() - 1);
+          stmt.build_tree(&new_prefix, i == body.len() - 1, source_file);
         }
       },
 
@@ -1325,7 +1332,7 @@ impl Stmt {
       } => {
         print_node!(prefix, connector, "If");
         println!("{}├── condition:", new_prefix);
-        condition.build_tree(&format!("{}│   ", new_prefix), true);
+        condition.build_tree(&format!("{}│   ", new_prefix), true, source_file);
         println!(
           "{}{}then:",
           new_prefix,
@@ -1344,10 +1351,10 @@ impl Stmt {
             "    "
           }
         );
-        then_branch.build_tree(&then_prefix, true);
+        then_branch.build_tree(&then_prefix, true, source_file);
         if let Some(else_stmt) = else_branch {
           println!("{}└── else:", new_prefix);
-          else_stmt.build_tree(&format!("{}    ", new_prefix), true);
+          else_stmt.build_tree(&format!("{}    ", new_prefix), true, source_file);
         }
       },
 
@@ -1355,16 +1362,16 @@ impl Stmt {
         condition, body, ..
       } => {
         print_node!(prefix, connector, "While");
-        condition.build_tree(&new_prefix, false);
-        body.build_tree(&new_prefix, true);
+        condition.build_tree(&new_prefix, false, source_file);
+        body.build_tree(&new_prefix, true, source_file);
       },
 
       Stmt::DoWhile {
         body, condition, ..
       } => {
         print_node!(prefix, connector, "DoWhile");
-        body.build_tree(&new_prefix, false);
-        condition.build_tree(&new_prefix, true);
+        body.build_tree(&new_prefix, false, source_file);
+        condition.build_tree(&new_prefix, true, source_file);
       },
 
       Stmt::For {
@@ -1377,18 +1384,18 @@ impl Stmt {
         print_node!(prefix, connector, "For");
         if let Some(i) = init {
           println!("{}├── init:", new_prefix);
-          i.build_tree(&format!("{}│   ", new_prefix), true);
+          i.build_tree(&format!("{}│   ", new_prefix), true, source_file);
         }
         if let Some(c) = condition {
           println!("{}├── condition:", new_prefix);
-          c.build_tree(&format!("{}│   ", new_prefix), true);
+          c.build_tree(&format!("{}│   ", new_prefix), true, source_file);
         }
         if let Some(u) = update {
           println!("{}├── update:", new_prefix);
-          u.build_tree(&format!("{}│   ", new_prefix), true);
+          u.build_tree(&format!("{}│   ", new_prefix), true, source_file);
         }
         println!("{}└── body:", new_prefix);
-        body.build_tree(&format!("{}    ", new_prefix), true);
+        body.build_tree(&format!("{}    ", new_prefix), true, source_file);
       },
 
       Stmt::ForIn {
@@ -1403,8 +1410,8 @@ impl Stmt {
           connector,
           format!("ForIn({:?} {} in)", kind, variable)
         );
-        iterable.build_tree(&new_prefix, false);
-        body.build_tree(&new_prefix, true);
+        iterable.build_tree(&new_prefix, false, source_file);
+        body.build_tree(&new_prefix, true, source_file);
       },
 
       Stmt::ForOf {
@@ -1419,8 +1426,8 @@ impl Stmt {
           connector,
           format!("ForOf({:?} {} of)", kind, variable)
         );
-        iterable.build_tree(&new_prefix, false);
-        body.build_tree(&new_prefix, true);
+        iterable.build_tree(&new_prefix, false, source_file);
+        body.build_tree(&new_prefix, true, source_file);
       },
 
       Stmt::Switch {
@@ -1429,7 +1436,7 @@ impl Stmt {
         ..
       } => {
         print_node!(prefix, connector, "Switch");
-        discriminant.build_tree(&new_prefix, false);
+        discriminant.build_tree(&new_prefix, false, source_file);
         println!("{}└── cases:", new_prefix);
         let cases_prefix = format!("{}    ", new_prefix);
         for (i, case) in cases.iter().enumerate() {
@@ -1452,9 +1459,9 @@ impl Stmt {
                 "│   "
               }
             );
-            test.build_tree(&case_prefix, case.consequent.is_empty());
+            test.build_tree(&case_prefix, case.consequent.is_empty(), source_file);
             for (j, stmt) in case.consequent.iter().enumerate() {
-              stmt.build_tree(&case_prefix, j == case.consequent.len() - 1);
+              stmt.build_tree(&case_prefix, j == case.consequent.len() - 1, source_file);
             }
           } else {
             println!(
@@ -1476,7 +1483,7 @@ impl Stmt {
               }
             );
             for (j, stmt) in case.consequent.iter().enumerate() {
-              stmt.build_tree(&case_prefix, j == case.consequent.len() - 1);
+              stmt.build_tree(&case_prefix, j == case.consequent.len() - 1, source_file);
             }
           }
         }
@@ -1511,7 +1518,7 @@ impl Stmt {
           }
         );
         for (i, stmt) in block.iter().enumerate() {
-          stmt.build_tree(&try_prefix, i == block.len() - 1);
+          stmt.build_tree(&try_prefix, i == block.len() - 1, source_file);
         }
 
         if let Some(catch) = catch_clause {
@@ -1536,7 +1543,7 @@ impl Stmt {
             if has_finally { "│   " } else { "    " }
           );
           for (i, stmt) in catch.body.iter().enumerate() {
-            stmt.build_tree(&catch_prefix, i == catch.body.len() - 1);
+            stmt.build_tree(&catch_prefix, i == catch.body.len() - 1, source_file);
           }
         }
 
@@ -1544,20 +1551,20 @@ impl Stmt {
           println!("{}└── finally:", new_prefix);
           let finally_prefix = format!("{}    ", new_prefix);
           for (i, stmt) in finally.iter().enumerate() {
-            stmt.build_tree(&finally_prefix, i == finally.len() - 1);
+            stmt.build_tree(&finally_prefix, i == finally.len() - 1, source_file);
           }
         }
       },
 
       Stmt::Throw { expr, .. } => {
         print_node!(prefix, connector, "Throw");
-        expr.build_tree(&new_prefix, true);
+        expr.build_tree(&new_prefix, true, source_file);
       },
 
       Stmt::Return { value, .. } => {
         print_node!(prefix, connector, "Return");
         if let Some(val) = value {
-          val.build_tree(&new_prefix, true);
+          val.build_tree(&new_prefix, true, source_file);
         }
       },
 
@@ -1572,13 +1579,13 @@ impl Stmt {
       Stmt::Block(stmts) => {
         print_node!(prefix, connector, "Block");
         for (i, stmt) in stmts.iter().enumerate() {
-          stmt.build_tree(&new_prefix, i == stmts.len() - 1);
+          stmt.build_tree(&new_prefix, i == stmts.len() - 1, source_file);
         }
       },
 
       Stmt::Export { declaration, .. } => {
         print_node!(prefix, connector, "Export");
-        declaration.build_tree(&new_prefix, true);
+        declaration.build_tree(&new_prefix, true, source_file);
       },
 
       Stmt::Import {
