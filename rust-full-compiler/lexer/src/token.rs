@@ -91,7 +91,7 @@ pub enum TokenKind {
   LeftBracket,  // [
   RightBracket, // ]
   Dot,          // .
-  DotDotDot,    // ...
+  DotDot,       // ..
   Comma,        // ,
   Colon,        // :
   ColonColon,   // ::

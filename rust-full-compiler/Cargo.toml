@@ -1,0 +1,25 @@
+[workspace]
+members = [
+  "core",
+  "diagnostic",
+  "lexer", 
+  "parser"
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["wildduck2 <duckui@duck.com>"]
+description = "A statically-typed language built on what you learned from Lox"
+license = "MIT"
+repository = "https://github.com/gentleeduck/duck-ttlog"
+keywords = ["language", "interpreter", "lox", "static", "type", "system"]
+categories = ["command-line-utilities", "development-tools"]
+
+[workspace.dependencies]
+# Core dependencies
+chrono = "0.4.41"
+colored = "3.0.0"
+
+tokio = { version = "1.47.1", features = ["full"] }

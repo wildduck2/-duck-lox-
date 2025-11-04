@@ -31,8 +31,8 @@ pub enum Stmt {
   },
 
   For {
-    initializer: Box<Expr>,
-    collection: Box<Expr>,
+    variable: Box<Expr>,
+    iterator: Box<Expr>,
     body: Vec<Stmt>,
     span: Span,
   },
@@ -45,12 +45,10 @@ pub enum Stmt {
   },
 
   Break {
-    label: Option<Expr>,
     span: Span,
   },
 
   Continue {
-    label: Option<Expr>,
     span: Span,
   },
 }
@@ -182,8 +180,8 @@ impl fmt::Display for Stmt {
         write!(f, "Block({:?})", stmts)
       },
       Stmt::For {
-        initializer,
-        collection,
+        variable: initializer,
+        iterator: collection,
         body,
         ..
       } => {
@@ -196,11 +194,11 @@ impl fmt::Display for Stmt {
       Stmt::Return { value, .. } => {
         write!(f, "Return(value: {:?})", value)
       },
-      Stmt::Break { label, .. } => {
-        write!(f, "Break(label: {:?})", label)
+      Stmt::Break { .. } => {
+        write!(f, "Break( )")
       },
-      Stmt::Continue { label, .. } => {
-        write!(f, "Continue(label: {:?})", label)
+      Stmt::Continue { .. } => {
+        write!(f, "Continue()")
       },
     }
   }
@@ -307,8 +305,8 @@ impl Stmt {
       },
 
       Stmt::For {
-        initializer,
-        collection,
+        variable: initializer,
+        iterator: collection,
         body,
         ..
       } => {
@@ -339,20 +337,12 @@ impl Stmt {
         }
       },
 
-      Stmt::Break { label, .. } => {
-        if let Some(lbl) = label {
-          println!("{}{}Break (label: {})", prefix, connector, lbl);
-        } else {
-          println!("{}{}Break", prefix, connector);
-        }
+      Stmt::Break { .. } => {
+        println!("{}{}Break", prefix, connector);
       },
 
-      Stmt::Continue { label, .. } => {
-        if let Some(lbl) = label {
-          println!("{}{}Continue (label: {})", prefix, connector, lbl);
-        } else {
-          println!("{}{}Continue", prefix, connector);
-        }
+      Stmt::Continue { .. } => {
+        println!("{}{}Continue", prefix, connector);
       },
     }
   }

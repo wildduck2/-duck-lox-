@@ -73,20 +73,17 @@ impl Lexer {
   }
 
   fn parse_colon(&mut self) -> Option<TokenKind> {
-    // if self.match_char(self.peek(), ':') {
-    //   self.advance(); // consume the ':'
-    //   return Some(TokenKind::ColonColon);
-    // }
+    if self.match_char(self.peek(), ':') {
+      self.advance(); // consume the ':'
+      return Some(TokenKind::ColonColon);
+    }
     Some(TokenKind::Colon)
   }
 
   fn lex_dot(&mut self) -> Option<TokenKind> {
     if self.match_char(self.peek(), '.') {
       self.advance(); // consume the '..'
-      if self.match_char(self.peek(), '.') {
-        self.advance(); // consume the '...'
-        return Some(TokenKind::DotDotDot);
-      }
+      return Some(TokenKind::DotDot);
     }
 
     return Some(TokenKind::Dot);

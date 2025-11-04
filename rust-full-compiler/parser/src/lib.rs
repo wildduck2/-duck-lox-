@@ -6,10 +6,11 @@ use diagnostic::{
 };
 use lexer::token::{Token, TokenKind};
 
-use crate::expr::Stmt;
+use crate::stmt::Stmt;
 
 mod expr;
 mod parser_utils;
+mod stmt;
 
 /// Recursive-descent parser that transforms tokens into an AST while reporting diagnostics.
 pub struct Parser {

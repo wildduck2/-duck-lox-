@@ -1,489 +1,617 @@
 use core::fmt;
 use diagnostic::diagnostic::Span;
 
-use crate::stmt::{Stmt, Type};
+// ==================== EXPRESSIONS ====================
 
 #[repr(u8)]
 #[derive(Debug, Clone)]
 pub enum Expr {
-  Integer {
-    value: i64,
-    span: Span,
-  },
-
-  Float {
+  // Literals
+  Number {
     value: f64,
     span: Span,
   },
-
   String {
     value: String,
     span: Span,
   },
-
+  Template {
+    parts: Vec<String>,
+    expressions: Vec<Box<Expr>>,
+    span: Span,
+  },
   Bool {
     value: bool,
     span: Span,
   },
-
-  Nil {
+  Null {
+    span: Span,
+  },
+  Undefined {
     span: Span,
   },
 
+  // Identifiers and special
   Identifier {
     name: String,
     span: Span,
   },
+  This {
+    span: Span,
+  },
+  Super {
+    span: Span,
+  },
 
+  // Operations
   Binary {
     left: Box<Expr>,
     op: BinaryOp,
     right: Box<Expr>,
     span: Span,
   },
-
   Unary {
     op: UnaryOp,
     expr: Box<Expr>,
     span: Span,
   },
+  Postfix {
+    expr: Box<Expr>,
+    op: PostfixOp,
+    span: Span,
+  },
 
+  // Access
   Call {
     callee: Box<Expr>,
-    args: Vec<Expr>,
+    args: Vec<Argument>,
     span: Span,
   },
-
   Member {
     object: Box<Expr>,
-    field: String,
+    property: String,
+    optional: bool, // for ?.
     span: Span,
   },
-
   Index {
     object: Box<Expr>,
     index: Box<Expr>,
     span: Span,
   },
 
+  // Assignment
   Assign {
     target: Box<Expr>,
+    op: AssignOp,
     value: Box<Expr>,
     span: Span,
   },
 
+  // Literals
   Array {
-    elements: Vec<Expr>,
+    elements: Vec<ArrayElement>,
     span: Span,
   },
-
   Object {
-    type_name: String,
-    fields: Vec<(String, Expr)>,
+    properties: Vec<ObjectProperty>,
     span: Span,
   },
 
-  Lambda {
+  // Functions
+  Arrow {
     params: Vec<Param>,
     return_type: Option<Type>,
-    body: Vec<Stmt>,
+    body: ArrowBody,
+    is_async: bool,
     span: Span,
   },
 
-  Match {
+  // Special expressions
+  Ternary {
+    condition: Box<Expr>,
+    then_expr: Box<Expr>,
+    else_expr: Box<Expr>,
+    span: Span,
+  },
+  Sequence {
+    expressions: Vec<Expr>,
+    span: Span,
+  },
+  New {
+    constructor: Box<Expr>,
+    args: Vec<Argument>,
+    span: Span,
+  },
+  TypeAssertion {
     expr: Box<Expr>,
-    arms: Vec<MatchArm>,
+    type_annotation: Type,
     span: Span,
   },
-
-  Tuple {
-    elements: Vec<Expr>,
+  NonNull {
+    expr: Box<Expr>,
     span: Span,
   },
-
   Grouping {
     expr: Box<Expr>,
     span: Span,
   },
+}
 
-  Comma {
-    expressions: Vec<Expr>,
+#[derive(Debug, Clone)]
+pub enum ArrowBody {
+  Expression(Box<Expr>),
+  Block(Vec<Stmt>),
+}
+
+#[derive(Debug, Clone)]
+pub struct Argument {
+  pub spread: bool,
+  pub expr: Expr,
+}
+
+#[derive(Debug, Clone)]
+pub enum ArrayElement {
+  Expression(Expr),
+  Spread(Expr),
+}
+
+#[derive(Debug, Clone)]
+pub enum ObjectProperty {
+  Property {
+    key: PropertyKey,
+    value: Expr,
+  },
+  Shorthand {
+    name: String,
+  },
+  Spread {
+    expr: Expr,
+  },
+  Method {
+    key: PropertyKey,
+    params: Vec<Param>,
+    body: Vec<Stmt>,
+    is_async: bool,
+  },
+}
+
+#[derive(Debug, Clone)]
+pub enum PropertyKey {
+  Identifier(String),
+  String(String),
+  Computed(Box<Expr>),
+}
+
+// ==================== OPERATORS ====================
+
+#[repr(u8)]
+#[derive(Debug, Clone)]
+pub enum BinaryOp {
+  // Arithmetic
+  Add,
+  Sub,
+  Mul,
+  Div,
+  Mod,
+  Exp,
+
+  // Bitwise
+  BitAnd,
+  BitOr,
+  BitXor,
+  LeftShift,
+  RightShift,
+  UnsignedRightShift,
+
+  // Comparison
+  Eq,
+  NotEq,
+  StrictEq,
+  StrictNotEq,
+  Less,
+  LessEq,
+  Greater,
+  GreaterEq,
+
+  // Logical
+  And,
+  Or,
+  NullishCoalescing,
+
+  // Special
+  In,
+  InstanceOf,
+}
+
+#[repr(u8)]
+#[derive(Debug, Clone)]
+pub enum UnaryOp {
+  Not,
+  BitwiseNot,
+  Neg,
+  Plus,
+  TypeOf,
+  Void,
+  Delete,
+  Await,
+}
+
+#[repr(u8)]
+#[derive(Debug, Clone)]
+pub enum PostfixOp {
+  Increment, // ++
+  Decrement, // --
+}
+
+#[repr(u8)]
+#[derive(Debug, Clone)]
+pub enum AssignOp {
+  Assign,        // =
+  AddAssign,     // +=
+  SubAssign,     // -=
+  MulAssign,     // *=
+  DivAssign,     // /=
+  ModAssign,     // %=
+  AndAssign,     // &&=
+  OrAssign,      // ||=
+  NullishAssign, // ??=
+}
+
+// ==================== STATEMENTS ====================
+
+#[repr(u8)]
+#[derive(Debug, Clone)]
+pub enum Stmt {
+  Expr(Expr),
+
+  VarDecl {
+    kind: VarKind,
+    name: String,
+    type_annotation: Option<Type>,
+    initializer: Option<Expr>,
     span: Span,
   },
 
-  Ternary {
-    condition: Box<Expr>,
-    then_branch: Box<Expr>,
-    else_branch: Box<Expr>,
+  FunctionDecl {
+    name: String,
+    type_params: Vec<TypeParam>,
+    params: Vec<Param>,
+    return_type: Option<Type>,
+    body: Vec<Stmt>,
+    is_async: bool,
+    span: Span,
+  },
+
+  ClassDecl {
+    name: String,
+    type_params: Vec<TypeParam>,
+    extends: Option<Type>,
+    implements: Vec<Type>,
+    members: Vec<ClassMember>,
+    is_abstract: bool,
+    span: Span,
+  },
+
+  InterfaceDecl {
+    name: String,
+    type_params: Vec<TypeParam>,
+    extends: Vec<Type>,
+    members: Vec<InterfaceMember>,
+    span: Span,
+  },
+
+  TypeAliasDecl {
+    name: String,
+    type_params: Vec<TypeParam>,
+    type_annotation: Type,
+    span: Span,
+  },
+
+  EnumDecl {
+    name: String,
+    members: Vec<EnumMember>,
+    span: Span,
+  },
+
+  NamespaceDecl {
+    name: String,
+    body: Vec<Stmt>,
     span: Span,
   },
 
   If {
     condition: Box<Expr>,
-    then_branch: Vec<Stmt>,
-    else_branch: Option<Vec<Stmt>>,
+    then_branch: Box<Stmt>,
+    else_branch: Option<Box<Stmt>>,
     span: Span,
   },
 
-  Range {
-    start: Box<Expr>, // 0
-    end: Box<Expr>,   // 5
-    inclusive: bool,  // false for .., true for ..=
+  While {
+    condition: Box<Expr>,
+    body: Box<Stmt>,
     span: Span,
   },
+
+  DoWhile {
+    body: Box<Stmt>,
+    condition: Box<Expr>,
+    span: Span,
+  },
+
+  For {
+    init: Option<Box<Stmt>>,
+    condition: Option<Box<Expr>>,
+    update: Option<Box<Expr>>,
+    body: Box<Stmt>,
+    span: Span,
+  },
+
+  ForIn {
+    kind: VarKind,
+    variable: String,
+    iterable: Box<Expr>,
+    body: Box<Stmt>,
+    span: Span,
+  },
+
+  ForOf {
+    kind: VarKind,
+    variable: String,
+    iterable: Box<Expr>,
+    body: Box<Stmt>,
+    span: Span,
+  },
+
+  Switch {
+    discriminant: Box<Expr>,
+    cases: Vec<SwitchCase>,
+    span: Span,
+  },
+
+  Try {
+    block: Vec<Stmt>,
+    catch_clause: Option<CatchClause>,
+    finally_block: Option<Vec<Stmt>>,
+    span: Span,
+  },
+
+  Throw {
+    expr: Box<Expr>,
+    span: Span,
+  },
+
+  Return {
+    value: Option<Box<Expr>>,
+    span: Span,
+  },
+
+  Break {
+    span: Span,
+  },
+
+  Continue {
+    span: Span,
+  },
+
+  Block(Vec<Stmt>),
+
+  Export {
+    declaration: Box<Stmt>,
+    span: Span,
+  },
+
+  Import {
+    specifiers: ImportSpecifier,
+    source: String,
+    span: Span,
+  },
+}
+
+// ==================== DECLARATIONS ====================
+
+#[repr(u8)]
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum VarKind {
+  Var,
+  Let,
+  Const,
 }
 
 #[derive(Debug, Clone)]
 pub struct Param {
   pub name: String,
   pub type_annotation: Option<Type>,
+  pub optional: bool,
+  pub rest: bool, // for ...args
   pub default_value: Option<Expr>,
 }
 
 #[derive(Debug, Clone)]
-pub struct Field {
-  pub name: String,
-  pub type_annotation: Type,
-  pub default_value: Option<Expr>,
+pub struct ClassMember {
+  pub visibility: Visibility,
+  pub is_static: bool,
+  pub is_readonly: bool,
+  pub kind: ClassMemberKind,
 }
 
 #[derive(Debug, Clone)]
-pub struct FnSignature {
-  pub name: String,
-  pub params: Vec<Param>,
-  pub return_type: Type,
+pub enum ClassMemberKind {
+  Property {
+    name: String,
+    type_annotation: Option<Type>,
+    initializer: Option<Expr>,
+    optional: bool,
+  },
+  Method {
+    name: String,
+    type_params: Vec<TypeParam>,
+    params: Vec<Param>,
+    return_type: Option<Type>,
+    body: Vec<Stmt>,
+    is_async: bool,
+  },
+  Constructor {
+    params: Vec<Param>,
+    body: Vec<Stmt>,
+  },
+}
+
+#[repr(u8)]
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum Visibility {
+  Public,
+  Private,
+  Protected,
 }
 
 #[derive(Debug, Clone)]
-pub struct MatchArm {
-  pub pattern: Pattern,
-  pub guard: Option<Expr>,
+pub struct InterfaceMember {
+  pub name: String,
+  pub kind: InterfaceMemberKind,
+}
+
+#[derive(Debug, Clone)]
+pub enum InterfaceMemberKind {
+  Property {
+    type_annotation: Type,
+    optional: bool,
+  },
+  Method {
+    type_params: Vec<TypeParam>,
+    params: Vec<Param>,
+    return_type: Type,
+  },
+  IndexSignature {
+    key_name: String,
+    key_type: Type,
+    value_type: Type,
+  },
+}
+
+#[derive(Debug, Clone)]
+pub struct EnumMember {
+  pub name: String,
+  pub value: Option<EnumValue>,
+}
+
+#[derive(Debug, Clone)]
+pub enum EnumValue {
+  Number(f64),
+  String(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct SwitchCase {
+  pub test: Option<Expr>, // None for default case
+  pub consequent: Vec<Stmt>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CatchClause {
+  pub param: Option<String>,
+  pub type_annotation: Option<Type>,
   pub body: Vec<Stmt>,
 }
 
+#[derive(Debug, Clone)]
+pub enum ImportSpecifier {
+  Default(String),
+  Named(Vec<String>),
+  Namespace(String),
+}
+
+// ==================== TYPES ====================
+
 #[repr(u8)]
 #[derive(Debug, Clone)]
-pub enum Pattern {
-  Wildcard,           // _
-  Literal(Expr),      // 42, "hello", true
-  Identifier(String), // x, name
+pub enum Type {
+  // Primitives
+  Number,
+  String,
+  Boolean,
+  Void,
+  Any,
+  Unknown,
+  Never,
+  Null,
+  Undefined,
+  Symbol,
+  BigInt,
 
-  Tuple(Vec<Pattern>), // (x, y, _)
+  // Literal types
+  NumberLiteral(f64),
+  StringLiteral(String),
+  BooleanLiteral(bool),
 
-  Struct {
-    name: String,                   // Person
-    fields: Vec<(String, Pattern)>, // { name: x, age: _ }
+  // Composite
+  Array(Box<Type>),
+  Tuple(Vec<Type>),
+
+  Function {
+    type_params: Vec<TypeParam>,
+    params: Vec<FunctionParam>,
+    return_type: Box<Type>,
   },
 
-  // For tuple-style patterns: Some(x), Point(1, 2)
-  TupleStruct {
+  Object {
+    members: Vec<TypeMember>,
+  },
+
+  // Reference
+  Reference {
     name: String,
-    patterns: Vec<Pattern>,
+    type_args: Vec<Type>,
   },
 
-  // Path with tuple: Option::Some(x), Result::Ok(val)
-  PathTuple {
-    path: Vec<String>, // ["Option", "Some"]
-    patterns: Vec<Pattern>,
+  // Operators
+  Union(Vec<Type>),
+  Intersection(Vec<Type>),
+  Optional(Box<Type>),
+
+  // Advanced
+  TypeQuery(String), // typeof x
+  Conditional {
+    check_type: Box<Type>,
+    extends_type: Box<Type>,
+    true_type: Box<Type>,
+    false_type: Box<Type>,
   },
 
-  // Path with struct: User::Name { first, last }
-  PathStruct {
-    path: Vec<String>, // ["User", "Name"]
-    fields: Vec<(String, Pattern)>,
+  IndexedAccess {
+    object_type: Box<Type>,
+    index_type: Box<Type>,
   },
-
-  Array(Vec<Pattern>), // [first, second, rest @ ..]
-
-  // Rest,                                      // ... or @ rest
-  Or(Vec<Pattern>), // 1 | 2 | 3
-
-  Range {
-    start: Expr,
-    end: Expr,
-    inclusive: bool,
-  }, // 1..=10 | 1..10
 }
 
-#[repr(u8)]
 #[derive(Debug, Clone)]
-pub enum BinaryOp {
-  Add,
-  Sub,
-  Mul,
-  Div,
-  Mod,
-  Power,
-  Eq,
-  NotEq,
-  Less,
-  LessEq,
-  Greater,
-  GreaterEq,
-  And,
-  Or,
+pub struct TypeParam {
+  pub name: String,
+  pub constraint: Option<Type>, // extends Type
+  pub default: Option<Type>,
 }
 
-#[repr(u8)]
 #[derive(Debug, Clone)]
-pub enum UnaryOp {
-  Neg, // -x
-  Not, // !x
+pub struct FunctionParam {
+  pub name: String,
+  pub type_annotation: Type,
+  pub optional: bool,
 }
 
-impl fmt::Display for BinaryOp {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    let op = match self {
-      BinaryOp::Add => "+",
-      BinaryOp::Sub => "-",
-      BinaryOp::Mul => "*",
-      BinaryOp::Div => "/",
-      BinaryOp::Mod => "%",
-      BinaryOp::Power => "^",
-      BinaryOp::Eq => "==",
-      BinaryOp::NotEq => "!=",
-      BinaryOp::Less => "<",
-      BinaryOp::LessEq => "<=",
-      BinaryOp::Greater => ">",
-      BinaryOp::GreaterEq => ">=",
-      BinaryOp::And => "and",
-      BinaryOp::Or => "or",
-    };
-    write!(f, "{}", op)
-  }
+#[derive(Debug, Clone)]
+pub struct TypeMember {
+  pub name: String,
+  pub type_annotation: Type,
+  pub optional: bool,
 }
 
-impl fmt::Display for UnaryOp {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    let op = match self {
-      UnaryOp::Neg => "-",
-      UnaryOp::Not => "!",
-    };
-    write!(f, "{}", op)
-  }
-}
-
-impl fmt::Display for Pattern {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Pattern::Wildcard => write!(f, "_"),
-      Pattern::Literal(expr) => write!(f, "{}", expr),
-      Pattern::Identifier(name) => write!(f, "{}", name),
-
-      Pattern::Tuple(patterns) => {
-        let pattern_str = patterns
-          .iter()
-          .map(|p| p.to_string())
-          .collect::<Vec<_>>()
-          .join(", ");
-        write!(f, "({})", pattern_str)
-      },
-
-      Pattern::Struct { name, fields } => {
-        let field_str = fields
-          .iter()
-          .map(|(k, v)| format!("{}: {}", k, v))
-          .collect::<Vec<_>>()
-          .join(", ");
-        write!(f, "{} {{ {} }}", name, field_str)
-      },
-
-      // TupleStruct: Some(x), Point(1, 2)
-      Pattern::TupleStruct { name, patterns } => {
-        if patterns.is_empty() {
-          write!(f, "{}", name)
-        } else {
-          let pattern_str = patterns
-            .iter()
-            .map(|p| p.to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-          write!(f, "{}({})", name, pattern_str)
-        }
-      },
-
-      // Path: Option::Some(x)
-      Pattern::PathTuple { path, patterns } => {
-        let path_str = path.join("::");
-        if patterns.is_empty() {
-          write!(f, "{}", path_str)
-        } else {
-          let pattern_str = patterns
-            .iter()
-            .map(|p| p.to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-          write!(f, "{}({})", path_str, pattern_str)
-        }
-      },
-
-      Pattern::PathStruct { path, fields } => {
-        let path_str = path.join("::");
-        let field_str = fields
-          .iter()
-          .map(|(k, v)| format!("{}: {}", k, v))
-          .collect::<Vec<_>>()
-          .join(", ");
-        write!(f, "{}::{{ {} }}", path_str, field_str)
-      },
-
-      Pattern::Array(patterns) => {
-        let pattern_str = patterns
-          .iter()
-          .map(|p| p.to_string())
-          .collect::<Vec<_>>()
-          .join(", ");
-        write!(f, "[{}]", pattern_str)
-      },
-
-      Pattern::Or(patterns) => {
-        let pattern_str = patterns
-          .iter()
-          .map(|p| p.to_string())
-          .collect::<Vec<_>>()
-          .join(" | ");
-        write!(f, "{}", pattern_str) // Remove extra parens
-      },
-
-      Pattern::Range {
-        start,
-        end,
-        inclusive,
-      } => write!(f, "{}{}..{}", start, if *inclusive { "=" } else { "" }, end),
-    }
-  }
-}
-
-impl fmt::Display for Expr {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Expr::Integer { value, .. } => write!(f, "{}", value),
-      Expr::Float { value, .. } => write!(f, "{}", value),
-      Expr::String { value, .. } => write!(f, "{}", value),
-      Expr::Bool { value, .. } => write!(f, "{}", value),
-      Expr::Nil { .. } => write!(f, "nil"),
-      Expr::Identifier { name, .. } => write!(f, "{}", name),
-      Expr::Tuple { elements, .. } => {
-        let element_str = elements
-          .iter()
-          .map(|e| e.to_string())
-          .collect::<Vec<_>>()
-          .join(", ");
-        write!(f, "({})", element_str)
-      },
-
-      Expr::Unary { op, expr, .. } => write!(f, "({}{})", op, expr),
-      Expr::Binary {
-        left, op, right, ..
-      } => write!(f, "({} {} {})", left, op, right),
-      Expr::Assign { target, value, .. } => write!(f, "({} = {})", target, value),
-
-      Expr::Call { callee, args, .. } => {
-        let arg_str = args
-          .iter()
-          .map(|a| a.to_string())
-          .collect::<Vec<_>>()
-          .join(", ");
-        write!(f, "{}({})", callee, arg_str)
-      },
-
-      Expr::Member { object, field, .. } => write!(f, "{}.{}", object, field),
-      Expr::Index { object, index, .. } => write!(f, "{}[{}]", object, index),
-      Expr::Grouping { expr, .. } => write!(f, "({})", expr),
-
-      Expr::Ternary {
-        condition,
-        then_branch,
-        else_branch,
-        ..
-      } => write!(f, "({} ? {} : {})", condition, then_branch, else_branch),
-
-      Expr::Comma { expressions, .. } => {
-        let element_str = expressions
-          .iter()
-          .map(|e| e.to_string())
-          .collect::<Vec<_>>()
-          .join(", ");
-        write!(f, "({})", element_str)
-      },
-
-      Expr::Array { elements, .. } => {
-        let element_str = elements
-          .iter()
-          .map(|e| e.to_string())
-          .collect::<Vec<_>>()
-          .join(", ");
-        write!(f, "[{}]", element_str)
-      },
-
-      Expr::Object {
-        type_name, fields, ..
-      } => {
-        let field_str = fields
-          .iter()
-          .map(|(k, v)| format!("{}: {}", k, v))
-          .collect::<Vec<_>>()
-          .join(", ");
-        write!(f, "{} {{ {} }}", type_name, field_str)
-      },
-
-      Expr::Lambda {
-        params,
-        return_type,
-        body,
-        ..
-      } => {
-        let param_str = params
-          .iter()
-          .map(|p| {
-            let type_annotation = if let Some(ref type_annotation) = p.type_annotation {
-              format!(": {}", type_annotation)
-            } else {
-              String::from("")
-            };
-            format!("{}: {}", p.name, type_annotation)
-          })
-          .collect::<Vec<_>>()
-          .join(", ");
-
-        let return_type = if let Some(ref return_type) = return_type {
-          format!("-> {}", return_type)
-        } else {
-          String::from("")
-        };
-
-        write!(
-          f,
-          "fn({}) -> {} {{ {} stmts }}",
-          param_str,
-          return_type,
-          body.len()
-        )
-      },
-
-      Expr::Match { expr, arms, .. } => {
-        write!(f, "match {} {{ {} arms }}", expr, arms.len())
-      },
-
-      Expr::If {
-        condition,
-        then_branch,
-        else_branch,
-        ..
-      } => {
-        write!(f, "if {} {{ {} stmts }}", condition, then_branch.len())
-      },
-
-      Expr::Range {
-        start,
-        end,
-        inclusive,
-        ..
-      } => {
-        write!(f, "{}..{}{}", start, if *inclusive { "=" } else { "" }, end)
-      },
-    }
-  }
+//NOTE: Helper macro for tree printing
+macro_rules! print_node {
+  ($prefix:expr, $connector:expr, $label:expr) => {
+    println!("{}{}{}", $prefix, $connector, $label)
+  };
+  ($prefix:expr, $connector:expr, $label:expr, $value:expr) => {
+    println!("{}{}{}({})", $prefix, $connector, $label, $value)
+  };
 }
 
 impl Expr {
@@ -495,174 +623,437 @@ impl Expr {
     };
     let new_prefix = format!("{}{}", prefix, extension);
 
-    macro_rules! print_node {
-      ($label:expr) => {
-        println!("{}{}{}", prefix, connector, $label)
-      };
-      ($label:expr, $value:expr) => {
-        println!("{}{}{}({})", prefix, connector, $label, $value)
-      };
-    }
-
     match self {
-      Expr::Integer { value, .. } => print_node!("Integer", value),
-      Expr::Float { value, .. } => print_node!("Float", format!("{}", value)),
-      Expr::String { value, .. } => print_node!("String", format!("{}", value)),
-      Expr::Bool { value, .. } => print_node!("Bool", value),
-      Expr::Nil { .. } => print_node!("Nil"),
-      Expr::Identifier { name, .. } => print_node!("Identifier", name),
-
-      Expr::Unary { op, expr, .. } => {
-        print_node!("Unary", op);
-        expr.build_tree(&new_prefix, true);
+      // ========== LITERALS ==========
+      Expr::Number { value, .. } => {
+        print_node!(prefix, connector, "Number", value);
       },
 
+      Expr::String { value, .. } => {
+        print_node!(prefix, connector, "String", format!("\"{}\"", value));
+      },
+
+      Expr::Template {
+        parts, expressions, ..
+      } => {
+        print_node!(prefix, connector, "Template");
+        println!("{}├── parts: {:?}", new_prefix, parts);
+        if !expressions.is_empty() {
+          println!("{}└── expressions:", new_prefix);
+          let expr_prefix = format!("{}    ", new_prefix);
+          for (i, expr) in expressions.iter().enumerate() {
+            expr.build_tree(&expr_prefix, i == expressions.len() - 1);
+          }
+        }
+      },
+
+      Expr::Bool { value, .. } => {
+        print_node!(prefix, connector, "Bool", value);
+      },
+
+      Expr::Null { .. } => {
+        print_node!(prefix, connector, "Null");
+      },
+
+      Expr::Undefined { .. } => {
+        print_node!(prefix, connector, "Undefined");
+      },
+
+      // ========== IDENTIFIERS & SPECIAL ==========
+      Expr::Identifier { name, .. } => {
+        print_node!(prefix, connector, "Identifier", name);
+      },
+
+      Expr::This { .. } => {
+        print_node!(prefix, connector, "This");
+      },
+
+      Expr::Super { .. } => {
+        print_node!(prefix, connector, "Super");
+      },
+
+      // ========== OPERATIONS ==========
       Expr::Binary {
         left, op, right, ..
       } => {
-        print_node!("Binary", op);
+        print_node!(prefix, connector, "Binary", format!("{:?}", op));
         left.build_tree(&new_prefix, false);
         right.build_tree(&new_prefix, true);
       },
 
-      Expr::Assign { target, value, .. } => {
-        print_node!("Assign");
-        target.build_tree(&new_prefix, false);
-        value.build_tree(&new_prefix, true);
+      Expr::Unary { op, expr, .. } => {
+        print_node!(prefix, connector, "Unary", format!("{:?}", op));
+        expr.build_tree(&new_prefix, true);
       },
 
+      Expr::Postfix { expr, op, .. } => {
+        print_node!(prefix, connector, "Postfix", format!("{:?}", op));
+        expr.build_tree(&new_prefix, true);
+      },
+
+      // ========== ACCESS ==========
       Expr::Call { callee, args, .. } => {
         if args.is_empty() {
-          print_node!("Call()");
+          print_node!(prefix, connector, "Call()");
+          callee.build_tree(&new_prefix, true);
         } else {
-          print_node!("Call");
-        }
-        callee.build_tree(&new_prefix, args.is_empty());
-        for (i, arg) in args.iter().enumerate() {
-          arg.build_tree(&new_prefix, i == args.len() - 1);
+          print_node!(prefix, connector, "Call");
+          callee.build_tree(&new_prefix, false);
+          println!("{}└── args:", new_prefix);
+          let args_prefix = format!("{}    ", new_prefix);
+          for (i, arg) in args.iter().enumerate() {
+            let label = if arg.spread { "...spread" } else { "arg" };
+            println!(
+              "{}{}{}",
+              args_prefix,
+              if i == args.len() - 1 {
+                "└── "
+              } else {
+                "├── "
+              },
+              label
+            );
+            let arg_prefix = format!(
+              "{}{}",
+              args_prefix,
+              if i == args.len() - 1 {
+                "    "
+              } else {
+                "│   "
+              }
+            );
+            arg.expr.build_tree(&arg_prefix, true);
+          }
         }
       },
 
-      Expr::Member { object, field, .. } => {
-        print_node!("Member", field);
+      Expr::Member {
+        object,
+        property,
+        optional,
+        ..
+      } => {
+        let op = if *optional { "?." } else { "." };
+        print_node!(prefix, connector, "Member", format!("{}{}", op, property));
         object.build_tree(&new_prefix, true);
       },
 
       Expr::Index { object, index, .. } => {
-        print_node!("Index");
+        print_node!(prefix, connector, "Index");
         object.build_tree(&new_prefix, false);
         index.build_tree(&new_prefix, true);
       },
 
-      Expr::Grouping { expr, .. } => {
-        print_node!("Grouping");
-        expr.build_tree(&new_prefix, true);
-      },
-
-      Expr::Ternary {
-        condition,
-        then_branch,
-        else_branch,
-        ..
+      // ========== ASSIGNMENT ==========
+      Expr::Assign {
+        target, op, value, ..
       } => {
-        print_node!("Ternary");
-        condition.build_tree(&new_prefix, false);
-        then_branch.build_tree(&new_prefix, false);
-        else_branch.build_tree(&new_prefix, true);
+        print_node!(prefix, connector, "Assign", format!("{:?}", op));
+        target.build_tree(&new_prefix, false);
+        value.build_tree(&new_prefix, true);
       },
 
-      Expr::Tuple { elements, .. } => {
-        print_node!("Tuple");
-        for (i, element) in elements.iter().enumerate() {
-          element.build_tree(&new_prefix, i == elements.len() - 1);
-        }
-      },
-
+      // ========== LITERALS (COMPOSITE) ==========
       Expr::Array { elements, .. } => {
-        print_node!("Array");
-        for (i, element) in elements.iter().enumerate() {
-          element.build_tree(&new_prefix, i == elements.len() - 1);
-        }
-      },
-
-      Expr::Object {
-        type_name, fields, ..
-      } => {
-        print_node!("Object", type_name);
-        for (i, (field_name, field_value)) in fields.iter().enumerate() {
-          let is_last_field = i == fields.len() - 1;
-          println!(
-            "{}{}{}:",
-            new_prefix,
-            if is_last_field {
-              "└── "
-            } else {
-              "├── "
+        print_node!(prefix, connector, "Array");
+        for (i, elem) in elements.iter().enumerate() {
+          match elem {
+            ArrayElement::Expression(expr) => {
+              expr.build_tree(&new_prefix, i == elements.len() - 1);
             },
-            field_name
-          );
-          let field_prefix = format!(
-            "{}{}",
-            new_prefix,
-            if is_last_field { "    " } else { "│   " }
-          );
-          field_value.build_tree(&field_prefix, true);
+            ArrayElement::Spread(expr) => {
+              println!(
+                "{}{}...spread:",
+                new_prefix,
+                if i == elements.len() - 1 {
+                  "└── "
+                } else {
+                  "├── "
+                }
+              );
+              let spread_prefix = format!(
+                "{}{}",
+                new_prefix,
+                if i == elements.len() - 1 {
+                  "    "
+                } else {
+                  "│   "
+                }
+              );
+              expr.build_tree(&spread_prefix, true);
+            },
+          }
         }
       },
 
-      Expr::Comma { expressions, .. } => {
-        let element_str = expressions
-          .iter()
-          .map(|e| e.to_string())
-          .collect::<Vec<_>>()
-          .join(", ");
-        print_node!("Comma", element_str);
-        for (i, element) in expressions.iter().enumerate() {
-          element.build_tree(&new_prefix, i == expressions.len() - 1);
+      Expr::Object { properties, .. } => {
+        print_node!(prefix, connector, "Object");
+        for (i, prop) in properties.iter().enumerate() {
+          let is_last = i == properties.len() - 1;
+          let prop_connector = if is_last { "└── " } else { "├── " };
+          let prop_prefix = format!("{}{}", new_prefix, if is_last { "    " } else { "│   " });
+
+          match prop {
+            ObjectProperty::Property { key, value } => {
+              let key_str = match key {
+                PropertyKey::Identifier(s) => s.clone(),
+                PropertyKey::String(s) => format!("\"{}\"", s),
+                PropertyKey::Computed(_) => "[computed]".to_string(),
+              };
+              println!("{}{}{}: ", new_prefix, prop_connector, key_str);
+              value.build_tree(&prop_prefix, true);
+            },
+            ObjectProperty::Shorthand { name } => {
+              println!("{}{}{} (shorthand)", new_prefix, prop_connector, name);
+            },
+            ObjectProperty::Spread { expr } => {
+              println!("{}{}...spread:", new_prefix, prop_connector);
+              expr.build_tree(&prop_prefix, true);
+            },
+            ObjectProperty::Method {
+              key,
+              params,
+              body,
+              is_async,
+            } => {
+              let key_str = match key {
+                PropertyKey::Identifier(s) => s.clone(),
+                PropertyKey::String(s) => format!("\"{}\"", s),
+                PropertyKey::Computed(_) => "[computed]".to_string(),
+              };
+              let async_str = if *is_async { "async " } else { "" };
+              println!(
+                "{}{}{}method {}({} params, {} stmts)",
+                new_prefix,
+                prop_connector,
+                async_str,
+                key_str,
+                params.len(),
+                body.len()
+              );
+            },
+          }
         }
       },
 
-      Expr::Lambda {
+      // ========== FUNCTIONS ==========
+      Expr::Arrow {
         params,
         return_type,
         body,
+        is_async,
         ..
       } => {
-        let return_type_str = if let Some(ref return_type) = return_type {
-          format!("-> {}", return_type)
+        let async_str = if *is_async { "async " } else { "" };
+        let return_str = if let Some(rt) = return_type {
+          format!(": {:?}", rt)
         } else {
-          String::from("-> ()")
+          String::new()
         };
-        print_node!(format!("Lambda() {}", return_type_str));
+        print_node!(
+          prefix,
+          connector,
+          format!("{}Arrow{}", async_str, return_str)
+        );
 
         // Print params
-        let has_body = !body.is_empty();
-        for (i, param) in params.iter().enumerate() {
-          let is_last_param = i == params.len() - 1 && !has_body;
-          let type_annotation = if let Some(ref type_annotation) = param.type_annotation {
-            format!(": {}", type_annotation)
-          } else {
-            String::from("")
+        if !params.is_empty() {
+          let has_body = match body {
+            ArrowBody::Expression(_) => true,
+            ArrowBody::Block(stmts) => !stmts.is_empty(),
           };
 
-          let param_str = if let Some(ref default) = param.default_value {
-            format!("{}{} = {}", param.name, type_annotation, default)
-          } else {
-            format!("{}{}", param.name, type_annotation)
-          };
           println!(
-            "{}{}param: {}",
+            "{}{}params:",
             new_prefix,
-            if is_last_param {
-              "└── "
-            } else {
-              "├── "
-            },
-            param_str
+            if has_body { "├── " } else { "└── " }
           );
+          let param_prefix = format!("{}{}", new_prefix, if has_body { "│   " } else { "    " });
+
+          for (i, param) in params.iter().enumerate() {
+            let mut param_str = param.name.clone();
+            if param.rest {
+              param_str = format!("...{}", param_str);
+            }
+            if param.optional {
+              param_str = format!("{}?", param_str);
+            }
+            if let Some(ref t) = param.type_annotation {
+              param_str = format!("{}: {:?}", param_str, t);
+            }
+            if let Some(ref default) = param.default_value {
+              param_str = format!("{} = {:?}", param_str, default);
+            }
+            println!(
+              "{}{}{}",
+              param_prefix,
+              if i == params.len() - 1 {
+                "└── "
+              } else {
+                "├── "
+              },
+              param_str
+            );
+          }
         }
 
-        // Print body statements
+        // Print body
+        match body {
+          ArrowBody::Expression(expr) => {
+            println!("{}└── expr:", new_prefix);
+            let body_prefix = format!("{}    ", new_prefix);
+            expr.build_tree(&body_prefix, true);
+          },
+          ArrowBody::Block(stmts) => {
+            if !stmts.is_empty() {
+              println!("{}└── body:", new_prefix);
+              let body_prefix = format!("{}    ", new_prefix);
+              for (i, stmt) in stmts.iter().enumerate() {
+                stmt.build_tree(&body_prefix, i == stmts.len() - 1);
+              }
+            }
+          },
+        }
+      },
+
+      // ========== SPECIAL EXPRESSIONS ==========
+      Expr::Ternary {
+        condition,
+        then_expr,
+        else_expr,
+        ..
+      } => {
+        print_node!(prefix, connector, "Ternary");
+        println!("{}├── condition:", new_prefix);
+        condition.build_tree(&format!("{}│   ", new_prefix), true);
+        println!("{}├── then:", new_prefix);
+        then_expr.build_tree(&format!("{}│   ", new_prefix), true);
+        println!("{}└── else:", new_prefix);
+        else_expr.build_tree(&format!("{}    ", new_prefix), true);
+      },
+
+      Expr::Sequence { expressions, .. } => {
+        print_node!(prefix, connector, "Sequence");
+        for (i, expr) in expressions.iter().enumerate() {
+          expr.build_tree(&new_prefix, i == expressions.len() - 1);
+        }
+      },
+
+      Expr::New {
+        constructor, args, ..
+      } => {
+        print_node!(prefix, connector, "New");
+        constructor.build_tree(&new_prefix, args.is_empty());
+        if !args.is_empty() {
+          println!("{}└── args:", new_prefix);
+          let args_prefix = format!("{}    ", new_prefix);
+          for (i, arg) in args.iter().enumerate() {
+            arg.expr.build_tree(&args_prefix, i == args.len() - 1);
+          }
+        }
+      },
+
+      Expr::TypeAssertion {
+        expr,
+        type_annotation,
+        ..
+      } => {
+        print_node!(
+          prefix,
+          connector,
+          "TypeAssertion",
+          format!("as {:?}", type_annotation)
+        );
+        expr.build_tree(&new_prefix, true);
+      },
+
+      Expr::NonNull { expr, .. } => {
+        print_node!(prefix, connector, "NonNull", "!");
+        expr.build_tree(&new_prefix, true);
+      },
+
+      Expr::Grouping { expr, .. } => {
+        print_node!(prefix, connector, "Grouping");
+        expr.build_tree(&new_prefix, true);
+      },
+    }
+  }
+}
+
+impl Stmt {
+  pub fn print_tree(&self) {
+    self.build_tree("", true);
+  }
+
+  pub fn build_tree(&self, prefix: &str, is_last: bool) {
+    let (connector, extension) = if is_last {
+      ("└── ", "    ")
+    } else {
+      ("├── ", "│   ")
+    };
+    let new_prefix = format!("{}{}", prefix, extension);
+
+    match self {
+      Stmt::Expr(expr) => {
+        print_node!(prefix, connector, "ExprStmt");
+        expr.build_tree(&new_prefix, true);
+      },
+
+      Stmt::VarDecl {
+        kind,
+        name,
+        type_annotation,
+        initializer,
+        ..
+      } => {
+        let type_str = if let Some(t) = type_annotation {
+          format!(": {:?}", t)
+        } else {
+          String::new()
+        };
+        print_node!(
+          prefix,
+          connector,
+          format!("{:?} {}{}", kind, name, type_str)
+        );
+        if let Some(init) = initializer {
+          init.build_tree(&new_prefix, true);
+        }
+      },
+
+      Stmt::FunctionDecl {
+        name,
+        type_params,
+        params,
+        return_type,
+        body,
+        is_async,
+        ..
+      } => {
+        let async_str = if *is_async { "async " } else { "" };
+        let generics = if !type_params.is_empty() {
+          format!("<{}>", type_params.len())
+        } else {
+          String::new()
+        };
+        let return_str = if let Some(rt) = return_type {
+          format!(": {:?}", rt)
+        } else {
+          String::new()
+        };
+        print_node!(
+          prefix,
+          connector,
+          format!(
+            "{}function {}{}({} params){}",
+            async_str,
+            name,
+            generics,
+            params.len(),
+            return_str
+          )
+        );
+
         if !body.is_empty() {
           println!("{}└── body:", new_prefix);
           let body_prefix = format!("{}    ", new_prefix);
@@ -672,114 +1063,537 @@ impl Expr {
         }
       },
 
-      Expr::Match { expr, arms, .. } => {
-        print_node!("Match");
+      Stmt::ClassDecl {
+        name,
+        type_params,
+        extends,
+        implements,
+        members,
+        is_abstract,
+        ..
+      } => {
+        let abstract_str = if *is_abstract { "abstract " } else { "" };
+        let generics = if !type_params.is_empty() {
+          format!("<{}>", type_params.len())
+        } else {
+          String::new()
+        };
+        let extends_str = if let Some(e) = extends {
+          format!(" extends {:?}", e)
+        } else {
+          String::new()
+        };
+        let implements_str = if !implements.is_empty() {
+          format!(" implements {} types", implements.len())
+        } else {
+          String::new()
+        };
+        print_node!(
+          prefix,
+          connector,
+          format!(
+            "{}class {}{}{}{}",
+            abstract_str, name, generics, extends_str, implements_str
+          )
+        );
 
-        // Print the expression being matched
-        println!("{}├── expr:", new_prefix);
-        let expr_prefix = format!("{}│   ", new_prefix);
-        expr.build_tree(&expr_prefix, true);
-
-        // Print arms
-        for (i, arm) in arms.iter().enumerate() {
-          let is_last_arm = i == arms.len() - 1;
-          println!(
-            "{}{}arm {}:",
-            new_prefix,
-            if is_last_arm {
-              "└── "
-            } else {
-              "├── "
-            },
-            i + 1
-          );
-          let arm_prefix = format!(
-            "{}{}",
-            new_prefix,
-            if is_last_arm { "    " } else { "│   " }
-          );
-
-          // Count children in this arm
-          let has_guard = arm.guard.is_some();
-          let has_body = !arm.body.is_empty();
-
-          // Print pattern
-          let pattern_connector = if !has_guard && !has_body {
-            "└── "
-          } else {
-            "├── "
+        for (i, member) in members.iter().enumerate() {
+          let is_last_member = i == members.len() - 1;
+          let vis = match member.visibility {
+            Visibility::Public => "public",
+            Visibility::Private => "private",
+            Visibility::Protected => "protected",
           };
-          println!(
-            "{}{}pattern: {}",
-            arm_prefix, pattern_connector, arm.pattern
-          );
+          let static_str = if member.is_static { " static" } else { "" };
+          let readonly_str = if member.is_readonly { " readonly" } else { "" };
 
-          // Print guard if exists
-          if let Some(ref guard) = arm.guard {
-            let guard_connector = if !has_body {
-              "└── "
-            } else {
-              "├── "
-            };
-            println!("{}{}guard:", arm_prefix, guard_connector);
-            let guard_prefix = format!("{}{}", arm_prefix, if !has_body { "    " } else { "│   " });
-            guard.build_tree(&guard_prefix, true);
-          }
-
-          // Print body
-          if has_body {
-            println!("{}└── body:", arm_prefix);
-            let body_prefix = format!("{}    ", arm_prefix);
-            for (j, stmt) in arm.body.iter().enumerate() {
-              stmt.build_tree(&body_prefix, j == arm.body.len() - 1);
-            }
+          match &member.kind {
+            ClassMemberKind::Property {
+              name,
+              type_annotation,
+              optional,
+              ..
+            } => {
+              let opt = if *optional { "?" } else { "" };
+              let type_str = if let Some(t) = type_annotation {
+                format!(": {:?}", t)
+              } else {
+                String::new()
+              };
+              println!(
+                "{}{}{}{}{} {}{}{}",
+                new_prefix,
+                if is_last_member {
+                  "└── "
+                } else {
+                  "├── "
+                },
+                vis,
+                static_str,
+                readonly_str,
+                name,
+                opt,
+                type_str
+              );
+            },
+            ClassMemberKind::Method {
+              name,
+              params,
+              return_type,
+              is_async,
+              ..
+            } => {
+              let async_str = if *is_async { "async " } else { "" };
+              let return_str = if let Some(rt) = return_type {
+                format!(": {:?}", rt)
+              } else {
+                String::new()
+              };
+              println!(
+                "{}{}{}{}{} {}{}({} params){}",
+                new_prefix,
+                if is_last_member {
+                  "└── "
+                } else {
+                  "├── "
+                },
+                vis,
+                static_str,
+                readonly_str,
+                async_str,
+                name,
+                params.len(),
+                return_str
+              );
+            },
+            ClassMemberKind::Constructor { params, .. } => {
+              println!(
+                "{}{}{}constructor({} params)",
+                new_prefix,
+                if is_last_member {
+                  "└── "
+                } else {
+                  "├── "
+                },
+                vis,
+                params.len()
+              );
+            },
           }
         }
       },
 
-      Expr::If {
+      Stmt::InterfaceDecl {
+        name,
+        type_params,
+        extends,
+        members,
+        ..
+      } => {
+        let generics = if !type_params.is_empty() {
+          format!("<{}>", type_params.len())
+        } else {
+          String::new()
+        };
+        let extends_str = if !extends.is_empty() {
+          format!(" extends {} types", extends.len())
+        } else {
+          String::new()
+        };
+        print_node!(
+          prefix,
+          connector,
+          format!("interface {}{}{}", name, generics, extends_str)
+        );
+
+        for (i, member) in members.iter().enumerate() {
+          let is_last_member = i == members.len() - 1;
+          match &member.kind {
+            InterfaceMemberKind::Property {
+              type_annotation,
+              optional,
+            } => {
+              let opt = if *optional { "?" } else { "" };
+              println!(
+                "{}{}{}{}: {:?}",
+                new_prefix,
+                if is_last_member {
+                  "└── "
+                } else {
+                  "├── "
+                },
+                member.name,
+                opt,
+                type_annotation
+              );
+            },
+            InterfaceMemberKind::Method {
+              params,
+              return_type,
+              ..
+            } => {
+              println!(
+                "{}{}{}({} params): {:?}",
+                new_prefix,
+                if is_last_member {
+                  "└── "
+                } else {
+                  "├── "
+                },
+                member.name,
+                params.len(),
+                return_type
+              );
+            },
+            InterfaceMemberKind::IndexSignature {
+              key_name,
+              key_type,
+              value_type,
+            } => {
+              println!(
+                "{}{}[{}: {:?}]: {:?}",
+                new_prefix,
+                if is_last_member {
+                  "└── "
+                } else {
+                  "├── "
+                },
+                key_name,
+                key_type,
+                value_type
+              );
+            },
+          }
+        }
+      },
+
+      Stmt::TypeAliasDecl {
+        name,
+        type_params,
+        type_annotation,
+        ..
+      } => {
+        let generics = if !type_params.is_empty() {
+          format!("<{}>", type_params.len())
+        } else {
+          String::new()
+        };
+        print_node!(
+          prefix,
+          connector,
+          format!("type {}{} = {:?}", name, generics, type_annotation)
+        );
+      },
+
+      Stmt::EnumDecl { name, members, .. } => {
+        print_node!(prefix, connector, format!("enum {}", name));
+        for (i, member) in members.iter().enumerate() {
+          let value_str = if let Some(ref val) = member.value {
+            match val {
+              EnumValue::Number(n) => format!(" = {}", n),
+              EnumValue::String(s) => format!(" = \"{}\"", s),
+            }
+          } else {
+            String::new()
+          };
+          println!(
+            "{}{}{}{}",
+            new_prefix,
+            if i == members.len() - 1 {
+              "└── "
+            } else {
+              "├── "
+            },
+            member.name,
+            value_str
+          );
+        }
+      },
+
+      Stmt::NamespaceDecl { name, body, .. } => {
+        print_node!(prefix, connector, format!("namespace {}", name));
+        for (i, stmt) in body.iter().enumerate() {
+          stmt.build_tree(&new_prefix, i == body.len() - 1);
+        }
+      },
+
+      Stmt::If {
         condition,
         then_branch,
         else_branch,
         ..
       } => {
-        print_node!("If");
-        condition.build_tree(&new_prefix, false);
-        for (i, stmt) in then_branch.iter().enumerate() {
-          stmt.build_tree(&new_prefix, i == then_branch.len() - 1);
-        }
-        if let Some(ref else_branch) = else_branch {
+        print_node!(prefix, connector, "If");
+        println!("{}├── condition:", new_prefix);
+        condition.build_tree(&format!("{}│   ", new_prefix), true);
+        println!(
+          "{}{}then:",
+          new_prefix,
+          if else_branch.is_some() {
+            "├── "
+          } else {
+            "└── "
+          }
+        );
+        let then_prefix = format!(
+          "{}{}",
+          new_prefix,
+          if else_branch.is_some() {
+            "│   "
+          } else {
+            "    "
+          }
+        );
+        then_branch.build_tree(&then_prefix, true);
+        if let Some(else_stmt) = else_branch {
           println!("{}└── else:", new_prefix);
-          let else_prefix = format!("{}    ", new_prefix);
-          for (i, stmt) in else_branch.iter().enumerate() {
-            stmt.build_tree(&else_prefix, i == else_branch.len() - 1);
+          else_stmt.build_tree(&format!("{}    ", new_prefix), true);
+        }
+      },
+
+      Stmt::While {
+        condition, body, ..
+      } => {
+        print_node!(prefix, connector, "While");
+        condition.build_tree(&new_prefix, false);
+        body.build_tree(&new_prefix, true);
+      },
+
+      Stmt::DoWhile {
+        body, condition, ..
+      } => {
+        print_node!(prefix, connector, "DoWhile");
+        body.build_tree(&new_prefix, false);
+        condition.build_tree(&new_prefix, true);
+      },
+
+      Stmt::For {
+        init,
+        condition,
+        update,
+        body,
+        ..
+      } => {
+        print_node!(prefix, connector, "For");
+        if let Some(i) = init {
+          println!("{}├── init:", new_prefix);
+          i.build_tree(&format!("{}│   ", new_prefix), true);
+        }
+        if let Some(c) = condition {
+          println!("{}├── condition:", new_prefix);
+          c.build_tree(&format!("{}│   ", new_prefix), true);
+        }
+        if let Some(u) = update {
+          println!("{}├── update:", new_prefix);
+          u.build_tree(&format!("{}│   ", new_prefix), true);
+        }
+        println!("{}└── body:", new_prefix);
+        body.build_tree(&format!("{}    ", new_prefix), true);
+      },
+
+      Stmt::ForIn {
+        kind,
+        variable,
+        iterable,
+        body,
+        ..
+      } => {
+        print_node!(
+          prefix,
+          connector,
+          format!("ForIn({:?} {} in)", kind, variable)
+        );
+        iterable.build_tree(&new_prefix, false);
+        body.build_tree(&new_prefix, true);
+      },
+
+      Stmt::ForOf {
+        kind,
+        variable,
+        iterable,
+        body,
+        ..
+      } => {
+        print_node!(
+          prefix,
+          connector,
+          format!("ForOf({:?} {} of)", kind, variable)
+        );
+        iterable.build_tree(&new_prefix, false);
+        body.build_tree(&new_prefix, true);
+      },
+
+      Stmt::Switch {
+        discriminant,
+        cases,
+        ..
+      } => {
+        print_node!(prefix, connector, "Switch");
+        discriminant.build_tree(&new_prefix, false);
+        println!("{}└── cases:", new_prefix);
+        let cases_prefix = format!("{}    ", new_prefix);
+        for (i, case) in cases.iter().enumerate() {
+          if let Some(test) = &case.test {
+            println!(
+              "{}{}case:",
+              cases_prefix,
+              if i == cases.len() - 1 {
+                "└── "
+              } else {
+                "├── "
+              }
+            );
+            let case_prefix = format!(
+              "{}{}",
+              cases_prefix,
+              if i == cases.len() - 1 {
+                "    "
+              } else {
+                "│   "
+              }
+            );
+            test.build_tree(&case_prefix, case.consequent.is_empty());
+            for (j, stmt) in case.consequent.iter().enumerate() {
+              stmt.build_tree(&case_prefix, j == case.consequent.len() - 1);
+            }
+          } else {
+            println!(
+              "{}{}default:",
+              cases_prefix,
+              if i == cases.len() - 1 {
+                "└── "
+              } else {
+                "├── "
+              }
+            );
+            let case_prefix = format!(
+              "{}{}",
+              cases_prefix,
+              if i == cases.len() - 1 {
+                "    "
+              } else {
+                "│   "
+              }
+            );
+            for (j, stmt) in case.consequent.iter().enumerate() {
+              stmt.build_tree(&case_prefix, j == case.consequent.len() - 1);
+            }
           }
         }
       },
 
-      Expr::Range {
-        start,
-        end,
-        inclusive,
+      Stmt::Try {
+        block,
+        catch_clause,
+        finally_block,
         ..
       } => {
-        // Label the node
-        let label = if *inclusive {
-          "Range(..=)"
-        } else {
-          "Range(..)"
+        print_node!(prefix, connector, "Try");
+        let has_catch = catch_clause.is_some();
+        let has_finally = finally_block.is_some();
+
+        println!(
+          "{}{}try:",
+          new_prefix,
+          if has_catch || has_finally {
+            "├── "
+          } else {
+            "└── "
+          }
+        );
+        let try_prefix = format!(
+          "{}{}",
+          new_prefix,
+          if has_catch || has_finally {
+            "│   "
+          } else {
+            "    "
+          }
+        );
+        for (i, stmt) in block.iter().enumerate() {
+          stmt.build_tree(&try_prefix, i == block.len() - 1);
+        }
+
+        if let Some(catch) = catch_clause {
+          let catch_label = if let Some(ref param) = catch.param {
+            format!("catch({})", param)
+          } else {
+            "catch".to_string()
+          };
+          println!(
+            "{}{}{}:",
+            new_prefix,
+            if has_finally {
+              "├── "
+            } else {
+              "└── "
+            },
+            catch_label
+          );
+          let catch_prefix = format!(
+            "{}{}",
+            new_prefix,
+            if has_finally { "│   " } else { "    " }
+          );
+          for (i, stmt) in catch.body.iter().enumerate() {
+            stmt.build_tree(&catch_prefix, i == catch.body.len() - 1);
+          }
+        }
+
+        if let Some(finally) = finally_block {
+          println!("{}└── finally:", new_prefix);
+          let finally_prefix = format!("{}    ", new_prefix);
+          for (i, stmt) in finally.iter().enumerate() {
+            stmt.build_tree(&finally_prefix, i == finally.len() - 1);
+          }
+        }
+      },
+
+      Stmt::Throw { expr, .. } => {
+        print_node!(prefix, connector, "Throw");
+        expr.build_tree(&new_prefix, true);
+      },
+
+      Stmt::Return { value, .. } => {
+        print_node!(prefix, connector, "Return");
+        if let Some(val) = value {
+          val.build_tree(&new_prefix, true);
+        }
+      },
+
+      Stmt::Break { .. } => {
+        print_node!(prefix, connector, "Break");
+      },
+
+      Stmt::Continue { .. } => {
+        print_node!(prefix, connector, "Continue");
+      },
+
+      Stmt::Block(stmts) => {
+        print_node!(prefix, connector, "Block");
+        for (i, stmt) in stmts.iter().enumerate() {
+          stmt.build_tree(&new_prefix, i == stmts.len() - 1);
+        }
+      },
+
+      Stmt::Export { declaration, .. } => {
+        print_node!(prefix, connector, "Export");
+        declaration.build_tree(&new_prefix, true);
+      },
+
+      Stmt::Import {
+        specifiers, source, ..
+      } => {
+        let spec_str = match specifiers {
+          ImportSpecifier::Default(name) => format!("{}", name),
+          ImportSpecifier::Named(names) => format!("{{ {} }}", names.join(", ")),
+          ImportSpecifier::Namespace(name) => format!("* as {}", name),
         };
-        print_node!(label);
-
-        // Print Start
-        println!("{}├── start:", new_prefix);
-        let start_prefix = format!("{}│   ", new_prefix);
-        start.build_tree(&start_prefix, true);
-
-        // Print End
-        println!("{}└── end:", new_prefix);
-        let end_prefix = format!("{}    ", new_prefix);
-        end.build_tree(&end_prefix, true);
+        print_node!(
+          prefix,
+          connector,
+          format!("Import {} from \"{}\"", spec_str, source)
+        );
       },
     }
   }
