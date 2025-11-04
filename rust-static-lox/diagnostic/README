@@ -1,61 +1,68 @@
 DIAGNOSTIC CRATE OVERVIEW
 
-The diagnostic crate powers richly formatted, colorized diagnostics for the Lox toolchain. It focuses on producing readable compiler-style error messages that include spans, annotated source lines, and optional help or note text.
+The diagnostic crate powers richly formatted, colorized diagnostics for the Lox toolchain. It aims to mirror Rust’s diagnostic style: clear headers, labeled spans, contextual source lines, and helpful notes/suggestions.
 
-KEY IDEAS
-1. DiagnosticEngine owns the input source, gathers diagnostics, and prints them in order.
-2. Diagnostic holds the message, file path, labels, context lines, and optional help or note text.
-3. DiagnosticCode wraps typed error and warning codes so every message carries a structured identifier and severity.
-4. Labels describe primary and secondary spans, letting you highlight multiple regions in a single report.
+KEY CONCEPTS
+1. Diagnostic holds the message, file path, labeled spans, and optional help/note text.
+2. SourceMap owns files, converts between byte offsets and (line, col), and provides line content.
+3. DiagnosticCode wraps typed error and warning codes with stable identifiers and severities.
+4. DiagnosticEngine aggregates diagnostics and emits them with a shared SourceMap.
 
-DEFINING A DIAGNOSTIC
-Start with Diagnostic::new, passing a DiagnosticCode, the human-readable message, and the file path. Chain builder helpers to attach context:
-  • with_context_line(line_number, "source line") records the snippet to display.
-  • with_label(Span { line, start, end }, Some("message"), LabelStyle::Primary) adds an annotated region.
-  • with_help("suggestion") or with_note("extra detail") insert follow-up guidance.
+USING SPANS AND SOURCEMAP
+Spans are byte ranges in a file. For ergonomic construction from (line, col), use Span::from_line_col with a SourceFile:
 
-The Span type uses 1-based line numbers and character offsets. Primary labels render as red carets (^^^^), secondary labels as cyan dashes (----).
+  use diagnostic::source_map::{SourceMap, Span};
 
-INTEGRATING WITH THE ENGINE
-Create a DiagnosticEngine, call insert_source with the original source text, push diagnostics with add, then call print_diagnostics when you are ready to report all accumulated issues.
+  let mut sm = SourceMap::new();
+  sm.add_file("src/main.rs", "println!(\"Count: {}\", counter);\n");
+  let file = sm.get("src/main.rs").unwrap();
+  let span = Span::from_line_col(1, 21, 7, file); // line 1, col 21, len 7
 
-TYPED CODES AND SEVERITIES
-DiagnosticCode::Error and DiagnosticCode::Warning point to enums in diagnostic::types. Each variant exposes a stable Rust-style code string (for example, E0425 for undefined variables) and a Severity so you can react programmatically.
+CREATING AND PRINTING A DIAGNOSTIC
 
-EXAMPLE
   use diagnostic::{
     code::DiagnosticCode,
-    diagnostic::{Diagnostic, LabelStyle, Span},
+    diagnostic::{Diagnostic, LabelStyle},
+    source_map::{SourceMap, Span},
     types::error::DiagnosticError,
-    DiagnosticEngine,
   };
 
-  let mut engine = DiagnosticEngine::new();
-  engine.insert_source(r#"println!("Count: {}", counter);"#);
+  let mut sm = SourceMap::new();
+  let src = "fn main() { println!(\"Count: {}\", counter); }\n";
+  sm.add_file("src/main.rs", src);
 
-  let diagnostic = Diagnostic::new(
+  let file = sm.get("src/main.rs").unwrap();
+
+  let diag = Diagnostic::new(
       DiagnosticCode::Error(DiagnosticError::UndefinedVariable),
-      "cannot find value `counter` in this scope",
-      "src/main.rs",
+      "cannot find value `counter` in this scope".to_string(),
+      "src/main.rs".to_string(),
     )
-    .with_context_line(5, r#"    println!("Count: {}", counter);"#)
     .with_label(
-      Span { line: 5, start: 27, end: 34 },
-      Some("not found in this scope"),
+      Span::from_line_col(1, 36, 7, file),
+      Some("not found in this scope".to_string()),
       LabelStyle::Primary,
     )
-    .with_help("a local variable with a similar name exists: `count`");
+    .with_help("a local variable with a similar name exists: `count`".to_string());
 
-  engine.add(diagnostic);
+  let _ = diag.print(&sm);
+
+USING THE ENGINE
+
+  use diagnostic::DiagnosticEngine;
+
+  let mut engine = DiagnosticEngine::new();
+  engine.add_file("src/main.rs", src);
+  engine.add(diag);
   engine.print_diagnostics();
 
-Typical terminal output (colors omitted here) resembles:
-error[E0425]: cannot find value `counter` in this scope
-  --> src/main.rs:5:27
-        |
-5       |     println!("Count: {}", counter);
-        |                           ^^^^^^^ not found in this scope
-   = help: a local variable with a similar name exists: `count`
+TYPED CODES AND SEVERITIES
+DiagnosticCode::Error and DiagnosticCode::Warning map to enums in diagnostic::types. Each variant exposes a stable code string (e.g., E0425) and a Severity (Error/Warning/Note/Help).
+
+MORE EXAMPLES
+- Multiple labels on a single diagnostic (primary + secondary)
+- Custom context padding with with_context_padding(n)
+- Help and Note messages for suggestions and clarifications
 
 TESTING
-Run cargo test -p diagnostic to see end-to-end examples that cover simple through super-complex reports. The tests print sample diagnostics so you can review formatting as it evolves.
+Run `cargo test -p diagnostic` to see end-to-end examples. The tests print sample diagnostics covering simple through super-complex reports.

@@ -1,6 +1,6 @@
 use diagnostic::{
   code::DiagnosticCode,
-  diagnostic::{Diagnostic, LabelStyle, Span},
+  diagnostic::{Diagnostic, LabelStyle},
   types::error::DiagnosticError,
   DiagnosticEngine,
 };
@@ -18,23 +18,77 @@ impl Lexer {
       '[' => Some(TokenKind::LeftBracket),
       ']' => Some(TokenKind::RightBracket),
 
-      '+' => Some(TokenKind::Plus),
-      '-' => self.parse_minus(),
-      '*' => Some(TokenKind::Star),
-      '%' => Some(TokenKind::Percent),
-      '^' => Some(TokenKind::Caret),
+      '+' => {
+        if self.match_char(self.peek(), '+') {
+          self.advance();
+          Some(TokenKind::PlusPlus)
+        } else if self.match_char(self.peek(), '=') {
+          self.advance();
+          Some(TokenKind::PlusEqual)
+        } else {
+          Some(TokenKind::Plus)
+        }
+      },
+
+      '-' => {
+        if self.match_char(self.peek(), '-') {
+          self.advance();
+          Some(TokenKind::MinusMinus)
+        } else if self.match_char(self.peek(), '=') {
+          self.advance();
+          Some(TokenKind::MinusEqual)
+        } else {
+          Some(TokenKind::Minus)
+        }
+      },
+
+      '*' => {
+        if self.match_char(self.peek(), '=') {
+          self.advance();
+          Some(TokenKind::StarEqual)
+        } else {
+          Some(TokenKind::Star)
+        }
+      },
+
+      '/' => self.lex_divide(),
+      '%' => {
+        if self.match_char(self.peek(), '=') {
+          self.advance();
+          Some(TokenKind::PercentEqual)
+        } else {
+          Some(TokenKind::Percent)
+        }
+      },
+
+      '&' => self.lex_and(engine),
+      '|' => self.lex_or(),
+      '^' => {
+        if self.match_char(self.peek(), '=') {
+          self.advance();
+          Some(TokenKind::CaretEqual)
+        } else {
+          Some(TokenKind::Caret)
+        }
+      },
+
+      '~' => Some(TokenKind::Tilde),
+      '!' => self.lex_bang(),
+      '=' => self.lex_equal(),
+      '<' => self.lex_less(),
+      '>' => self.lex_greater(),
+
       ';' => Some(TokenKind::Semicolon),
       ',' => Some(TokenKind::Comma),
       '.' => self.lex_dot(),
-      ':' => self.parse_colon(),
+      ':' => Some(TokenKind::Colon),
       '?' => Some(TokenKind::Question),
-      '/' => self.lex_divide(),
-      '=' => self.lex_equal(),
-      '!' => self.lex_bang(),
-      '<' => self.lex_less(),
-      '>' => self.lex_greater(),
-      '&' => self.lex_and(engine),
-      '|' => self.lex_or(),
+      '`' => self.lex_string(engine),
+      '"' | '\'' => self.lex_string(engine),
+
+      '@' => Some(TokenKind::At),
+      '#' => Some(TokenKind::Hash),
+
       '\n' => {
         self.line += 1;
         self.column = 0;
@@ -42,7 +96,6 @@ impl Lexer {
       },
 
       '\r' | '\t' | ' ' => None,
-      '"' | '\'' | '`' => self.lex_string(engine),
       'A'..='Z' | 'a'..='z' | '_' => self.lex_keywords(),
       '0'..='9' => self.lex_number(),
 
@@ -50,10 +103,10 @@ impl Lexer {
         let diagnostic = Diagnostic::new(
           DiagnosticCode::Error(DiagnosticError::InvalidCharacter),
           format!("unexpected character: {}", self.get_current_lexeme()),
-          "demo.lox".to_string(),
+          "source.ts".to_string(),
         )
         .with_label(
-          Span::new(self.line, self.current, self.column + 1),
+          diagnostic::Span::new(self.start, self.current),
           Some("unexpected character".to_string()),
           LabelStyle::Primary,
         );
@@ -64,158 +117,150 @@ impl Lexer {
     }
   }
 
-  fn parse_minus(&mut self) -> Option<TokenKind> {
-    if self.match_char(self.peek(), '>') {
-      self.advance(); // consume the '-'
-      return Some(TokenKind::FatArrow);
-    }
-    Some(TokenKind::Minus)
-  }
-
-  fn parse_colon(&mut self) -> Option<TokenKind> {
-    // if self.match_char(self.peek(), ':') {
-    //   self.advance(); // consume the ':'
-    //   return Some(TokenKind::ColonColon);
-    // }
-    Some(TokenKind::Colon)
-  }
-
   fn lex_dot(&mut self) -> Option<TokenKind> {
     if self.match_char(self.peek(), '.') {
-      self.advance(); // consume the '..'
+      self.advance();
       if self.match_char(self.peek(), '.') {
-        self.advance(); // consume the '...'
+        self.advance();
         return Some(TokenKind::DotDotDot);
       }
     }
-
-    return Some(TokenKind::Dot);
+    Some(TokenKind::Dot)
   }
 
-  /// Lexes `/`, distinguishing between division tokens and comment delimiters.
   fn lex_divide(&mut self) -> Option<TokenKind> {
     if self.match_char(self.peek(), '/') {
       return self.lex_line_comment();
     } else if self.match_char(self.peek(), '*') {
       return self.lex_multi_line_comment();
+    } else if self.match_char(self.peek(), '=') {
+      self.advance();
+      return Some(TokenKind::SlashEqual);
     }
-
     Some(TokenKind::Slash)
   }
 
-  /// Consumes a single-line `//` comment and returns its token.
   fn lex_line_comment(&mut self) -> Option<TokenKind> {
     while !self.is_eof() {
-      self.advance(); // consume the current char
-      if self.match_char(self.peek(), '\n') {
-        self.advance(); // consume the '\n'
-        self.line += 1;
-        self.column = 0;
-
+      if self.peek() == Some('\n') {
         break;
       }
+      self.advance();
     }
     Some(TokenKind::SingleLineComment)
   }
 
-  /// Consumes a block `/* ... */` comment and returns its token.
   fn lex_multi_line_comment(&mut self) -> Option<TokenKind> {
     while !self.is_eof() {
-      self.advance(); // consume the current char
-      if self.match_char(self.peek(), '\n') {
-        self.line += 1;
-        self.column = 0
-      }
-      if self.match_char(self.peek(), '*') && self.match_char(self.peek(), '/') {
-        self.advance(); // consume the "*"
-        self.advance(); // consume the "/"
+      if self.peek() == Some('*') && self.peek_next() == Some('/') {
+        self.advance();
+        self.advance();
         break;
       }
+      if self.peek() == Some('\n') {
+        self.line += 1;
+        self.column = 0;
+      }
+      self.advance();
     }
-
     Some(TokenKind::MultiLineComment)
   }
 
-  /// Lexes `!` and `!=` tokens.
   fn lex_bang(&mut self) -> Option<TokenKind> {
     if self.match_char(self.peek(), '=') {
-      self.advance(); // consume the '='
-      return Some(TokenKind::BangEqual);
+      self.advance();
+      if self.match_char(self.peek(), '=') {
+        self.advance();
+        return Some(TokenKind::NotEqualEqual);
+      }
+      return Some(TokenKind::NotEqual);
     }
-
     Some(TokenKind::Bang)
   }
 
-  /// Lexes greater-than comparators, upgrading to `>=` when an equals sign follows.
-  fn lex_greater(&mut self) -> Option<TokenKind> {
-    if self.match_char(self.peek(), '=') {
-      self.advance(); // consume the '='
-      return Some(TokenKind::GreaterEqual);
-    }
-
-    Some(TokenKind::Greater)
-  }
-
-  /// Lexes less-than comparators, upgrading to `<=` when an equals sign follows.
-  fn lex_less(&mut self) -> Option<TokenKind> {
-    if self.match_char(self.peek(), '=') {
-      self.advance(); // consume the '='
-      return Some(TokenKind::LessEqual);
-    }
-
-    Some(TokenKind::Less)
-  }
-
-  /// Lexes `=` and `==` tokens.
   fn lex_equal(&mut self) -> Option<TokenKind> {
     if self.match_char(self.peek(), '=') {
-      self.advance(); // consume the '='
+      self.advance();
+      if self.match_char(self.peek(), '=') {
+        self.advance();
+        return Some(TokenKind::EqualEqualEqual);
+      }
       return Some(TokenKind::EqualEqual);
+    } else if self.match_char(self.peek(), '>') {
+      self.advance();
+      return Some(TokenKind::Arrow);
     }
 
     Some(TokenKind::Equal)
   }
 
-  /// Lexes `&&`, emitting a diagnostic when a second `&` is missing.
+  fn lex_less(&mut self) -> Option<TokenKind> {
+    if self.match_char(self.peek(), '<') {
+      self.advance();
+      if self.match_char(self.peek(), '=') {
+        self.advance();
+        return Some(TokenKind::LessLessEqual);
+      }
+      return Some(TokenKind::LessLess);
+    }
+    if self.match_char(self.peek(), '=') {
+      self.advance();
+      return Some(TokenKind::LessEqual);
+    }
+    Some(TokenKind::Less)
+  }
+
+  fn lex_greater(&mut self) -> Option<TokenKind> {
+    if self.match_char(self.peek(), '>') {
+      self.advance();
+      if self.match_char(self.peek(), '>') {
+        self.advance();
+        if self.match_char(self.peek(), '=') {
+          self.advance();
+          return Some(TokenKind::GreaterGreaterGreaterEqual);
+        }
+        return Some(TokenKind::GreaterGreaterGreater);
+      }
+      if self.match_char(self.peek(), '=') {
+        self.advance();
+        return Some(TokenKind::GreaterGreaterEqual);
+      }
+      return Some(TokenKind::GreaterGreater);
+    }
+    if self.match_char(self.peek(), '=') {
+      self.advance();
+      return Some(TokenKind::GreaterEqual);
+    }
+    Some(TokenKind::Greater)
+  }
+
   fn lex_and(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     if self.match_char(self.peek(), '&') {
-      self.advance(); // consume the '='
-      return Some(TokenKind::And);
+      self.advance();
+      return Some(TokenKind::AmpAmp);
+    } else if self.match_char(self.peek(), '=') {
+      self.advance();
+      return Some(TokenKind::AmpEqual);
     } else {
       self.emit_error_unexpected_character(engine);
       None
     }
   }
 
-  /// Lexes `||`, emitting a diagnostic when a second `|` is missing.
   fn lex_or(&mut self) -> Option<TokenKind> {
     if self.match_char(self.peek(), '|') {
-      self.advance(); // consume the '|'
-      return Some(TokenKind::Or);
+      self.advance();
+      return Some(TokenKind::PipePipe);
+    } else if self.match_char(self.peek(), '=') {
+      self.advance();
+      return Some(TokenKind::PipeEqual);
     } else {
-      return Some(TokenKind::Pipe);
+      Some(TokenKind::Pipe)
     }
   }
 
-  /// Consumes an identifier or keyword, returning the proper token kind.
-
+  /// TypeScript keyword recognition
   fn lex_keywords(&mut self) -> Option<TokenKind> {
-    let next_char = match self.peek() {
-      Some(ch) => ch.to_string(),
-      None => "".to_string(),
-    };
-
-    if self.get_current_lexeme() == "_"
-      && !next_char.chars().next().unwrap().is_ascii_alphabetic()
-      && next_char != ","
-      && next_char != ")"
-      && next_char != "}"
-    {
-      self.advance();
-      return Some(TokenKind::Underscore);
-    }
-
-    // Consume valid identifier characters
     while let Some(ch) = self.peek() {
       if !ch.is_ascii_alphanumeric() && ch != '_' {
         break;
@@ -224,64 +269,75 @@ impl Lexer {
     }
 
     match self.get_current_lexeme() {
-      // Type & Structure Keywords
-      "int" => Some(TokenKind::Int),
-      "float" => Some(TokenKind::Float),
-      "string" => Some(TokenKind::String),
-      "bool" => Some(TokenKind::Bool),
-      "void" => Some(TokenKind::Void),
-      "type" => Some(TokenKind::Type),
-      "struct" => Some(TokenKind::Struct),
-      "trait" => Some(TokenKind::Trait),
-      "impl" => Some(TokenKind::Impl),
-      "interface" => Some(TokenKind::Interface),
-      "enum" => Some(TokenKind::Enum),
-
-      // Control Flow Keywords
-      "if" => Some(TokenKind::If),
-      "else" => Some(TokenKind::Else),
-      "while" => Some(TokenKind::While),
-      "for" => Some(TokenKind::For),
-      "in" => Some(TokenKind::In),
-      "loop" => Some(TokenKind::Loop),
-      "match" => Some(TokenKind::Match),
+      // Core Keywords
       "break" => Some(TokenKind::Break),
-      "continue" => Some(TokenKind::Continue),
-      "return" => Some(TokenKind::Return),
-      "await" => Some(TokenKind::Await),
-
-      // Declaration & Module Keywords
-      "let" => Some(TokenKind::Let),
-      "mut" => Some(TokenKind::Mut),
+      "case" => Some(TokenKind::Case),
+      "catch" => Some(TokenKind::Catch),
+      "class" => Some(TokenKind::Class),
       "const" => Some(TokenKind::Const),
-      "fn" => Some(TokenKind::Fn),
-      "function" => Some(TokenKind::Function),
-      "import" => Some(TokenKind::Import),
-      "from" => Some(TokenKind::From),
+      "continue" => Some(TokenKind::Continue),
+      "debugger" => Some(TokenKind::Debugger),
+      "default" => Some(TokenKind::Default),
+      "delete" => Some(TokenKind::Delete),
+      "do" => Some(TokenKind::Do),
+      "else" => Some(TokenKind::Else),
+      "enum" => Some(TokenKind::Enum),
       "export" => Some(TokenKind::Export),
-      "as" => Some(TokenKind::As),
-
-      // Object & Type System Keywords
-      "self" => Some(TokenKind::SelfKeyword),
-      "super" => Some(TokenKind::Super),
-
-      // Logical Operators
-      "and" => Some(TokenKind::And),
-      "or" => Some(TokenKind::Or),
-
-      // Literals
-      "true" => Some(TokenKind::True),
+      "extends" => Some(TokenKind::Extends),
       "false" => Some(TokenKind::False),
-      "nil" => Some(TokenKind::Nil),
-
-      // Default Fallback
+      "finally" => Some(TokenKind::Finally),
+      "for" => Some(TokenKind::For),
+      "function" => Some(TokenKind::Function),
+      "if" => Some(TokenKind::If),
+      "import" => Some(TokenKind::Import),
+      "in" => Some(TokenKind::In),
+      "instanceof" => Some(TokenKind::Instanceof),
+      "new" => Some(TokenKind::New),
+      "null" => Some(TokenKind::Null),
+      "undefined" => Some(TokenKind::Undefined),
+      "return" => Some(TokenKind::Return),
+      "super" => Some(TokenKind::Super),
+      "switch" => Some(TokenKind::Switch),
+      "this" => Some(TokenKind::This),
+      "throw" => Some(TokenKind::Throw),
+      "true" => Some(TokenKind::True),
+      "try" => Some(TokenKind::Try),
+      "typeof" => Some(TokenKind::Typeof),
+      "var" => Some(TokenKind::Var),
+      "void" => Some(TokenKind::Void),
+      "while" => Some(TokenKind::While),
+      "with" => Some(TokenKind::With),
+      "yield" => Some(TokenKind::Yield),
+      "await" => Some(TokenKind::Await),
+      "as" => Some(TokenKind::As),
+      "implements" => Some(TokenKind::Implements),
+      "interface" => Some(TokenKind::Interface),
+      "let" => Some(TokenKind::Let),
+      "package" => Some(TokenKind::Package),
+      "private" => Some(TokenKind::Private),
+      "protected" => Some(TokenKind::Protected),
+      "public" => Some(TokenKind::Public),
+      "static" => Some(TokenKind::Static),
+      "any" => Some(TokenKind::Any),
+      "boolean" => Some(TokenKind::Boolean),
+      "constructor" => Some(TokenKind::Constructor),
+      "declare" => Some(TokenKind::Declare),
+      "get" => Some(TokenKind::Get),
+      "module" => Some(TokenKind::Module),
+      "namespace" => Some(TokenKind::Namespace),
+      "require" => Some(TokenKind::Require),
+      "number" => Some(TokenKind::Number),
+      "set" => Some(TokenKind::Set),
+      "string" => Some(TokenKind::String),
+      "symbol" => Some(TokenKind::Symbol),
+      "type" => Some(TokenKind::Type),
+      "from" => Some(TokenKind::From),
+      "of" => Some(TokenKind::Of),
       _ => Some(TokenKind::Identifier),
     }
   }
 
-  /// Parses an integer or floating-point literal.
   fn lex_number(&mut self) -> Option<TokenKind> {
-    // Consume integer part
     while let Some(c) = self.peek() {
       if c.is_ascii_digit() {
         self.advance();
@@ -290,96 +346,61 @@ impl Lexer {
       }
     }
 
-    // Check for decimal part
-    if self.peek() == Some('.') {
-      // Look ahead to see if next is a digit, otherwise it's not a float (could be a range, for example)
-      if let Some(next) = self.peek_next() {
-        if next.is_ascii_digit() {
-          // Consume '.'
+    if self.peek() == Some('.')
+      && self
+        .peek_next()
+        .map(|n| n.is_ascii_digit())
+        .unwrap_or(false)
+    {
+      self.advance();
+      while let Some(c) = self.peek() {
+        if c.is_ascii_digit() {
           self.advance();
-          // Consume fractional part
-          while let Some(c) = self.peek() {
-            if c.is_ascii_digit() {
-              self.advance();
-            } else {
-              break;
-            }
-          }
-          return Some(TokenKind::Float);
+        } else {
+          break;
         }
       }
     }
 
-    Some(TokenKind::Int)
+    Some(TokenKind::Number)
   }
 
-  /// Parses a quoted string literal and reports unterminated strings.
   fn lex_string(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
-    // The opening quote is already in the lexeme at position self.start
-    let first_char = self.source.chars().nth(self.start).unwrap();
+    let quote = self.source.chars().nth(self.start).unwrap();
 
-    while let Some(char) = self.peek() {
+    while let Some(ch) = self.peek() {
       if self.is_eof() {
-        let diagnostic = Diagnostic::new(
-          DiagnosticCode::Error(DiagnosticError::UnterminatedString),
-          "unterminated string".to_string(),
-          "demo.lox".to_string(),
-        )
-        .with_label(
-          Span::new(self.line, 1, 1),
-          Some("unterminated string".to_string()),
-          LabelStyle::Primary,
-        );
-
-        engine.add(diagnostic);
-
+        self.report_unterminated_string(engine);
         break;
       }
 
-      if char == '\n' && first_char != '`' {
-        let line_content = self.get_line(self.line);
-
-        if self.peek() == Some('\n') {
-          let diagnostic = Diagnostic::new(
-            DiagnosticCode::Error(DiagnosticError::UnterminatedString),
-            "unterminated string".to_string(),
-            "demo.lox".to_string(),
-          )
-          .with_label(
-            Span::new(self.line, 1, line_content.len() + 1),
-            Some("unterminated string".to_string()),
-            LabelStyle::Primary,
-          );
-          engine.add(diagnostic);
-          break;
-        }
-
-        let diagnostic = Diagnostic::new(
-          DiagnosticCode::Error(DiagnosticError::UnterminatedString),
-          "unterminated string".to_string(),
-          "demo.lox".to_string(),
-        )
-        .with_label(
-          Span::new(self.line, self.start + 1, self.current + 1),
-          Some("unterminated string".to_string()),
-          LabelStyle::Primary,
-        );
-
-        engine.add(diagnostic);
-
+      if ch == quote {
+        self.advance();
         break;
       }
 
-      if (first_char == '\'' && char == '\'')
-        || (first_char == '"' && char == '"')
-        || (first_char == '`' && char == '`')
-      {
-        self.advance(); // consume the closing quote
+      if ch == '\n' && quote != '`' {
+        self.report_unterminated_string(engine);
         break;
       }
+
       self.advance();
     }
 
     Some(TokenKind::String)
+  }
+
+  fn report_unterminated_string(&mut self, engine: &mut DiagnosticEngine) {
+    let diagnostic = Diagnostic::new(
+      DiagnosticCode::Error(DiagnosticError::UnterminatedString),
+      "unterminated string".to_string(),
+      "source.ts".to_string(),
+    )
+    .with_label(
+      diagnostic::Span::new(self.start, self.current),
+      Some("unterminated string".to_string()),
+      LabelStyle::Primary,
+    );
+    engine.add(diagnostic);
   }
 }
