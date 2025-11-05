@@ -11,6 +11,11 @@ impl Span {
     Self { start, end }
   }
 
+  pub fn merge(&mut self, other: Self) {
+    self.start = self.start.min(other.start);
+    self.end = self.end.max(other.end);
+  }
+
   pub fn len(&self) -> usize {
     self.end.saturating_sub(self.start)
   }

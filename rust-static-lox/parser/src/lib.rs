@@ -9,6 +9,7 @@ use lexer::token::{Token, TokenKind};
 use crate::ast::Item;
 
 mod ast;
+mod grammar;
 mod parser_utils;
 
 /// Recursive-descent parser that transforms tokens into an AST while reporting diagnostics.

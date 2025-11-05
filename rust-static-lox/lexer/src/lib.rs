@@ -62,7 +62,7 @@ impl Lexer {
   /// Pushes a token covering the span between `start` and `current`.
   fn emit(&mut self, kind: TokenKind) {
     // ignore comments
-    if kind == TokenKind::MultiLineComment || kind == TokenKind::SingleLineComment {
+    if kind.is_trivia() {
       return;
     }
 

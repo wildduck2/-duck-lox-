@@ -13,4 +13,3 @@ categories.workspace = true
 colored.workspace = true
 diagnostic = { path = "../diagnostic" }
 lexer = { path = "../lexer" }
-parser = { path = "../parser" }
