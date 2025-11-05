@@ -1,0 +1,62 @@
+use crate::{token::TokenKind, Lexer};
+use diagnostic::{
+  code::DiagnosticCode,
+  diagnostic::{Diagnostic, LabelStyle},
+  types::error::DiagnosticError,
+  DiagnosticEngine, Span,
+};
+
+impl Lexer {
+  /// Lexes a shebang line (only valid at the very start of a file)
+  ///
+  /// # Examples
+  /// ```rust
+  /// #!/usr/bin/env rustrc
+  /// #![allow(dead_code)]
+  /// ```
+  pub fn lex_shebang(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
+    // Only valid at very beginning of the file
+    if self.get_current_offset() != 1 {
+      return None;
+    }
+
+    self.advance(); // consume '!'
+
+    // Look ahead to decide what kind of shebang it is
+    match self.peek() {
+      // OS interpreter shebang, e.g. "#!/usr/bin/env rustrc"
+      Some('/') => {
+        // Consume until newline or EOF
+        while let Some(c) = self.peek() {
+          if c == '\n' || c == '\r' {
+            break;
+          }
+          self.advance();
+        }
+
+        Some(TokenKind::Shebang)
+      },
+
+      // Compiler attribute shebang, e.g. "#![allow(dead_code)]"
+      Some('[') => None,
+
+      // Anything else is invalid for a shebang
+      _ => {
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::InvalidShebang),
+          "invalid shebang".to_string(),
+          "demo.lox".to_string(),
+        )
+        .with_label(
+          Span::new(self.start, self.current),
+          Some("invalid shebang".to_string()),
+          LabelStyle::Primary,
+        );
+
+        engine.add(diagnostic);
+
+        None
+      },
+    }
+  }
+}

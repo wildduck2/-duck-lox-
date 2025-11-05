@@ -7,6 +7,7 @@ use diagnostic::{
 
 use crate::token::{Token, TokenKind};
 
+mod lexers;
 mod scanner_utils;
 pub mod token;
 
@@ -66,6 +67,16 @@ impl Lexer {
     //   return;
     // }
 
+    // println!(
+    //   "{:?}",
+    //   Token {
+    //     kind,
+    //     span: Span {
+    //       start: self.start,
+    //       end: self.current,
+    //     },
+    //   }
+    // );
     self.tokens.push(Token {
       kind,
       span: Span {
@@ -117,6 +128,10 @@ impl Lexer {
   /// Returns the current lexeme slice spanning the active token.
   fn get_current_lexeme(&self) -> &str {
     &self.source[self.start..self.current]
+  }
+
+  fn get_current_offset(&self) -> usize {
+    self.current
   }
 
   /// Returns `true` when the cursor has reached the end of the source text.

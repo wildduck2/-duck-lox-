@@ -1,1 +1,4 @@
-/* outer /* inner */ still outer */
+#!/usr/bin/env rustrc
+// #![allow(dead_code)]
+
+

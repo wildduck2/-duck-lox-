@@ -1,5 +1,6 @@
 use diagnostic::Span;
 
+/// A token produced by the lexer, containing both its kind and source location
 #[derive(Debug, Clone)]
 pub struct Token {
   pub kind: TokenKind,
@@ -10,155 +11,280 @@ pub struct Token {
 // SUPPORTING ENUMS
 // ============================================================================
 
-/// Style of a doc comment
+/// Style of a documentation comment
+///
+/// Documentation comments in Rust come in two flavors:
+/// - **Outer**: Document the item that follows (`///` or `/** */`)
+/// - **Inner**: Document the enclosing item (`//!` or `/*! */`)
 ///
 /// # Examples
-/// - `Outer`: `/// Documentation` or `/** Documentation */`
-/// - `Inner`: `//! Module docs` or `/*! Module docs */`
+/// ```rust
+/// /// This is an outer doc comment for the function below
+/// fn foo() {
+///   //! This is an inner doc comment for the function itself
+/// }
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DocStyle {
-  /// Outer doc comment: `///` or `/**`
+  /// Outer doc comment: `///` or `/** */`
   Outer,
-  /// Inner doc comment: `//!` or `/*!`
+  /// Inner doc comment: `//!` or `/*! */`
   Inner,
 }
 
-/// Base of numeric literal encoding according to its prefix
+/// Numeric base for integer and float literals
+///
+/// Rust supports four numeric bases, indicated by prefixes:
+///
+/// | Base | Prefix | Example | Digits |
+/// |------|--------|---------|--------|
+/// | Binary | `0b` | `0b1010` | 0-1 |
+/// | Octal | `0o` | `0o755` | 0-7 |
+/// | Decimal | _(none)_ | `42` | 0-9 |
+/// | Hexadecimal | `0x` | `0xDEADBEEF` | 0-9, a-f, A-F |
 ///
 /// # Examples
-/// - `Binary`: `0b1010`
-/// - `Octal`: `0o755`
-/// - `Decimal`: `42`
-/// - `Hexadecimal`: `0xDEADBEEF`
+/// ```rust
+/// let binary = 0b1111_0000;      // Base::Binary
+/// let octal = 0o755;             // Base::Octal
+/// let decimal = 1_000_000;       // Base::Decimal
+/// let hex = 0xDEAD_BEEF;         // Base::Hexadecimal
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Base {
-  /// `0b` prefix - Binary (base 2)
+  /// Binary literals with `0b` prefix (base 2)
   Binary = 2,
-  /// `0o` prefix - Octal (base 8)
+  /// Octal literals with `0o` prefix (base 8)
   Octal = 8,
-  /// No prefix - Decimal (base 10)
+  /// Decimal literals with no prefix (base 10)
   Decimal = 10,
-  /// `0x` prefix - Hexadecimal (base 16)
+  /// Hexadecimal literals with `0x` prefix (base 16)
   Hexadecimal = 16,
 }
 
-/// Errors that can occur when parsing raw string literals
+/// Errors that can occur when lexing raw string literals
 ///
-/// Raw strings use the syntax `r#"..."#` where the number of `#`
-/// characters must match on both sides
+/// Raw strings use the syntax `r#"..."#` where the number of `#` delimiters
+/// must match exactly on both the opening and closing sides.
+///
+/// # Examples of Valid Raw Strings
+/// ```rust
+/// r"no hashes needed"
+/// r#"can contain "quotes" now"#
+/// r##"can contain "# now"##
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RawStrError {
-  /// Non-`#` characters exist between `r` and `"`, e.g. `r#~".."`
-  InvalidStarter { bad_char: char },
-
-  /// The string was never terminated
+  /// Invalid characters between `r` and the opening quote
+  ///
+  /// Only `#` characters are allowed between `r` and `"`.
   ///
   /// # Example
-  /// `r##"hello` expects `"##` but found EOF
+  /// ```rust
+  /// r#~"invalid"  // bad_char = '~'
+  /// ```
+  InvalidStarter { bad_char: char },
+
+  /// The raw string was not properly terminated
+  ///
+  /// Either EOF was reached, or the closing delimiter didn't match
+  /// the opening delimiter's hash count.
+  ///
+  /// # Examples
+  /// ```rust
+  /// r##"hello     // expected "##, found EOF
+  /// r##"hello"#   // expected "##, found "#
+  /// ```
   NoTerminator {
-    /// Number of `#` characters expected
+    /// Number of `#` characters in the opening delimiter
     expected: usize,
-    /// Number of `#` characters found
+    /// Number of `#` characters found in the (potential) closing delimiter
     found: usize,
-    /// Byte offset where a possible terminator was found
+    /// Byte offset where a possible but mismatched terminator was found
     possible_terminator_offset: Option<usize>,
   },
 
-  /// More than 65535 `#` delimiters
+  /// Too many `#` delimiters (exceeds u16::MAX = 65535)
   ///
-  /// Rust limits raw string delimiters to u16::MAX
+  /// Rust limits raw string delimiters to prevent abuse.
+  ///
+  /// # Example
+  /// ```rust
+  /// r#####...#####"text"#####...#####  // 70000 hashes
+  /// ```
   TooManyDelimiters { found: usize },
 }
 
-/// Enum representing all literal types supported by Rust
+/// The kind of literal token
+///
+/// Rust supports various literal types for numbers, characters, and strings.
+/// Each variant includes metadata about malformed literals (e.g., unterminated
+/// strings, empty exponents) to enable better error reporting.
+///
+/// # Examples
+/// ```rust
+/// 42              // Int { base: Decimal, empty_int: false }
+/// 0xFF            // Int { base: Hexadecimal, empty_int: false }
+/// 3.14            // Float { base: Decimal, empty_exponent: false }
+/// 'x'             // Char { terminated: true }
+/// "hello"         // Str { terminated: true }
+/// r#"raw"#        // RawStr { n_hashes: 1, err: None }
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LiteralKind {
-  /// Integer literal: `12_u8`, `0o100`, `0b1010`, `0xDEAD`, `42i64`
+  /// Integer literal with optional suffix
   ///
-  /// # Fields
-  /// - `base`: The numeric base (binary, octal, decimal, hex)
-  /// - `empty_int`: true if no digits follow the base prefix (e.g., `0x`)
-  Int { base: Base, empty_int: bool },
+  /// # Examples
+  /// ```rust
+  /// 42              // decimal
+  /// 0b1010          // binary
+  /// 0o755           // octal
+  /// 0xDEAD_BEEF     // hexadecimal
+  /// 100_u32         // with type suffix
+  /// 0x_             // empty_int = true (malformed)
+  /// ```
+  Int {
+    /// The numeric base of the literal
+    base: Base,
+    /// True if no digits follow the base prefix (e.g., `0x` with nothing after)
+    empty_int: bool,
+  },
 
-  /// Floating point literal: `12.34f32`, `1e3`, `3.14`, `2.5E-10`
+  /// Floating-point literal with optional suffix
   ///
-  /// Note: `1f32` is an Int with suffix, not a Float
+  /// # Examples
+  /// ```rust
+  /// 3.14            // basic float
+  /// 1e10            // exponential notation
+  /// 2.5E-3          // exponential with sign
+  /// 1.0f32          // with type suffix
+  /// 1e_             // empty_exponent = true (malformed)
+  /// ```
   ///
-  /// # Fields
-  /// - `base`: The numeric base (typically Decimal, but hex floats exist)
-  /// - `empty_exponent`: true if exponent marker exists but no digits follow (e.g., `1e`)
-  Float { base: Base, empty_exponent: bool },
+  /// **Note**: `1f32` is lexed as `Int` with suffix "f32", not `Float`
+  Float {
+    /// The numeric base (usually Decimal, but hex floats exist in some contexts)
+    base: Base,
+    /// True if exponent marker (`e` or `E`) exists but no digits follow
+    empty_exponent: bool,
+  },
 
-  /// Character literal: `'a'`, `'\n'`, `'\u{1F980}'`, `'🦀'`
+  /// Character literal (single Unicode scalar)
   ///
-  /// # Fields
-  /// - `terminated`: false if closing `'` is missing
-  Char { terminated: bool },
+  /// # Examples
+  /// ```rust
+  /// 'a'             // ASCII character
+  /// '🦀'            // Unicode emoji
+  /// '\n'            // escape sequence
+  /// '\u{1F980}'     // Unicode escape
+  /// 'x              // terminated = false (malformed)
+  /// ```
+  Char {
+    /// False if the closing `'` is missing
+    terminated: bool,
+  },
 
-  /// Byte literal: `b'a'`, `b'\n'`, `b'\x7F'`
+  /// Byte literal (single ASCII byte)
   ///
-  /// Must contain ASCII-only characters
+  /// # Examples
+  /// ```rust
+  /// b'a'            // ASCII byte
+  /// b'\n'           // escape sequence
+  /// b'\x7F'         // hex escape
+  /// b'              // terminated = false (malformed)
+  /// ```
   ///
-  /// # Fields
-  /// - `terminated`: false if closing `'` is missing
-  Byte { terminated: bool },
+  /// **Note**: Byte literals must contain only ASCII characters (0-127)
+  Byte {
+    /// False if the closing `'` is missing
+    terminated: bool,
+  },
 
-  /// String literal: `"hello"`, `"foo\nbar"`, `"multi
-  /// line"`
+  /// String literal with escape sequences
   ///
-  /// # Fields
-  /// - `terminated`: false if closing `"` is missing
-  Str { terminated: bool },
+  /// # Examples
+  /// ```rust
+  /// "hello"         // basic string
+  /// "foo\nbar"      // with escape
+  /// "multi
+  /// line"           // multiline (valid)
+  /// "unterminated   // terminated = false (malformed)
+  /// ```
+  Str {
+    /// False if the closing `"` is missing
+    terminated: bool,
+  },
 
-  /// Byte string literal: `b"hello"`, `b"\x48\x69"`
+  /// Byte string literal (ASCII-only string as `&[u8]`)
   ///
-  /// Must contain ASCII-only characters
-  ///
-  /// # Fields
-  /// - `terminated`: false if closing `"` is missing
-  ByteStr { terminated: bool },
+  /// # Examples
+  /// ```rust
+  /// b"hello"        // ASCII bytes
+  /// b"\x48\x69"     // hex escapes for "Hi"
+  /// b"unterminated  // terminated = false (malformed)
+  /// ```
+  ByteStr {
+    /// False if the closing `"` is missing
+    terminated: bool,
+  },
 
-  /// C string literal: `c"hello"`, `c"null-terminated\0"`
+  /// C string literal (null-terminated, type `&CStr`)
   ///
-  /// Added in Rust 1.77, creates a `&CStr`
+  /// Added in Rust 1.77 for FFI interop.
   ///
-  /// # Fields
-  /// - `terminated`: false if closing `"` is missing
-  CStr { terminated: bool },
+  /// # Examples
+  /// ```rust
+  /// c"hello"        // becomes "hello\0"
+  /// c"with\0null"   // explicit null allowed
+  /// c"unterminated  // terminated = false (malformed)
+  /// ```
+  CStr {
+    /// False if the closing `"` is missing
+    terminated: bool,
+  },
 
-  /// Raw string literal: `r"no escapes"`, `r#"with "quotes" "#`, `r###"custom"###`
+  /// Raw string literal (no escape processing)
   ///
-  /// No escape sequences are processed
-  ///
-  /// # Fields
-  /// - `n_hashes`: Number of `#` delimiters used
-  /// - `err`: Optional error if malformed
+  /// # Examples
+  /// ```rust
+  /// r"no\escapes"           // n_hashes = 0
+  /// r#"with "quotes""#      // n_hashes = 1
+  /// r##"more # freedom"##   // n_hashes = 2
+  /// ```
   RawStr {
+    /// Number of `#` delimiters used
     n_hashes: u16,
+    /// Error if the raw string is malformed
     err: Option<RawStrError>,
   },
 
-  /// Raw byte string literal: `br"bytes"`, `br#"raw bytes"#`
+  /// Raw byte string literal (raw + byte string combined)
   ///
-  /// Combination of raw and byte string features
-  ///
-  /// # Fields
-  /// - `n_hashes`: Number of `#` delimiters used
-  /// - `err`: Optional error if malformed
+  /// # Examples
+  /// ```rust
+  /// br"raw bytes"
+  /// br#"with "quotes""#
+  /// ```
   RawByteStr {
+    /// Number of `#` delimiters used
     n_hashes: u16,
+    /// Error if the raw byte string is malformed
     err: Option<RawStrError>,
   },
 
-  /// Raw C string literal: `cr"c string"`, `cr#"raw c"#`
+  /// Raw C string literal (raw + C string combined)
   ///
-  /// Added in Rust 1.77
+  /// Added in Rust 1.77.
   ///
-  /// # Fields
-  /// - `n_hashes`: Number of `#` delimiters used
-  /// - `err`: Optional error if malformed
+  /// # Examples
+  /// ```rust
+  /// cr"raw c string"
+  /// cr#"with "quotes""#
+  /// ```
   RawCStr {
+    /// Number of `#` delimiters used
     n_hashes: u16,
+    /// Error if the raw C string is malformed
     err: Option<RawStrError>,
   },
 }
@@ -167,245 +293,334 @@ pub enum LiteralKind {
 // MAIN TOKEN KIND ENUM
 // ============================================================================
 
-/// The lexeme-level kind of token in Rust
+/// The kind of token produced by the lexer
 ///
-/// This enum represents all possible tokens that can be produced by
-/// the Rust lexer, including literals, keywords, operators, and special tokens.
+/// This enum represents every possible token in Rust's syntax, including:
+/// - **Comments and whitespace** (trivia tokens)
+/// - **Identifiers and lifetimes**
+/// - **Literals** (numbers, strings, characters)
+/// - **Keywords** (control flow, declarations, modifiers)
+/// - **Operators and punctuation**
+/// - **Special tokens** (EOF, errors)
+///
+/// The lexer produces a stream of these tokens, which the parser then
+/// consumes to build an AST.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TokenKind {
-  // ------------------------------------------------------------------------
-  // COMMENTS & WHITESPACE
-  // ------------------------------------------------------------------------
-  /// Line comment: `// comment` or `/// doc comment` or `//! inner doc`
+  // =========================================================================
+  // COMMENTS & WHITESPACE (Trivia)
+  // =========================================================================
+  /// Line comment: `//` or `///` or `//!`
   ///
-  /// Extends from `//` to the end of the line (not including newline)
-  LineComment { doc_style: Option<DocStyle> },
-
-  /// Block comment: `/* comment */` or `/** doc */` or `/*! inner doc */`
-  ///
-  /// # Fields
-  /// - `doc_style`: If present, this is a documentation comment
-  /// - `terminated`: false if closing `*/` is missing
-  BlockComment {
+  /// # Examples
+  /// ```rust
+  /// // regular comment
+  /// /// outer doc comment
+  /// //! inner doc comment
+  /// ```
+  LineComment {
+    /// Some(DocStyle) if this is a doc comment, None for regular comments
     doc_style: Option<DocStyle>,
+  },
+
+  /// Block comment: `/* */` or `/** */` or `/*! */`
+  ///
+  /// # Examples
+  /// ```rust
+  /// /* regular comment */
+  /// /** outer doc comment */
+  /// /*! inner doc comment */
+  /// /* unterminated comment...
+  /// ```
+  BlockComment {
+    /// Some(DocStyle) if this is a doc comment, None for regular comments
+    doc_style: Option<DocStyle>,
+    /// False if the closing `*/` is missing
     terminated: bool,
   },
 
-  /// Any whitespace character sequence: spaces, tabs, newlines, etc.
+  /// Whitespace: spaces, tabs, newlines, carriage returns
   ///
-  /// Includes: ` `, `\t`, `\n`, `\r`, and other Unicode whitespace
+  /// Matches the pattern `[ \t\n\r]+`
   Whitespace,
 
-  // ------------------------------------------------------------------------
-  // IDENTIFIERS & KEYWORDS
-  // ------------------------------------------------------------------------
-  /// Identifier or keyword: `foo`, `let`, `fn`, `if`, `my_variable`
+  // =========================================================================
+  // SHEBANG
+  // =========================================================================
+  /// Shebang line (only valid at the very start of a file)
   ///
-  /// The lexer doesn't distinguish between identifiers and keywords.
-  /// That distinction is made during parsing by checking against a keyword list.
+  /// # Example
+  /// ```rust
+  /// #!/usr/bin/env rustrc
+  /// #![allow(dead_code)]
+  /// ```
+  Shebang,
+
+  // =========================================================================
+  // IDENTIFIERS
+  // =========================================================================
+  /// Valid identifier
   ///
-  /// Valid identifiers start with `a-z`, `A-Z`, `_`, or most Unicode XID_Start
-  /// characters, followed by `a-z`, `A-Z`, `0-9`, `_`, or Unicode XID_Continue.
+  /// Matches `[a-zA-Z_][a-zA-Z0-9_]*` or Unicode XID identifiers.
+  ///
+  /// # Examples
+  /// ```rust
+  /// foo
+  /// _private
+  /// CamelCase
+  /// snake_case
+  /// ```
   Ident,
 
-  /// Invalid identifier (contains characters not allowed in identifiers)
+  /// Invalid identifier (used for error recovery)
   ///
-  /// This can occur when someone tries to use emoji or other invalid
-  /// characters directly in an identifier position.
+  /// Typically identifiers with invalid characters or starting with digits.
   InvalidIdent,
 
-  /// Raw identifier: `r#let`, `r#type`, `r#async`
+  /// Raw identifier (allows using keywords as identifiers)
   ///
-  /// Allows using keywords as identifiers. The `r#` prefix is included in the token.
-  /// Used when you need a variable named after a keyword.
+  /// # Examples
+  /// ```rust
+  /// r#type      // can use 'type' keyword as identifier
+  /// r#match
+  /// r#fn
+  /// ```
   RawIdent,
 
-  // ------------------------------------------------------------------------
+  // =========================================================================
   // LIFETIMES
-  // ------------------------------------------------------------------------
-  /// Lifetime: `'a`, `'static`, `'_`
+  // =========================================================================
+  /// Lifetime parameter: `'a`, `'static`, `'_`
   ///
-  /// # Fields
-  /// - `starts_with_number`: true for invalid lifetimes like `'1lifetime`
-  Lifetime { starts_with_number: bool },
+  /// # Examples
+  /// ```rust
+  /// 'a          // regular lifetime
+  /// 'static     // built-in lifetime
+  /// '_          // anonymous lifetime
+  /// '0invalid   // starts_with_number = true (error)
+  /// ```
+  Lifetime {
+    /// True if the lifetime name starts with a digit (invalid)
+    starts_with_number: bool,
+  },
 
-  /// Raw lifetime: `'r#foo`
-  ///
-  /// Allows using keywords as lifetime names with the `r#` prefix
+  /// Raw lifetime (hypothetical - for future compatibility)
   RawLifetime,
 
-  // ------------------------------------------------------------------------
+  // =========================================================================
   // LITERALS
-  // ------------------------------------------------------------------------
-  /// All literal values: integers, floats, strings, chars, etc.
+  // =========================================================================
+  /// Any literal value: numbers, strings, chars, bytes
   ///
-  /// # Fields
-  /// - `kind`: The specific type of literal (see `LiteralKind`)
-  /// - `suffix_start`: Byte offset where the type suffix starts (e.g., `u32` in `42u32`)
-  ///   If no suffix exists, this equals the literal's length.
+  /// # Examples
+  /// ```rust
+  /// 42          // Int literal
+  /// 3.14        // Float literal
+  /// 'x'         // Char literal
+  /// "hello"     // Str literal
+  /// 100_u32     // Int with suffix (suffix_start points to 'u')
+  /// ```
   Literal {
+    /// The specific kind of literal
     kind: LiteralKind,
+    /// Byte offset where the suffix starts (for type suffixes like `_u32`)
+    /// Equal to the literal length if no suffix exists
     suffix_start: u32,
   },
 
-  // ------------------------------------------------------------------------
-  // SPECIAL PREFIXES & ERRORS
-  // ------------------------------------------------------------------------
-  /// Unknown literal prefix: `foo#`, `bar"`, `baz'`
+  // =========================================================================
+  // PREFIX ERRORS
+  // =========================================================================
+  /// Unknown prefix on a literal
   ///
-  /// When a potential prefix is followed by a literal-starting character
-  /// but isn't a recognized prefix (like `b`, `r`, `br`, `c`, `cr`).
-  ///
-  /// Only the prefix part (before `#`, `"`, or `'`) is in the token.
+  /// # Example
+  /// ```rust
+  /// q"invalid"  // 'q' is not a valid string prefix
+  /// ```
   UnknownPrefix,
 
-  /// Unknown prefix in a lifetime context: `'foo#`
+  /// Unknown prefix on a lifetime
   ///
-  /// Similar to UnknownPrefix but for lifetime-like tokens
+  /// # Example
+  /// ```rust
+  /// x'invalid   // only 'r' is valid before lifetimes
+  /// ```
   UnknownPrefixLifetime,
 
-  /// Reserved prefix for Rust 2024+ (edition-specific feature)
+  /// Reserved prefix that's not yet used
   ///
-  /// Prefixes like `k#`, `f#` are reserved for future literal types.
-  /// The `#` is included in the token.
+  /// Rust reserves some prefixes for future use.
   ReservedPrefix,
 
-  // ------------------------------------------------------------------------
-  // SINGLE-CHARACTER PUNCTUATION
-  // ------------------------------------------------------------------------
-  /// `;` - Semicolon (statement terminator)
-  Semi,
+  // =========================================================================
+  // KEYWORDS
+  // =========================================================================
 
-  /// `,` - Comma (separator)
-  Comma,
+  // Control Flow Keywords
+  KwIf,       // if
+  KwElse,     // else
+  KwMatch,    // match
+  KwLoop,     // loop
+  KwWhile,    // while
+  KwFor,      // for
+  KwBreak,    // break
+  KwContinue, // continue
+  KwReturn,   // return
 
-  /// `.` - Dot (field access, method call, range start)
-  Dot,
+  // Declaration Keywords
+  KwLet,     // let
+  KwFn,      // fn
+  KwStruct,  // struct
+  KwEnum,    // enum
+  KwUnion,   // union
+  KwTrait,   // trait
+  KwImpl,    // impl
+  KwType,    // type
+  KwMod,     // mod
+  KwUse,     // use
+  KwConst,   // const
+  KwStatic,  // static
+  KwExtern,  // extern
+  KwMacro,   // macro (2.0)
+  KwAuto,    // auto
+  KwDefault, // default
 
-  /// `(` - Open parenthesis
-  OpenParen,
+  // Modifier Keywords
+  KwPub,    // pub
+  KwMut,    // mut
+  KwRef,    // ref
+  KwMove,   // move
+  KwUnsafe, // unsafe
+  KwAsync,  // async
+  KwAwait,  // await
+  KwDyn,    // dyn
 
-  /// `)` - Close parenthesis
-  CloseParen,
+  // Special Identifiers
+  KwSelfValue, // self (value)
+  KwSelfType,  // Self (type)
+  KwSuper,     // super
+  KwCrate,     // crate
 
-  /// `{` - Open brace (block start)
-  OpenBrace,
+  // Literal Keywords
+  KwTrue,  // true
+  KwFalse, // false
 
-  /// `}` - Close brace (block end)
-  CloseBrace,
+  // Other Keywords
+  KwAs,    // as
+  KwIn,    // in
+  KwWhere, // where
 
-  /// `[` - Open bracket (array/slice)
-  OpenBracket,
+  // Reserved Keywords (not yet used, but reserved for future use)
+  KwAbstract, // abstract
+  KwBecome,   // become
+  KwBox,      // box
+  KwDo,       // do
+  KwFinal,    // final
+  KwOverride, // override
+  KwPriv,     // priv
+  KwTry,      // try
+  KwTypeof,   // typeof
+  KwUnsized,  // unsized
+  KwVirtual,  // virtual
+  KwYield,    // yield
 
-  /// `]` - Close bracket
-  CloseBracket,
+  // =========================================================================
+  // PUNCTUATION & DELIMITERS
+  // =========================================================================
+  Semi,         // ;
+  Comma,        // ,
+  Dot,          // .
+  OpenParen,    // (
+  CloseParen,   // )
+  OpenBrace,    // {
+  CloseBrace,   // }
+  OpenBracket,  // [
+  CloseBracket, // ]
+  At,           // @
+  Pound,        // #
+  Tilde,        // ~
+  Question,     // ?
+  Colon,        // :
+  Dollar,       // $
 
-  /// `@` - At symbol (pattern binding)
-  At,
+  // =========================================================================
+  // OPERATORS (Single-character and Compound)
+  // =========================================================================
 
-  /// `#` - Pound/Hash (attributes, macros)
-  Pound,
+  // Assignment & Comparison
+  Eq,   // =
+  EqEq, // ==
+  Ne,   // !=
+  Lt,   // <
+  Le,   // <=
+  Gt,   // >
+  Ge,   // >=
 
-  /// `~` - Tilde (historical, rarely used in modern Rust)
-  Tilde,
+  // Arithmetic
+  Plus,    // +
+  Minus,   // -
+  Star,    // *
+  Slash,   // /
+  Percent, // %
 
-  /// `?` - Question mark (error propagation operator)
-  Question,
+  // Bitwise & Logical
+  And,    // &
+  Or,     // |
+  Caret,  // ^
+  Bang,   // !
+  AndAnd, // &&
+  OrOr,   // ||
 
-  /// `:` - Colon (type annotation, struct patterns)
-  Colon,
+  // Compound Assignment
+  PlusEq,       // +=
+  MinusEq,      // -=
+  StarEq,       // *=
+  SlashEq,      // /=
+  PercentEq,    // %=
+  AndEq,        // &=
+  OrEq,         // |=
+  CaretEq,      // ^=
+  ShiftLeftEq,  // <<=
+  ShiftRightEq, // >>=
 
-  /// `$` - Dollar sign (macro variables)
-  Dollar,
+  // Bit Shifts
+  ShiftLeft,  // <<
+  ShiftRight, // >>
 
-  /// `=` - Equals (assignment, comparison when doubled)
-  Eq,
+  // Special Operators
+  ColonColon, // :: (path separator)
+  ThinArrow,  // -> (return type, match arm)
+  FatArrow,   // => (match arm)
+  DotDot,     // .. (range, struct update)
+  DotDotEq,   // ..= (inclusive range)
+  DotDotDot,  // ... (reserved/deprecated)
 
-  /// `!` - Bang/Exclamation (negation, macro invocation)
-  Bang,
-
-  /// `<` - Less than (comparison, generics)
-  Lt,
-
-  /// `>` - Greater than (comparison, generics)
-  Gt,
-
-  /// `-` - Minus (subtraction, negation)
-  Minus,
-
-  /// `&` - Ampersand (reference, bitwise AND)
-  And,
-
-  /// `|` - Pipe (bitwise OR, closure parameters)
-  Or,
-
-  /// `+` - Plus (addition, trait bounds)
-  Plus,
-
-  /// `*` - Star/Asterisk (multiplication, dereference, raw pointers)
-  Star,
-
-  /// `/` - Slash (division)
-  Slash,
-
-  /// `^` - Caret (bitwise XOR)
-  Caret,
-
-  /// `%` - Percent (modulo/remainder)
-  Percent,
-
-  // ------------------------------------------------------------------------
+  // =========================================================================
   // SPECIAL TOKENS
-  // ------------------------------------------------------------------------
-  /// Shebang line: `#!/usr/bin/env rustc`
-  ///
-  /// Only valid as the very first line of a file.
-  /// Used for executable Rust scripts.
-  Shebang,
-
-  /// Unknown/invalid token
-  ///
-  /// Any character or sequence that doesn't match other token patterns.
-  /// Examples: `№`, `¿`, or other unexpected Unicode characters.
+  // =========================================================================
+  /// Unknown or invalid token (error recovery)
   Unknown,
 
-  /// End of input
-  ///
-  /// Sentinel value indicating the lexer has reached the end of the source.
-  /// Useful for parsers to detect completion without special-casing.
+  /// End of file
   Eof,
 }
 
 // ============================================================================
-// MULTI-CHARACTER OPERATORS (typically handled in parser, not lexer)
+// IMPLEMENTATION METHODS
 // ============================================================================
-//
-// Note: Many Rust lexers emit single-character tokens and let the parser
-// combine them. Some lexers emit these as distinct tokens:
-//
-// - `::` - Path separator
-// - `->` - Return type indicator
-// - `=>` - Match arm separator
-// - `..` - Range (exclusive end)
-// - `..=` - Range (inclusive end)
-// - `...` - (Deprecated range syntax)
-// - `&&` - Logical AND
-// - `||` - Logical OR
-// - `<<` - Left shift
-// - `>>` - Right shift
-// - `+=`, `-=`, `*=`, `/=`, `%=`, `&=`, `|=`, `^=`, `<<=`, `>>=` - Compound assignment
-// - `==` - Equality
-// - `!=` - Inequality
-// - `<=` - Less than or equal
-// - `>=` - Greater than or equal
-//
-// If your lexer needs these, add them to the TokenKind enum.
 
 impl TokenKind {
-  /// Returns true if this token is a trivia (whitespace or comment)
+  /// Returns true if this token is trivia (whitespace or comment)
   ///
-  /// Trivia tokens are typically ignored during parsing but preserved
-  /// for formatting tools and IDEs.
+  /// Trivia tokens are typically skipped during parsing but preserved
+  /// for source formatting tools, IDEs, and error diagnostics.
+  ///
+  /// # Examples
+  /// ```rust
+  /// assert!(TokenKind::Whitespace.is_trivia());
+  /// assert!(TokenKind::LineComment { doc_style: None }.is_trivia());
+  /// assert!(!TokenKind::Ident.is_trivia());
+  /// ```
   pub fn is_trivia(&self) -> bool {
     matches!(
       self,
@@ -413,30 +628,68 @@ impl TokenKind {
     )
   }
 
-  /// Returns true if this token can start an expression
+  /// Returns true if this token can begin an expression
+  ///
+  /// Used by the parser to determine if a token sequence might start
+  /// an expression, which is useful for error recovery and lookahead.
+  ///
+  /// # Examples
+  /// ```rust
+  /// assert!(TokenKind::Ident.can_start_expr());
+  /// assert!(TokenKind::Literal { kind: LiteralKind::Int { base: Base::Decimal, empty_int: false }, suffix_start: 0 }.can_start_expr());
+  /// assert!(TokenKind::OpenParen.can_start_expr());  // tuple or grouping
+  /// assert!(!TokenKind::Semi.can_start_expr());
+  /// ```
   pub fn can_start_expr(&self) -> bool {
     matches!(
       self,
       TokenKind::Ident
-            | TokenKind::RawIdent
-            | TokenKind::Literal { .. }
-            | TokenKind::OpenParen
-            | TokenKind::OpenBracket
-            | TokenKind::OpenBrace
-            | TokenKind::Or  // closure
-            | TokenKind::Minus
-            | TokenKind::Star
-            | TokenKind::Bang
-            | TokenKind::And
+        | TokenKind::RawIdent
+        | TokenKind::Literal { .. }
+        | TokenKind::OpenParen      // tuple, grouped expr
+        | TokenKind::OpenBracket    // array literal
+        | TokenKind::OpenBrace      // struct literal, block
+        | TokenKind::Or             // closure: |x| x + 1
+        | TokenKind::OrOr           // closure: || 42
+        | TokenKind::Minus          // unary negation
+        | TokenKind::Star           // dereference
+        | TokenKind::Bang           // logical not
+        | TokenKind::And            // borrow
+        | TokenKind::KwMove         // move closure
+        | TokenKind::KwIf
+        | TokenKind::KwMatch
+        | TokenKind::KwWhile
+        | TokenKind::KwLoop
+        | TokenKind::KwFor
+        | TokenKind::KwReturn
+        | TokenKind::KwBreak
+        | TokenKind::KwContinue
+        | TokenKind::KwAsync
+        | TokenKind::KwUnsafe
     )
   }
 
-  /// Returns true if this token represents a literal
+  /// Returns true if this token is a literal
+  ///
+  /// # Examples
+  /// ```rust
+  /// assert!(TokenKind::Literal { kind: LiteralKind::Int { base: Base::Decimal, empty_int: false }, suffix_start: 0 }.is_literal());
+  /// assert!(!TokenKind::Ident.is_literal());
+  /// ```
   pub fn is_literal(&self) -> bool {
     matches!(self, TokenKind::Literal { .. })
   }
 
-  /// Returns true if this token is an error or invalid token
+  /// Returns true if this token represents an error
+  ///
+  /// Error tokens are used for recovery and diagnostics.
+  ///
+  /// # Examples
+  /// ```rust
+  /// assert!(TokenKind::Unknown.is_error());
+  /// assert!(TokenKind::InvalidIdent.is_error());
+  /// assert!(!TokenKind::Ident.is_error());
+  /// ```
   pub fn is_error(&self) -> bool {
     matches!(
       self,
@@ -444,12 +697,89 @@ impl TokenKind {
         | TokenKind::InvalidIdent
         | TokenKind::UnknownPrefix
         | TokenKind::UnknownPrefixLifetime
+        | TokenKind::ReservedPrefix
+    )
+  }
+
+  /// Returns true if this token is a keyword
+  ///
+  /// # Examples
+  /// ```rust
+  /// assert!(TokenKind::KwFn.is_keyword());
+  /// assert!(TokenKind::KwLet.is_keyword());
+  /// assert!(!TokenKind::Ident.is_keyword());
+  /// ```
+  pub fn is_keyword(&self) -> bool {
+    matches!(
+      self,
+      TokenKind::KwAs
+        | TokenKind::KwBreak
+        | TokenKind::KwConst
+        | TokenKind::KwContinue
+        | TokenKind::KwCrate
+        | TokenKind::KwElse
+        | TokenKind::KwEnum
+        | TokenKind::KwExtern
+        | TokenKind::KwFalse
+        | TokenKind::KwFn
+        | TokenKind::KwFor
+        | TokenKind::KwIf
+        | TokenKind::KwImpl
+        | TokenKind::KwIn
+        | TokenKind::KwLet
+        | TokenKind::KwLoop
+        | TokenKind::KwMatch
+        | TokenKind::KwMod
+        | TokenKind::KwMove
+        | TokenKind::KwMut
+        | TokenKind::KwPub
+        | TokenKind::KwRef
+        | TokenKind::KwReturn
+        | TokenKind::KwSelfValue
+        | TokenKind::KwSelfType
+        | TokenKind::KwStatic
+        | TokenKind::KwStruct
+        | TokenKind::KwSuper
+        | TokenKind::KwTrait
+        | TokenKind::KwTrue
+        | TokenKind::KwType
+        | TokenKind::KwUnsafe
+        | TokenKind::KwUse
+        | TokenKind::KwWhere
+        | TokenKind::KwWhile
+        | TokenKind::KwAsync
+        | TokenKind::KwAwait
+        | TokenKind::KwDyn
+        | TokenKind::KwAbstract
+        | TokenKind::KwBecome
+        | TokenKind::KwFinal
+        | TokenKind::KwMacro
+        | TokenKind::KwOverride
+        | TokenKind::KwPriv
+        | TokenKind::KwTry
+        | TokenKind::KwTypeof
+        | TokenKind::KwUnion
+        | TokenKind::KwUnsized
+        | TokenKind::KwYield
+        | TokenKind::KwBox
+        | TokenKind::KwDo
+        | TokenKind::KwVirtual
     )
   }
 }
 
 impl LiteralKind {
   /// Returns true if this literal is a string-like type
+  ///
+  /// Includes all string variants: regular strings, byte strings,
+  /// C strings, and their raw variants.
+  ///
+  /// # Examples
+  /// ```rust
+  /// assert!(LiteralKind::Str { terminated: true }.is_string_like());
+  /// assert!(LiteralKind::RawStr { n_hashes: 1, err: None }.is_string_like());
+  /// assert!(!LiteralKind::Int { base: Base::Decimal, empty_int: false }.is_string_like());
+  /// ```
   pub fn is_string_like(&self) -> bool {
     matches!(
       self,
@@ -463,7 +793,26 @@ impl LiteralKind {
   }
 
   /// Returns true if this literal is a numeric type
+  ///
+  /// # Examples
+  /// ```rust
+  /// assert!(LiteralKind::Int { base: Base::Decimal, empty_int: false }.is_numeric());
+  /// assert!(LiteralKind::Float { base: Base::Decimal, empty_exponent: false }.is_numeric());
+  /// assert!(!LiteralKind::Char { terminated: true }.is_numeric());
+  /// ```
   pub fn is_numeric(&self) -> bool {
     matches!(self, LiteralKind::Int { .. } | LiteralKind::Float { .. })
+  }
+
+  /// Returns true if this literal is a character-like type
+  ///
+  /// # Examples
+  /// ```rust
+  /// assert!(LiteralKind::Char { terminated: true }.is_char_like());
+  /// assert!(LiteralKind::Byte { terminated: true }.is_char_like());
+  /// assert!(!LiteralKind::Str { terminated: true }.is_char_like());
+  /// ```
+  pub fn is_char_like(&self) -> bool {
+    matches!(self, LiteralKind::Char { .. } | LiteralKind::Byte { .. })
   }
 }

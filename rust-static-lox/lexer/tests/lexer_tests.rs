@@ -2,7 +2,10 @@
 mod lexer_tests {
 
   use diagnostic::{DiagnosticEngine, SourceMap};
-  use lexer::Lexer;
+  use lexer::{
+    token::{DocStyle, TokenKind},
+    Lexer,
+  };
 
   #[test]
   fn test_whitespaces() {
@@ -41,8 +44,12 @@ mod lexer_tests {
     );
     lexer.scan_tokens(&mut engine);
 
-    // assert_eq!(lexer.tokens.len(), 1);
-    // assert_eq!(engine.has_errors(), false);
-    // assert_eq!(engine.has_warnings(), false);
+    // ensure no diagnostics
+    assert!(!engine.has_errors(), "Lexer produced unexpected errors");
+    assert!(!engine.has_warnings(), "Lexer produced unexpected warnings");
+
+    // final EOF token check
+    let last = lexer.tokens.last().unwrap();
+    assert!(matches!(last.kind, TokenKind::Eof));
   }
 }

@@ -57,14 +57,14 @@ A comprehensive checklist for building a production-ready Rust lexer from scratc
   - [x] `/**` (not `/**/`) → `DocStyle::Outer`
   - [x] `/*!` → `DocStyle::Inner`
   - [x] `/*` → `None` (regular comment)
-- [ ] **Handle nesting**: `/* /* nested */ */`
-  - [ ] Track nesting depth counter
-  - [ ] Increment on `/*`, decrement on `*/`
-- [ ] Set `terminated: false` if EOF before closing `*/`
-- [ ] Test deeply nested comments
+- [x] **Handle nesting**: `/* /* nested */ */`
+  - [x] Track nesting depth counter
+  - [x] Increment on `/*`, decrement on `*/`
+- [x] Set `terminated: false` if EOF before closing `*/`
+- [x] Test deeply nested comments
 
 ### 2.4 Shebang
-- [ ] Implement `lex_shebang() -> Option<Token>`
+- [x] Implement `lex_shebang() -> Option<Token>`
 - [ ] **Only valid as first token** (position 0)
 - [ ] Must start with `#!`
 - [ ] Must be followed by `[` or `/` (not `![` for inner attribute)
