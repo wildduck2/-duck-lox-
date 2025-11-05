@@ -1,8 +1,8 @@
 use diagnostic::{
   code::DiagnosticCode,
-  diagnostic::{Diagnostic, LabelStyle, Span},
+  diagnostic::{Diagnostic, LabelStyle},
   types::error::DiagnosticError,
-  DiagnosticEngine,
+  DiagnosticEngine, Span,
 };
 
 use crate::{token::TokenKind, Lexer};
@@ -53,7 +53,7 @@ impl Lexer {
           "demo.lox".to_string(),
         )
         .with_label(
-          Span::new(self.line, self.current, self.column + 1),
+          Span::new(self.current, self.column + 1),
           Some("unexpected character".to_string()),
           LabelStyle::Primary,
         );
@@ -323,7 +323,7 @@ impl Lexer {
           "demo.lox".to_string(),
         )
         .with_label(
-          Span::new(self.line, 1, 1),
+          Span::new(1, 1),
           Some("unterminated string".to_string()),
           LabelStyle::Primary,
         );
@@ -343,7 +343,7 @@ impl Lexer {
             "demo.lox".to_string(),
           )
           .with_label(
-            Span::new(self.line, 1, line_content.len() + 1),
+            Span::new(1, line_content.len() + 1),
             Some("unterminated string".to_string()),
             LabelStyle::Primary,
           );
@@ -357,7 +357,7 @@ impl Lexer {
           "demo.lox".to_string(),
         )
         .with_label(
-          Span::new(self.line, self.start + 1, self.current + 1),
+          Span::new(self.start + 1, self.current + 1),
           Some("unterminated string".to_string()),
           LabelStyle::Primary,
         );

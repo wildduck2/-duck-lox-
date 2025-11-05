@@ -1,9 +1,8 @@
-use diagnostic::diagnostic::Span;
+use diagnostic::Span;
 
 #[derive(Debug, Clone)]
 pub struct Token {
   pub kind: TokenKind,
-  pub lexeme: String,
   pub span: Span,
 }
 

@@ -1,8 +1,12 @@
+// ============================================================================
+// Complete Rust AST with All Features - FIXED
+// ============================================================================
+
+use diagnostic::Span;
+
 // ----------------------------------------------------------------------------
 // Top-level Items
 // ----------------------------------------------------------------------------
-
-use diagnostic::diagnostic::Span;
 
 #[derive(Debug, Clone)]
 pub enum Item {
@@ -16,10 +20,24 @@ pub enum Item {
   TypeAlias(TypeAliasDecl),
   Module(ModuleDecl),
   Use(UseDecl),
-  ExternCrate(ExternCrateDecl), // extern crate foo;
-  Macro(MacroDecl),             // macro_rules! foo { ... }
-  ForeignMod(ForeignModDecl),   // extern "C" { ... }
-  Union(UnionDecl),             // union Foo { ... }
+  ExternCrate(ExternCrateDecl),
+  Macro(MacroDecl),
+  Macro2(Macro2Decl),
+  ForeignMod(ForeignModDecl),
+  Union(UnionDecl),
+  ExternType(ExternTypeDecl),
+}
+
+// ----------------------------------------------------------------------------
+// Extern Type Declaration
+// ----------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct ExternTypeDecl {
+  pub visibility: Visibility,
+  pub name: String,
+  pub generics: Option<GenericParams>,
+  pub span: Span,
 }
 
 // ----------------------------------------------------------------------------
@@ -59,8 +77,8 @@ pub struct TypeAliasDecl {
 pub struct ModuleDecl {
   pub visibility: Visibility,
   pub name: String,
-  pub items: Option<Vec<Item>>, // None for mod foo; (external module)
-  pub is_unsafe: bool,          // unsafe mod
+  pub items: Option<Vec<Item>>,
+  pub is_unsafe: bool,
   pub span: Span,
 }
 
@@ -77,28 +95,64 @@ pub enum UseTree {
     prefix: String,
     suffix: Box<UseTree>,
   },
-  Name(String), // use std::collections::HashMap
+  Name(String),
   Rename {
     name: String,
     alias: String,
-  }, // use foo as bar
-  Glob,         // use foo::*
-  List(Vec<UseTree>), // use foo::{a, b, c}
+  },
+  Glob,
+  List(Vec<UseTree>),
 }
 
 #[derive(Debug, Clone)]
 pub struct ExternCrateDecl {
   pub visibility: Visibility,
   pub name: String,
-  pub alias: Option<String>, // extern crate foo as bar;
+  pub alias: Option<String>,
   pub span: Span,
 }
+
+// ----------------------------------------------------------------------------
+// Macro Declarations
+// ----------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
 pub struct MacroDecl {
   pub name: String,
   pub rules: Vec<MacroRule>,
   pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct Macro2Decl {
+  pub visibility: Visibility,
+  pub name: String,
+  pub params: Vec<MacroParam>,
+  pub body: Vec<TokenTree>,
+  pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct MacroParam {
+  pub name: String,
+  pub kind: MacroParamKind,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MacroParamKind {
+  Ident,
+  Expr,
+  Ty,
+  Pat,
+  Stmt,
+  Block,
+  Item,
+  Meta,
+  Tt,
+  Path,
+  Literal,
+  Lifetime,
+  Vis,
 }
 
 #[derive(Debug, Clone)]
@@ -121,27 +175,31 @@ pub enum TokenTree {
   },
   MetaVar {
     name: String,
-    kind: String, // ident, expr, ty, etc.
+    kind: String,
   },
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Delimiter {
-  Parenthesis, // ( )
-  Brace,       // { }
-  Bracket,     // [ ]
+  Parenthesis,
+  Brace,
+  Bracket,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RepeatKind {
-  ZeroOrMore, // *
-  OneOrMore,  // +
-  ZeroOrOne,  // ?
+  ZeroOrMore,
+  OneOrMore,
+  ZeroOrOne,
 }
+
+// ----------------------------------------------------------------------------
+// Foreign Items
+// ----------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
 pub struct ForeignModDecl {
-  pub abi: String, // "C", "system", etc.
+  pub abi: String,
   pub items: Vec<ForeignItem>,
   pub span: Span,
 }
@@ -154,7 +212,7 @@ pub enum ForeignItem {
     generics: Option<GenericParams>,
     params: Vec<Param>,
     return_type: Type,
-    is_variadic: bool, // for C varargs
+    is_variadic: bool,
     span: Span,
   },
   Static {
@@ -198,14 +256,14 @@ pub struct FnDecl {
   pub is_async: bool,
   pub is_const: bool,
   pub is_unsafe: bool,
-  pub is_extern: bool,     // extern fn
-  pub abi: Option<String>, // extern "C" fn
+  pub is_extern: bool,
+  pub abi: Option<String>,
   pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub struct Param {
-  pub attributes: Vec<Attribute>, // #[attr] on parameters
+  pub attributes: Vec<Attribute>,
   pub pattern: Pattern,
   pub type_annotation: Type,
   pub default_value: Option<Expr>,
@@ -218,15 +276,45 @@ pub struct Param {
 #[derive(Debug, Clone)]
 pub struct Attribute {
   pub style: AttrStyle,
-  pub path: ExprPath,
-  pub tokens: Vec<TokenTree>,
+  pub kind: AttrKind,
   pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AttrStyle {
-  Outer, // #[...]
-  Inner, // #![...]
+  Outer,
+  Inner,
+}
+
+#[derive(Debug, Clone)]
+pub enum AttrKind {
+  Normal {
+    path: ExprPath,
+    tokens: Vec<TokenTree>,
+  },
+  DocComment {
+    is_inner: bool,
+    content: String,
+  },
+  Cfg(MetaItem),
+  CfgAttr {
+    condition: MetaItem,
+    attrs: Vec<Attribute>,
+  },
+}
+
+#[derive(Debug, Clone)]
+pub enum MetaItem {
+  Word(String),
+  NameValue(String, MetaItemValue),
+  List(String, Vec<MetaItem>),
+}
+
+#[derive(Debug, Clone)]
+pub enum MetaItemValue {
+  Str(String),
+  Int(i128),
+  Bool(bool),
 }
 
 // ----------------------------------------------------------------------------
@@ -235,7 +323,7 @@ pub enum AttrStyle {
 
 #[derive(Debug, Clone)]
 pub struct StructDecl {
-  pub attributes: Vec<Attribute>, // #[derive(Debug)]
+  pub attributes: Vec<Attribute>,
   pub visibility: Visibility,
   pub name: String,
   pub generics: Option<GenericParams>,
@@ -247,7 +335,7 @@ pub struct StructDecl {
 #[derive(Debug, Clone)]
 pub enum StructKind {
   Named { fields: Vec<FieldDecl> },
-  Tuple(Vec<TupleField>), // Now includes visibility per field
+  Tuple(Vec<TupleField>),
   Unit,
 }
 
@@ -308,8 +396,8 @@ pub struct TraitDecl {
   pub attributes: Vec<Attribute>,
   pub visibility: Visibility,
   pub name: String,
-  pub is_auto: bool,   // auto trait
-  pub is_unsafe: bool, // unsafe trait
+  pub is_auto: bool,
+  pub is_unsafe: bool,
   pub generics: Option<GenericParams>,
   pub supertraits: Vec<TypeBound>,
   pub items: Vec<TraitItem>,
@@ -323,6 +411,7 @@ pub enum TraitItem {
   Type {
     attributes: Vec<Attribute>,
     name: String,
+    generics: Option<GenericParams>,
     bounds: Vec<TypeBound>,
     default: Option<Type>,
   },
@@ -353,9 +442,9 @@ pub struct MacroInvocation {
 pub struct ImplBlock {
   pub attributes: Vec<Attribute>,
   pub is_unsafe: bool,
-  pub is_default: bool, // default impl (specialization)
+  pub is_default: bool,
   pub generics: Option<GenericParams>,
-  pub polarity: ImplPolarity, // impl !Trait (negative impl)
+  pub polarity: ImplPolarity,
   pub trait_ref: Option<TypePath>,
   pub self_ty: Type,
   pub items: Vec<ImplItem>,
@@ -366,7 +455,7 @@ pub struct ImplBlock {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ImplPolarity {
   Positive,
-  Negative, // impl !Trait
+  Negative,
 }
 
 #[derive(Debug, Clone)]
@@ -376,6 +465,7 @@ pub enum ImplItem {
     attributes: Vec<Attribute>,
     visibility: Visibility,
     name: String,
+    generics: Option<GenericParams>,
     ty: Type,
   },
   Const {
@@ -417,23 +507,23 @@ pub enum GenericParam {
     attributes: Vec<Attribute>,
     name: String,
     ty: Type,
-    default: Option<Expr>, // const N: usize = 10
+    default: Option<Expr>,
   },
 }
 
 #[derive(Debug, Clone)]
 pub struct TypeBound {
-  pub modifier: TraitBoundModifier, // ? in ?Sized
+  pub modifier: TraitBoundModifier,
   pub path: TypePath,
-  pub generics: Option<Vec<Type>>,
-  pub for_lifetimes: Option<Vec<String>>, // for<'a>
+  pub generics: Option<Vec<GenericArg>>,
+  pub for_lifetimes: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TraitBoundModifier {
   None,
-  Maybe,      // ?Trait
-  MaybeConst, // ?const Trait
+  Maybe,
+  MaybeConst,
 }
 
 #[derive(Debug, Clone)]
@@ -444,7 +534,7 @@ pub struct WhereClause {
 #[derive(Debug, Clone)]
 pub enum WherePredicate {
   Type {
-    for_lifetimes: Option<Vec<String>>, // for<'a>
+    for_lifetimes: Option<Vec<String>>,
     ty: Type,
     bounds: Vec<TypeBound>,
   },
@@ -453,7 +543,6 @@ pub enum WherePredicate {
     bounds: Vec<String>,
   },
   Equality {
-    // Associated type binding: where T::Item = String
     ty: Type,
     equals: Type,
   },
@@ -463,13 +552,13 @@ pub enum WherePredicate {
 // Visibility
 // ----------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Visibility {
   Public,
   PublicCrate,
   PublicSuper,
-  PublicSelf, // pub(self)
-  PublicIn(Vec<String>),
+  PublicSelf,
+  PublicIn(ExprPath),
   Private,
 }
 
@@ -479,7 +568,6 @@ pub enum Visibility {
 
 #[derive(Debug, Clone)]
 pub enum Type {
-  // Primitives
   I8,
   I16,
   I32,
@@ -496,68 +584,66 @@ pub enum Type {
   F64,
   Bool,
   Char,
-  Str,   // str (unsized)
-  Never, // !
+  Str,
+  Never,
 
-  // Compound types
   Array {
     element: Box<Type>,
-    size: Box<Expr>, // Changed to Expr for const expressions
+    size: Box<Expr>,
   },
   Slice(Box<Type>),
   Tuple(Vec<Type>),
 
-  // References
   Reference {
     lifetime: Option<String>,
     mutability: Mutability,
     inner: Box<Type>,
   },
 
-  // Pointers
   RawPointer {
     mutability: Mutability,
     inner: Box<Type>,
   },
 
-  // Functions
   BareFn {
-    for_lifetimes: Option<Vec<String>>, // for<'a>
-    safety: Safety,                     // unsafe
-    abi: Option<String>,                // extern "C"
-    params: Vec<Type>,
+    for_lifetimes: Option<Vec<String>>,
+    safety: Safety,
+    abi: Option<String>,
+    params: Vec<BareFnParam>,
     return_type: Box<Type>,
-    is_variadic: bool, // C varargs
+    is_variadic: bool,
   },
 
-  // Named types
   Path(TypePath),
 
-  // Qualified paths
   QPath {
     self_ty: Box<Type>,
     trait_ref: Option<TypePath>,
     name: String,
-  }, // <T as Trait>::AssocType
+    generics: Option<Box<GenericArgs>>,
+  },
 
-  // Trait objects
   TraitObject {
     bounds: Vec<TypeBound>,
     lifetime: Option<String>,
-    is_dyn: bool, // dyn Trait vs Trait (legacy)
+    is_dyn: bool,
   },
 
-  // Implementation trait
   ImplTrait(Vec<TypeBound>),
 
-  // Type inference placeholder
   Infer,
 
-  // Parenthesized type
-  Paren(Box<Type>), // (T)
+  Paren(Box<Type>),
 
-  // Macro invocation in type position
-  Macro(MacroInvocation),
+  Macro(Box<MacroInvocation>),
+
+  Typeof(Box<Expr>),
+}
+
+#[derive(Debug, Clone)]
+pub struct BareFnParam {
+  pub name: Option<String>,
+  pub ty: Type,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -568,7 +654,7 @@ pub enum Safety {
 
 #[derive(Debug, Clone)]
 pub struct TypePath {
-  pub leading_colon: bool, // ::std::vec::Vec
+  pub leading_colon: bool,
   pub segments: Vec<PathSegment>,
 }
 
@@ -585,7 +671,7 @@ pub enum GenericArgs {
   },
   Parenthesized {
     inputs: Vec<Type>,
-    output: Option<Type>, // Fn(A, B) -> C
+    output: Option<Type>,
   },
 }
 
@@ -595,13 +681,13 @@ pub enum GenericArg {
   Type(Type),
   Const(Expr),
   Binding {
-    // AssocType = Foo
     name: String,
+    generics: Option<GenericParams>,
     ty: Type,
   },
   Constraint {
-    // AssocType: Bound
     name: String,
+    generics: Option<GenericParams>,
     bounds: Vec<TypeBound>,
   },
 }
@@ -625,402 +711,11 @@ pub enum Stmt {
     pattern: Pattern,
     ty: Option<Type>,
     init: Option<Expr>,
-    else_block: Option<Vec<Stmt>>, // let-else: let Some(x) = y else { return };
+    else_block: Option<Vec<Stmt>>,
     span: Span,
   },
   Item(Box<Item>),
-  Empty, // ;
-}
-
-// ----------------------------------------------------------------------------
-// Expressions
-// ----------------------------------------------------------------------------
-
-#[derive(Debug, Clone)]
-pub enum Expr {
-  // Literals
-  Integer {
-    value: i128, // Changed to i128 for full range
-    suffix: Option<String>,
-    span: Span,
-  },
-  Float {
-    value: f64,
-    suffix: Option<String>,
-    span: Span,
-  },
-  String {
-    value: String,
-    kind: StrKind, // regular, raw, byte
-    span: Span,
-  },
-  Char {
-    value: char,
-    span: Span,
-  },
-  ByteString {
-    value: Vec<u8>,
-    span: Span,
-  },
-  Byte {
-    value: u8,
-    span: Span,
-  },
-  Bool {
-    value: bool,
-    span: Span,
-  },
-
-  // Paths
-  Path(ExprPath),
-
-  // Operations
-  Binary {
-    left: Box<Expr>,
-    op: BinaryOp,
-    right: Box<Expr>,
-    span: Span,
-  },
-  Unary {
-    op: UnaryOp,
-    expr: Box<Expr>,
-    span: Span,
-  },
-
-  // Assignment
-  Assign {
-    target: Box<Expr>,
-    value: Box<Expr>,
-    span: Span,
-  },
-  AssignOp {
-    target: Box<Expr>,
-    op: BinaryOp,
-    value: Box<Expr>,
-    span: Span,
-  },
-
-  // Field access
-  Field {
-    object: Box<Expr>,
-    field: FieldAccess,
-    span: Span,
-  },
-
-  // Method call
-  MethodCall {
-    receiver: Box<Expr>,
-    method: String,
-    turbofish: Option<GenericArgs>,
-    args: Vec<Expr>,
-    span: Span,
-  },
-
-  // Function call
-  Call {
-    callee: Box<Expr>,
-    args: Vec<Expr>,
-    span: Span,
-  },
-
-  // Indexing
-  Index {
-    object: Box<Expr>,
-    index: Box<Expr>,
-    span: Span,
-  },
-
-  // Range expressions
-  Range {
-    start: Option<Box<Expr>>,
-    end: Option<Box<Expr>>,
-    kind: RangeKind,
-    span: Span,
-  },
-
-  // Collections
-  Array {
-    elements: Vec<Expr>,
-    span: Span,
-  },
-  ArrayRepeat {
-    element: Box<Expr>,
-    count: Box<Expr>,
-    span: Span,
-  },
-  Tuple {
-    elements: Vec<Expr>,
-    span: Span,
-  },
-
-  // Struct literal
-  Struct {
-    path: ExprPath,
-    fields: Vec<FieldInit>,
-    base: Option<Box<Expr>>,
-    span: Span,
-  },
-
-  // Control flow
-  If {
-    condition: Box<Expr>,
-    then_branch: Box<Expr>,
-    else_branch: Option<Box<Expr>>,
-    span: Span,
-  },
-
-  Match {
-    expr: Box<Expr>,
-    arms: Vec<MatchArm>,
-    span: Span,
-  },
-
-  Loop {
-    body: Vec<Stmt>,
-    label: Option<String>,
-    span: Span,
-  },
-  While {
-    condition: Box<Expr>,
-    body: Vec<Stmt>,
-    label: Option<String>,
-    span: Span,
-  },
-  For {
-    pattern: Pattern,
-    iterator: Box<Expr>,
-    body: Vec<Stmt>,
-    label: Option<String>,
-    span: Span,
-  },
-
-  // Returns and breaks
-  Return {
-    value: Option<Box<Expr>>,
-    span: Span,
-  },
-  Break {
-    label: Option<String>,
-    value: Option<Box<Expr>>,
-    span: Span,
-  },
-  Continue {
-    label: Option<String>,
-    span: Span,
-  },
-  Yield {
-    // for generators
-    value: Option<Box<Expr>>,
-    span: Span,
-  },
-
-  // Closures
-  Closure {
-    capture: CaptureKind,
-    is_async: bool, // async closures
-    is_move: bool,  // explicit move
-    params: Vec<ClosureParam>,
-    return_type: Option<Type>,
-    body: Box<Expr>,
-    span: Span,
-  },
-
-  // Block
-  Block {
-    attributes: Vec<Attribute>,
-    stmts: Vec<Stmt>,
-    label: Option<String>,
-    is_unsafe: bool,
-    span: Span,
-  },
-
-  // Async/await
-  Async {
-    attributes: Vec<Attribute>,
-    capture: CaptureKind,
-    block: Vec<Stmt>,
-    span: Span,
-  },
-  Await {
-    expr: Box<Expr>,
-    span: Span,
-  },
-
-  // Try operator
-  Try {
-    expr: Box<Expr>,
-    span: Span,
-  },
-
-  // Type operations
-  Cast {
-    expr: Box<Expr>,
-    ty: Type,
-    span: Span,
-  },
-  Type {
-    // Type ascription (unstable)
-    expr: Box<Expr>,
-    ty: Type,
-    span: Span,
-  },
-
-  // Let expression (unstable)
-  Let {
-    pattern: Pattern,
-    expr: Box<Expr>,
-    span: Span,
-  },
-
-  // Unsafe
-  Unsafe {
-    block: Vec<Stmt>,
-    span: Span,
-  },
-
-  // Const block
-  Const {
-    block: Vec<Stmt>,
-    span: Span,
-  },
-
-  // Box expression (placement new)
-  Box {
-    expr: Box<Expr>,
-    span: Span,
-  },
-
-  // Underscore expression (type inference in expressions)
-  Underscore {
-    span: Span,
-  },
-
-  // Macro invocation
-  Macro {
-    mac: MacroInvocation,
-  },
-
-  // Grouped expression (parentheses)
-  Paren {
-    expr: Box<Expr>,
-    span: Span,
-  },
-
-  // Inline assembly
-  InlineAsm {
-    template: String,
-    operands: Vec<AsmOperand>,
-    options: Vec<String>,
-    span: Span,
-  },
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum StrKind {
-  Normal,
-  Raw(usize),     // r#"..."# (number of hashes)
-  Byte,           // b"..."
-  RawByte(usize), // br#"..."#
-}
-
-#[derive(Debug, Clone)]
-pub enum FieldAccess {
-  Named(String),  // .field
-  Unnamed(usize), // .0 (tuple field)
-}
-
-#[derive(Debug, Clone)]
-pub struct AsmOperand {
-  pub kind: AsmOperandKind,
-  pub constraint: String,
-  pub expr: Expr,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum AsmOperandKind {
-  In,
-  Out,
-  InOut,
-  SplitInOut,
-  Const,
-  Sym,
-}
-
-#[derive(Debug, Clone)]
-pub struct ExprPath {
-  pub leading_colon: bool,
-  pub segments: Vec<String>,
-  pub turbofish: Option<GenericArgs>, // For paths with generics
-}
-
-#[derive(Debug, Clone)]
-pub struct FieldInit {
-  pub attributes: Vec<Attribute>,
-  pub name: String,
-  pub value: Option<Expr>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum RangeKind {
-  Exclusive,   // start..end
-  Inclusive,   // start..=end
-  From,        // start..
-  To,          // ..end
-  ToInclusive, // ..=end
-  Full,        // ..
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum CaptureKind {
-  Default,
-  Move,
-}
-
-#[derive(Debug, Clone)]
-pub struct ClosureParam {
-  pub attributes: Vec<Attribute>,
-  pub pattern: Pattern,
-  pub ty: Option<Type>,
-}
-
-// ----------------------------------------------------------------------------
-// Binary Operators
-// ----------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum BinaryOp {
-  // Arithmetic
-  Add,
-  Sub,
-  Mul,
-  Div,
-  Mod,
-
-  // Bitwise
-  BitAnd,
-  BitOr,
-  BitXor,
-  Shl,
-  Shr,
-
-  // Comparison
-  Eq,
-  NotEq,
-  Less,
-  LessEq,
-  Greater,
-  GreaterEq,
-
-  // Logical
-  And,
-  Or,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum UnaryOp {
-  Neg,   // -
-  Not,   // !
-  Deref, // * (moved from separate node)
+  Empty,
 }
 
 // ----------------------------------------------------------------------------
@@ -1042,7 +737,7 @@ pub enum Pattern {
   },
 
   Ident {
-    reference: Option<Mutability>, // ref or ref mut
+    reference: Option<Mutability>,
     mutability: Mutability,
     name: String,
     subpattern: Option<Box<Pattern>>,
@@ -1050,7 +745,7 @@ pub enum Pattern {
   },
 
   Path {
-    qself: Option<Box<Type>>, // <T as Trait>::CONST
+    qself: Option<Box<Type>>,
     path: ExprPath,
     span: Span,
   },
@@ -1120,7 +815,7 @@ pub struct FieldPattern {
   pub attributes: Vec<Attribute>,
   pub name: String,
   pub pattern: Option<Pattern>,
-  pub is_shorthand: bool, // true for { x } vs { x: x }
+  pub is_shorthand: bool,
 }
 
 // ----------------------------------------------------------------------------
@@ -1133,6 +828,438 @@ pub struct MatchArm {
   pub pattern: Pattern,
   pub guard: Option<Expr>,
   pub body: Expr,
-  pub comma: bool, // trailing comma affects whether body needs braces
+  pub comma: bool,
   pub span: Span,
+}
+
+// ----------------------------------------------------------------------------
+// Expressions
+// ----------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub enum Expr {
+  Integer {
+    value: i128,
+    suffix: Option<String>,
+    span: Span,
+  },
+  Float {
+    value: f64,
+    suffix: Option<String>,
+    span: Span,
+  },
+  String {
+    value: String,
+    kind: StrKind,
+    span: Span,
+  },
+  Char {
+    value: char,
+    span: Span,
+  },
+  ByteString {
+    value: Vec<u8>,
+    span: Span,
+  },
+  Byte {
+    value: u8,
+    span: Span,
+  },
+  Bool {
+    value: bool,
+    span: Span,
+  },
+
+  Path(ExprPath),
+
+  Binary {
+    left: Box<Expr>,
+    op: BinaryOp,
+    right: Box<Expr>,
+    span: Span,
+  },
+  Unary {
+    op: UnaryOp,
+    expr: Box<Expr>,
+    span: Span,
+  },
+
+  Assign {
+    target: Box<Expr>,
+    value: Box<Expr>,
+    span: Span,
+  },
+  AssignOp {
+    target: Box<Expr>,
+    op: BinaryOp,
+    value: Box<Expr>,
+    span: Span,
+  },
+
+  Field {
+    object: Box<Expr>,
+    field: FieldAccess,
+    span: Span,
+  },
+
+  MethodCall {
+    receiver: Box<Expr>,
+    method: String,
+    turbofish: Option<GenericArgs>,
+    args: Vec<Expr>,
+    span: Span,
+  },
+
+  Call {
+    callee: Box<Expr>,
+    args: Vec<Expr>,
+    span: Span,
+  },
+
+  Index {
+    object: Box<Expr>,
+    index: Box<Expr>,
+    span: Span,
+  },
+
+  Range {
+    start: Option<Box<Expr>>,
+    end: Option<Box<Expr>>,
+    kind: RangeKind,
+    span: Span,
+  },
+
+  Array {
+    elements: Vec<Expr>,
+    span: Span,
+  },
+  ArrayRepeat {
+    element: Box<Expr>,
+    count: Box<Expr>,
+    span: Span,
+  },
+  Tuple {
+    elements: Vec<Expr>,
+    span: Span,
+  },
+
+  Struct {
+    path: ExprPath,
+    fields: Vec<FieldInit>,
+    base: Option<Box<Expr>>,
+    span: Span,
+  },
+
+  If {
+    condition: Box<Expr>,
+    then_branch: Box<Expr>,
+    else_branch: Option<Box<Expr>>,
+    span: Span,
+  },
+
+  Match {
+    expr: Box<Expr>,
+    arms: Vec<MatchArm>,
+    span: Span,
+  },
+
+  Loop {
+    body: Vec<Stmt>,
+    label: Option<String>,
+    span: Span,
+  },
+  While {
+    condition: Box<Expr>,
+    body: Vec<Stmt>,
+    label: Option<String>,
+    span: Span,
+  },
+  For {
+    pattern: Pattern,
+    iterator: Box<Expr>,
+    body: Vec<Stmt>,
+    label: Option<String>,
+    span: Span,
+  },
+
+  Return {
+    value: Option<Box<Expr>>,
+    span: Span,
+  },
+  Break {
+    label: Option<String>,
+    value: Option<Box<Expr>>,
+    span: Span,
+  },
+  Continue {
+    label: Option<String>,
+    span: Span,
+  },
+  Yield {
+    value: Option<Box<Expr>>,
+    span: Span,
+  },
+
+  Become {
+    expr: Box<Expr>,
+    span: Span,
+  },
+
+  Closure {
+    capture: CaptureKind,
+    is_async: bool,
+    is_move: bool,
+    params: Vec<ClosureParam>,
+    return_type: Option<Type>,
+    body: Box<Expr>,
+    span: Span,
+  },
+
+  Block {
+    attributes: Vec<Attribute>,
+    stmts: Vec<Stmt>,
+    label: Option<String>,
+    is_unsafe: bool,
+    span: Span,
+  },
+
+  LabeledBlock {
+    label: String,
+    block: Vec<Stmt>,
+    span: Span,
+  },
+
+  Async {
+    attributes: Vec<Attribute>,
+    capture: CaptureKind,
+    block: Vec<Stmt>,
+    span: Span,
+  },
+  Await {
+    expr: Box<Expr>,
+    span: Span,
+  },
+
+  Try {
+    expr: Box<Expr>,
+    span: Span,
+  },
+
+  TryBlock {
+    attributes: Vec<Attribute>,
+    block: Vec<Stmt>,
+    span: Span,
+  },
+
+  Cast {
+    expr: Box<Expr>,
+    ty: Type,
+    span: Span,
+  },
+  Type {
+    expr: Box<Expr>,
+    ty: Type,
+    span: Span,
+  },
+
+  Let {
+    pattern: Pattern,
+    expr: Box<Expr>,
+    span: Span,
+  },
+
+  Unsafe {
+    block: Vec<Stmt>,
+    span: Span,
+  },
+
+  Const {
+    block: Vec<Stmt>,
+    span: Span,
+  },
+
+  InlineConst {
+    generics: Option<GenericParams>,
+    block: Vec<Stmt>,
+    span: Span,
+  },
+
+  Box {
+    expr: Box<Expr>,
+    span: Span,
+  },
+
+  Underscore {
+    span: Span,
+  },
+
+  Macro {
+    mac: MacroInvocation,
+  },
+
+  Paren {
+    expr: Box<Expr>,
+    span: Span,
+  },
+
+  InlineAsm {
+    template: String,
+    operands: Vec<AsmOperand>,
+    options: Vec<String>,
+    span: Span,
+  },
+
+  FormatString {
+    template: String,
+    args: Vec<FormatArg>,
+    span: Span,
+  },
+}
+
+// ----------------------------------------------------------------------------
+// Expression Supporting Types
+// ----------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct FormatArg {
+  pub name: Option<String>,
+  pub expr: Expr,
+  pub format_spec: Option<FormatSpec>,
+}
+
+#[derive(Debug, Clone)]
+pub struct FormatSpec {
+  pub fill: Option<char>,
+  pub align: Option<FormatAlign>,
+  pub sign: Option<FormatSign>,
+  pub alternate: bool,
+  pub zero_pad: bool,
+  pub width: Option<FormatCount>,
+  pub precision: Option<FormatCount>,
+  pub ty: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum FormatAlign {
+  Left,
+  Center,
+  Right,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum FormatSign {
+  Plus,
+  Minus,
+}
+
+#[derive(Debug, Clone)]
+pub enum FormatCount {
+  Integer(usize),
+  Argument(String),
+  Asterisk,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum StrKind {
+  Normal,
+  Raw(usize),
+  Byte,
+  RawByte(usize),
+}
+
+#[derive(Debug, Clone)]
+pub enum FieldAccess {
+  Named(String),
+  Unnamed(usize),
+}
+
+#[derive(Debug, Clone)]
+pub struct AsmOperand {
+  pub kind: AsmOperandKind,
+  pub constraint: String,
+  pub expr: Expr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AsmOperandKind {
+  In,
+  Out,
+  InOut,
+  SplitInOut,
+  Const,
+  Sym,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExprPath {
+  pub leading_colon: bool,
+  pub segments: Vec<String>,
+  pub turbofish: Option<GenericArgs>,
+}
+
+#[derive(Debug, Clone)]
+pub struct FieldInit {
+  pub attributes: Vec<Attribute>,
+  pub name: String,
+  pub value: Option<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RangeKind {
+  Exclusive,
+  Inclusive,
+  From,
+  To,
+  ToInclusive,
+  Full,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CaptureKind {
+  Default,
+  Move,
+}
+
+#[derive(Debug, Clone)]
+pub struct ClosureParam {
+  pub attributes: Vec<Attribute>,
+  pub pattern: Pattern,
+  pub ty: Option<Type>,
+}
+
+// ----------------------------------------------------------------------------
+// Binary Operators
+// ----------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BinaryOp {
+  Add,
+  Sub,
+  Mul,
+  Div,
+  Mod,
+  BitAnd,
+  BitOr,
+  BitXor,
+  Shl,
+  Shr,
+  Eq,
+  NotEq,
+  Less,
+  LessEq,
+  Greater,
+  GreaterEq,
+  And,
+  Or,
+}
+
+// ----------------------------------------------------------------------------
+// Unary Operators
+// ----------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum UnaryOp {
+  Neg,
+  Not,
+  Deref,
 }
