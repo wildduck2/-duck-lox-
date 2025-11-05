@@ -24,39 +24,39 @@ A comprehensive checklist for building a production-ready Rust lexer from scratc
 - [x] Implement span calculation (start/end positions)
 - [x] Add line and column tracking (optional, for better error messages)
 - [x] Create `Span::new(start: usize, end: usize)` constructor
-- [ ] Implement `Span::merge()` for combining spans
+- [x] Implement `Span::merge()` for combining spans
 
 ---
 
 ## Phase 2: Whitespace & Comments 📝
 
 ### 2.1 Whitespace
-- [ ] Implement `lex_whitespace() -> Token`
-- [ ] Handle all Unicode whitespace characters:
-  - [ ] Space (` `)
-  - [ ] Tab (`\t`)
-  - [ ] Newline (`\n`)
-  - [ ] Carriage return (`\r`)
-  - [ ] Other Unicode whitespace (use `char::is_whitespace()`)
-- [ ] Test with mixed whitespace
+- [x] Implement `lex_whitespace() -> Token`
+- [x] Handle all Unicode whitespace characters:
+  - [x] Space (` `)
+  - [x] Tab (`\t`)
+  - [x] Newline (`\n`)
+  - [x] Carriage return (`\r`)
+  - [x] Other Unicode whitespace (use `char::is_whitespace()`)
+- [x] Test with mixed whitespace
 
 ### 2.2 Line Comments
-- [ ] Implement `lex_line_comment() -> Token`
-- [ ] Detect `//` at start
-- [ ] Check for doc comments:
-  - [ ] `///` → `DocStyle::Outer`
-  - [ ] `//!` → `DocStyle::Inner`
-  - [ ] `//` → `None` (regular comment)
-- [ ] Consume until end of line (not including `\n`)
-- [ ] Handle EOF in middle of line comment
+- [x] Implement `lex_line_comment() -> Token`
+- [x] Detect `//` at start
+- [x] Check for doc comments:
+  - [x] `///` → `DocStyle::Outer`
+  - [x] `//!` → `DocStyle::Inner`
+  - [x] `//` → `None` (regular comment)
+- [x] Consume until end of line (not including `\n`)
+- [x] Handle EOF in middle of line comment
 
 ### 2.3 Block Comments
-- [ ] Implement `lex_block_comment() -> Token`
-- [ ] Detect `/*` at start
-- [ ] Check for doc comments:
-  - [ ] `/**` (not `/**/`) → `DocStyle::Outer`
-  - [ ] `/*!` → `DocStyle::Inner`
-  - [ ] `/*` → `None` (regular comment)
+- [x] Implement `lex_block_comment() -> Token`
+- [x] Detect `/*` at start
+- [x] Check for doc comments:
+  - [x] `/**` (not `/**/`) → `DocStyle::Outer`
+  - [x] `/*!` → `DocStyle::Inner`
+  - [x] `/*` → `None` (regular comment)
 - [ ] **Handle nesting**: `/* /* nested */ */`
   - [ ] Track nesting depth counter
   - [ ] Increment on `/*`, decrement on `*/`

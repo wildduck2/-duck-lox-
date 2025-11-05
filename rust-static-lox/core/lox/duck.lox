@@ -1,1 +1,1 @@
-123
+/* outer /* inner */ still outer */
