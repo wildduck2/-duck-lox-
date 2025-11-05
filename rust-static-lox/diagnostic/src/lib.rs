@@ -2,16 +2,11 @@ use crate::{code::DiagnosticCode, diagnostic::Diagnostic};
 
 pub mod code;
 pub mod diagnostic;
-pub mod source_map;
 pub mod types;
-
-// Re-exports for convenience
-pub use source_map::{SourceFile, SourceMap, Span};
 
 #[derive(Debug, Default)]
 pub struct DiagnosticEngine {
   source: String,
-  source_map: SourceMap,
   diagnostics: Vec<Diagnostic>,
   error_count: usize,
   warning_count: usize,
@@ -24,10 +19,6 @@ impl DiagnosticEngine {
 
   pub fn insert_source(&mut self, source: String) {
     self.source = source;
-  }
-
-  pub fn add_file(&mut self, path: &str, src: &str) {
-    self.source_map.add_file(path, src);
   }
 
   pub fn add(&mut self, diagnostic: Diagnostic) {
@@ -45,7 +36,7 @@ impl DiagnosticEngine {
 
   pub fn print_diagnostics(&self) {
     for diagnostic in &self.diagnostics {
-      let _ = diagnostic.print(&self.source_map);
+      let _ = diagnostic.print();
     }
   }
 

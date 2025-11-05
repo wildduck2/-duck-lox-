@@ -1,5 +1,12 @@
+use std::{
+  fs,
+  rc::Rc,
+  sync::{Arc, Mutex},
+};
+
 use diagnostic::{
   code::DiagnosticCode, diagnostic::Diagnostic, types::error::DiagnosticError, DiagnosticEngine,
+  SourceMap,
 };
 
 use crate::runner::Runner;
@@ -9,8 +16,9 @@ mod runner;
 
 fn main() -> Result<(), std::io::Error> {
   let args = std::env::args().collect::<Vec<_>>();
-  let mut diagnostic_engine = DiagnosticEngine::new();
   let mut runner = Runner::new();
+
+  let mut diagnostic_engine = DiagnosticEngine::new();
 
   match args.len() {
     1 => {
@@ -19,7 +27,7 @@ fn main() -> Result<(), std::io::Error> {
     },
     2 => {
       println!("{}", format!("Running file: {}", args[1]).cyan().bold());
-      match runner.run_file(args[1].clone(), &mut diagnostic_engine) {
+      match runner.run_file(args[1].as_str(), &mut diagnostic_engine) {
         Ok(_) => {
           println!("\n{}", "Compiled Successfully [0] ".green().bold());
         },

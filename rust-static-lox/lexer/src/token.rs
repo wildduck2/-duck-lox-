@@ -1,8 +1,9 @@
-use diagnostic::Span;
+use diagnostic::diagnostic::Span;
 
 #[derive(Debug, Clone)]
 pub struct Token {
   pub kind: TokenKind,
+  pub lexeme: String,
   pub span: Span,
 }
 
@@ -10,134 +11,77 @@ pub struct Token {
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TokenKind {
   // 1️⃣ Keywords
-  Break,
-  Case,
-  Catch,
-  Class,
-  Const,
-  Continue,
-  Debugger,
-  Default,
-  Delete,
-  Do,
-  Else,
-  Enum,
-  Export,
-  Extends,
-  False,
-  Finally,
-  For,
-  Function,
-  If,
-  Import,
-  In,
-  Instanceof,
-  New,
-  Null,
-  Return,
-  Super,
-  Switch,
-  This,
-  Throw,
-  True,
-  Try,
-  Typeof,
-  Var,
-  Void,
-  While,
-  With,
-  Yield,
-  Await,
-  As,
-  Implements,
-  Interface,
   Let,
-  Package,
-  Private,
-  Protected,
-  Public,
-  Static,
-  Any,
-  Boolean,
-  Constructor,
-  Declare,
-  Get,
-  Module,
-  Namespace,
-  Require,
-  Number,
-  Set,
-  String,
-  Symbol,
-  Type,
+  Mut,
+  Const,
+  Fn,
+  Return,
+  Break,
+  Continue,
+  Import,
   From,
-  Of,
+  Export,
+  As,
+  If,
+  Else,
+  While,
+  For,
+  In,
+  Loop,
+  Match,
+  Type,
+  Struct,
+  Trait,
+  Impl,
+  Interface,
+  Enum,
+  SelfKeyword,
+  Super,
+  Function,
+  Await,
 
   // 2️⃣ Literals
   Identifier,
-  Template,
-  RegularExpression,
-  Undefined,
+  String,
+  Int,
+  Float,
+  Bool,
+  Nil,
+  True,
+  False,
+  Void,
 
   // 3️⃣ Operators
+
   // Arithmetic
-  Plus,       // +
-  Minus,      // -
-  Star,       // *
-  Slash,      // /
-  Percent,    // %
-  PlusPlus,   // ++
-  MinusMinus, // --
+  Plus,    // +
+  Minus,   // -
+  Star,    // *
+  Slash,   // /
+  Percent, // %
+  Caret,   // ^
 
-  // Assignment
-  Equal,                      // =
-  PlusEqual,                  // +=
-  MinusEqual,                 // -=
-  StarEqual,                  // *=
-  SlashEqual,                 // /=
-  PercentEqual,               // %=
-  AmpEqual,                   // &=
-  PipeEqual,                  // |=
-  CaretEqual,                 // ^=
-  LessLessEqual,              // <<=
-  GreaterGreaterEqual,        // >>=
-  GreaterGreaterGreaterEqual, // >>>=
-
-  // Bitwise / Logical
+  // Logical / Bitwise
+  Bang,      // !
   Ampersand, // &
   Pipe,      // |
-  Caret,     // ^
   Tilde,     // ~
-  Bang,      // !
-  AmpAmp,    // &&
-  PipePipe,  // ||
 
   // Comparison
-  EqualEqual,      // ==
-  NotEqual,        // !=
-  EqualEqualEqual, // ===
-  NotEqualEqual,   // !==
-  Greater,         // >
-  GreaterEqual,    // >=
-  Less,            // <
-  LessEqual,       // <=
+  Greater,      // >
+  GreaterEqual, // >=
+  Less,         // <
+  LessEqual,    // <=
+  EqualEqual,   // ==
+  BangEqual,    // !=
+  Equal,        // =
 
-  // Shift
-  LessLess,              // <<
-  GreaterGreater,        // >>
-  GreaterGreaterGreater, // >>>
-
-  // Misc
-  Question,  // ?
-  Colon,     // :
-  Dot,       // .
-  DotDotDot, // ...
-  Comma,     // ,
-  Semicolon, // ;
-  Backtick,  // `
-  At,        // @
-  Hash,      // #
-  Arrow,     // =>
+  // Compound / Misc
+  CaretEqual,       // ^=
+  LessEqualGreater, // <=>
+  GreaterEqualLess, // >=<
+  And,              // and
+  Or,               // or
 
   // 4️⃣ Delimiters
   LeftParen,    // (
@@ -146,11 +90,21 @@ pub enum TokenKind {
   RightBrace,   // }
   LeftBracket,  // [
   RightBracket, // ]
+  Dot,          // .
+  DotDot,       // ..
+  Comma,        // ,
+  Colon,        // :
+  ColonColon,   // ::
+  Semicolon,    // ;
+  Question,     // ?
+  Underscore,   // _
+  FatArrow,     // ->
 
   // 5️⃣ Comments
   SingleLineComment, // //
   MultiLineComment,  // /* ... */
 
-  // 6️⃣ End of file
-  Eof,
+  // 6️⃣ Miscellaneous
+  Keyword, // For general keyword handling if needed
+  Eof,     // End of file/input
 }

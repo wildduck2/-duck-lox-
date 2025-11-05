@@ -2,8 +2,7 @@
 mod tests {
   use diagnostic::{
     code::DiagnosticCode,
-    diagnostic::{Diagnostic, LabelStyle},
-    source_map::{SourceMap, Span},
+    diagnostic::{Diagnostic, LabelStyle, Span},
     types::error::DiagnosticError,
   };
   use std::fs;
@@ -157,31 +156,18 @@ pub fn another_function() {
 
     // Run all tests without cleanup
     println!("\n=== SIMPLE: Undefined Variable ===\n");
-    let mut source_map = SourceMap::new();
-    // Load sources into source map
-    let main_rs = fs::read_to_string("test_sources/main.rs").unwrap();
-    let lib_rs = fs::read_to_string("test_sources/lib.rs").unwrap();
-    let calculator_rs = fs::read_to_string("test_sources/calculator.rs").unwrap();
-    let collections_rs = fs::read_to_string("test_sources/collections.rs").unwrap();
-    let example_rs = fs::read_to_string("test_sources/example.rs").unwrap();
-    source_map.add_file("test_sources/main.rs", &main_rs);
-    source_map.add_file("test_sources/lib.rs", &lib_rs);
-    source_map.add_file("test_sources/calculator.rs", &calculator_rs);
-    source_map.add_file("test_sources/collections.rs", &collections_rs);
-    source_map.add_file("test_sources/example.rs", &example_rs);
-
     let diagnostic1 = Diagnostic::new(
       DiagnosticCode::Error(DiagnosticError::UndefinedVariable),
       "cannot find value `counter` in this scope".to_string(),
       "test_sources/main.rs".to_string(),
     )
     .with_label(
-      Span::from_line_col(5, 28, 7, source_map.get("test_sources/main.rs").unwrap()),
+      Span::new(5, 28, 7),
       Some("not found in this scope".to_string()),
       LabelStyle::Primary,
     )
     .with_help("a local variable with a similar name exists: `count`".to_string());
-    let _ = diagnostic1.print(&source_map);
+    diagnostic1.print();
 
     println!("\n=== MEDIUM: Type Mismatch ===\n");
     let diagnostic2 = Diagnostic::new(
@@ -190,18 +176,18 @@ pub fn another_function() {
       "test_sources/lib.rs".to_string(),
     )
     .with_label(
-      Span::from_line_col(15, 5, 6, source_map.get("test_sources/lib.rs").unwrap()),
+      Span::new(15, 5, 6),
       Some("expected `String`, found `i32`".to_string()),
       LabelStyle::Primary,
     )
     .with_label(
-      Span::from_line_col(13, 32, 6, source_map.get("test_sources/lib.rs").unwrap()),
+      Span::new(13, 32, 6),
       Some("expected `String` because of return type".to_string()),
       LabelStyle::Secondary,
     )
     .with_help("try using `.to_string()` to convert `i32` to `String`".to_string())
     .with_note("expected type `String`\n          found type `i32`".to_string());
-    let _ = diagnostic2.print(&source_map);
+    diagnostic2.print();
 
     println!("\n=== COMPLEX: Trait Bound Not Satisfied ===\n");
     let diagnostic3 = Diagnostic::new(
@@ -210,23 +196,23 @@ pub fn another_function() {
       "test_sources/calculator.rs".to_string(),
     )
     .with_label(
-      Span::from_line_col(1, 21, 4, source_map.get("test_sources/calculator.rs").unwrap()),
+      Span::new(1, 21, 4),
       Some("this parameter has type `&str`".to_string()),
       LabelStyle::Secondary,
     )
     .with_label(
-      Span::from_line_col(3, 5, 1, source_map.get("test_sources/calculator.rs").unwrap()),
+      Span::new(3, 5, 1),
       Some("no implementation for `&str + i32`".to_string()),
       LabelStyle::Primary,
     )
     .with_label(
-      Span::from_line_col(3, 9, 1, source_map.get("test_sources/calculator.rs").unwrap()),
+      Span::new(3, 9, 1),
       Some("cannot add `i32` to `&str`".to_string()),
       LabelStyle::Secondary,
     )
     .with_help("the trait `Add<i32>` is not implemented for `&str`".to_string())
     .with_note("the following trait bounds were not satisfied:\n            `&str: Add<i32>`\n            which is required by `&str: Add<i32>`".to_string());
-    let _ = diagnostic3.print(&source_map);
+    diagnostic3.print();
 
     println!("\n=== SUPER COMPLEX: Borrow Checker Violation ===\n");
     let diagnostic4 = Diagnostic::new(
@@ -236,58 +222,33 @@ pub fn another_function() {
     )
     .with_context_padding(1)
     .with_label(
-      Span::from_line_col(
-        19,
-        17,
-        8,
-        source_map.get("test_sources/collections.rs").unwrap(),
-      ),
+      Span::new(19, 17, 8),
       Some("immutable borrow occurs here".to_string()),
       LabelStyle::Secondary,
     )
     .with_label(
-      Span::from_line_col(
-        20,
-        18,
-        8,
-        source_map.get("test_sources/collections.rs").unwrap(),
-      ),
+      Span::new(20, 18, 8),
       Some("another immutable borrow occurs here".to_string()),
       LabelStyle::Secondary,
     )
     .with_label(
-      Span::from_line_col(
-        22,
-        5,
-        4,
-        source_map.get("test_sources/collections.rs").unwrap(),
-      ),
+      Span::new(22, 5, 4),
       Some("mutable borrow occurs here".to_string()),
       LabelStyle::Primary,
     )
     .with_label(
-      Span::from_line_col(
-        24,
-        39,
-        5,
-        source_map.get("test_sources/collections.rs").unwrap(),
-      ),
+      Span::new(24, 39, 5),
       Some("immutable borrow later used here".to_string()),
       LabelStyle::Secondary,
     )
     .with_label(
-      Span::from_line_col(
-        24,
-        46,
-        6,
-        source_map.get("test_sources/collections.rs").unwrap(),
-      ),
+      Span::new(24, 46, 6),
       Some("immutable borrow also used here".to_string()),
       LabelStyle::Secondary,
     )
     .with_help("consider cloning the values before mutating `data`".to_string())
     .with_note("cannot borrow `data` as mutable, as it is not declared as mutable".to_string());
-    let _ = diagnostic4.print(&source_map);
+    diagnostic4.print();
 
     println!("\n=== CUSTOM PADDING: Wide Context ===\n");
     let diagnostic5 = Diagnostic::new(
@@ -297,16 +258,11 @@ pub fn another_function() {
     )
     .with_context_padding(3)
     .with_label(
-      Span::from_line_col(
-        10,
-        19,
-        11,
-        source_map.get("test_sources/example.rs").unwrap(),
-      ),
+      Span::new(10, 19, 11),
       Some("undefined variable".to_string()),
       LabelStyle::Primary,
     );
-    let _ = diagnostic5.print(&source_map);
+    diagnostic5.print();
 
     println!("\n=== USING from_range ===\n");
     let diagnostic6 = Diagnostic::new(
@@ -315,11 +271,11 @@ pub fn another_function() {
       "test_sources/main.rs".to_string(),
     )
     .with_label(
-      Span::from_line_col(3, 18, 27, source_map.get("test_sources/main.rs").unwrap()),
+      Span::from_range(3, 18, 27),
       Some("type mismatch here".to_string()),
       LabelStyle::Primary,
     );
-    let _ = diagnostic6.print(&source_map);
+    diagnostic6.print();
 
     // Cleanup once at the end
     cleanup_test_files();

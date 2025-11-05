@@ -1,56 +1,59 @@
-use diagnostic::{DiagnosticEngine, SourceMap};
+use std::fs;
+
+use diagnostic::DiagnosticEngine;
 use lexer::Lexer;
 use parser::Parser;
 
-pub struct Runner {}
+pub struct Runner {
+  pub source: String,
+}
 
 impl Runner {
   pub fn new() -> Self {
-    Self {}
+    Self {
+      source: String::new(),
+    }
   }
 
   pub fn run_interactive_mode(&mut self, engine: &mut DiagnosticEngine) {}
 
   pub fn run_file(
     mut self,
-    path: &str,
+    path: String,
     engine: &mut DiagnosticEngine,
   ) -> Result<(), std::io::Error> {
-    let mut source_map = SourceMap::new();
-    source_map.add_wd(path)?;
+    println!("\n============== READ =================\n");
 
-    for source_file in source_map.files.values() {
-      println!("\n============== READ =================\n");
-      println!("{}", &source_file.src);
+    self.source = fs::read_to_string(&path)?;
+    println!("{}", self.source);
 
-      println!("\n============= SCANNED ===============\n");
+    println!("\n============= SCANNED ===============\n");
 
-      let mut lexer = Lexer::new(source_file.src.clone());
-      lexer.scan_tokens(engine);
+    let mut lexer = Lexer::new(self.source);
+    lexer.scan_tokens(engine);
 
-      if engine.has_errors() {
-        engine.print_diagnostics();
-        return Err(std::io::Error::new(
-          std::io::ErrorKind::Other,
-          "lexing error",
-        ));
-      }
+    if engine.has_errors() {
+      engine.print_diagnostics();
+      return Err(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        "lexing error",
+      ));
+    }
 
-      // println!("{:?}", lexer.tokens);
-      println!("TooLongVecOfTokens[{}]", lexer.tokens.len());
+    // println!("{:?}", lexer.tokens);
+    println!("TooLongVecOfTokens[{}]", lexer.tokens.len());
 
-      println!("\n============= PARSED ===============\n");
+    println!("\n============= PARSED ===============\n");
 
-      let mut parser = Parser::new(lexer.tokens, source_file.clone());
-      parser.parse(engine);
+    let mut parser = Parser::new(lexer.tokens);
+    parser.parse(engine);
 
-      if engine.has_errors() || engine.has_warnings() {
-        engine.print_diagnostics();
-        return Err(std::io::Error::new(
-          std::io::ErrorKind::Other,
-          "parsing error",
-        ));
-      }
+    if engine.has_errors() || engine.has_warnings() {
+      engine.print_diagnostics();
+      return Err(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        "parsing error",
+      ));
     }
 
     Ok(())

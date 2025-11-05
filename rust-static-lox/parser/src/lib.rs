@@ -1,27 +1,27 @@
 use diagnostic::{
   code::DiagnosticCode,
-  diagnostic::{Diagnostic, LabelStyle},
+  diagnostic::{Diagnostic, LabelStyle, Span},
   types::error::DiagnosticError,
-  DiagnosticEngine, SourceFile,
+  DiagnosticEngine,
 };
 use lexer::token::{Token, TokenKind};
 
-use crate::expr::Stmt;
+use crate::stmt::Stmt;
 
 mod expr;
 mod parser_utils;
+mod stmt;
 
 /// Recursive-descent parser that transforms tokens into an AST while reporting diagnostics.
 pub struct Parser {
   pub tokens: Vec<Token>,
   pub ast: Vec<Stmt>,
   pub current: usize,
-  pub source_file: SourceFile,
 }
 
 impl Parser {
   /// Creates a parser seeded with the lexer output.
-  pub fn new(tokens: Vec<Token>, source_file: SourceFile) -> Self {
+  pub fn new(tokens: Vec<Token>) -> Self {
     if tokens.is_empty() {
       // Parser always expects at least an EOF sentinel, bail early otherwise.
       panic!("Parser::new: tokens is empty");
@@ -31,7 +31,6 @@ impl Parser {
       tokens,
       ast: Vec::new(),
       current: 0,
-      source_file,
     }
   }
 
@@ -60,10 +59,10 @@ impl Parser {
       let diagnostic = Diagnostic::new(
         DiagnosticCode::Error(DiagnosticError::UnterminatedString),
         "unterminated string".to_string(),
-        self.source_file.path.clone(),
+        "demo.lox".to_string(),
       )
       .with_label(
-        current_token.span,
+        Span::new(current_token.span.line, 1, current_token.lexeme.len() + 1),
         Some("unterminated string".to_string()),
         LabelStyle::Primary,
       );
@@ -126,13 +125,13 @@ impl Parser {
     let diagnostic = Diagnostic::new(
       DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
       format!("Expected '{:?}', but reached end of file", expected),
-      self.source_file.path.clone(),
+      "duck.lox".to_string(),
     )
     .with_label(
-      token.span,
+      Span::new(token.span.line, 1, token.span.len),
       Some(format!(
-        "" // "Expected a {:?} expression, found {:?}",
-           // expected, token
+        "Expected a {:?} expression, found {:?}",
+        expected, token.lexeme
       )),
       LabelStyle::Primary,
     );
@@ -148,20 +147,15 @@ impl Parser {
     engine: &mut DiagnosticEngine,
   ) {
     let current_token = self.current_token();
-    let lexeme = self
-      .source_file
-      .src
-      .get(current_token.span.start..current_token.span.end)
-      .unwrap();
 
     // Attach diagnostic information to the surprising token.
     let diagnostic = Diagnostic::new(
       DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
-      format!("Expected '{:?}', found '{}'", expected, lexeme),
-      self.source_file.path.clone(),
+      format!("Expected '{:?}', found '{}'", expected, found.lexeme),
+      "demo.lox".to_string(),
     )
     .with_label(
-      current_token.span,
+      Span::new(current_token.span.line, 1, current_token.lexeme.len() + 1),
       Some(format!("expected '{:?}' here", expected).into()),
       LabelStyle::Primary,
     )
@@ -198,16 +192,14 @@ impl Parser {
     // Highlight whichever token left the parser in a bad state.
     let diagnostic = Diagnostic::new(
       DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
-      "Unexpected token".to_string(),
-      // format!("Unexpected token {:?}", token.lexeme),
-      self.source_file.path.clone(),
+      format!("Unexpected token {:?}", token.lexeme),
+      "duck.lox".to_string(),
     )
     .with_label(
-      token.span,
+      Span::new(token.span.line + 1, 1, token.span.len),
       Some(format!(
-        "",
-        // "Expected a primary expression, found \"{}\"",
-        // token.lexeme
+        "Expected a primary expression, found \"{}\"",
+        token.lexeme
       )),
       LabelStyle::Primary,
     );

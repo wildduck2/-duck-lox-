@@ -1,8 +1,8 @@
 use diagnostic::{
   code::DiagnosticCode,
-  diagnostic::{Diagnostic, LabelStyle},
+  diagnostic::{Diagnostic, LabelStyle, Span},
   types::error::DiagnosticError,
-  DiagnosticEngine, Span,
+  DiagnosticEngine,
 };
 
 use crate::token::{Token, TokenKind};
@@ -68,10 +68,8 @@ impl Lexer {
 
     self.tokens.push(Token {
       kind,
-      span: Span {
-        start: self.start,
-        end: self.current,
-      },
+      lexeme: self.get_current_lexeme().to_string(),
+      span: Span::new(self.line, self.column, self.current - self.start),
     });
     self.start = self.current;
   }
@@ -132,7 +130,11 @@ impl Lexer {
       "demo.lox".to_string(),
     )
     .with_label(
-      diagnostic::Span::new(self.start, self.current),
+      Span::new(
+        self.line,
+        self.current,
+        self.column + self.get_current_lexeme().len() - 1,
+      ),
       Some("unexpected character".to_string()),
       LabelStyle::Primary,
     );
