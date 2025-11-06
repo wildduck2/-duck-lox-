@@ -13,10 +13,10 @@ impl Lexer {
   ///       ^^ ampersand equals sign
   /// ```
   pub fn lex_and(&mut self) -> Option<TokenKind> {
-    if self.match_char(self.peek(), '&') {
+    if self.match_char('&') {
       self.advance(); // consume the '='
       return Some(TokenKind::AndAnd);
-    } else if self.match_char(self.peek(), '=') {
+    } else if self.match_char('=') {
       self.advance(); // consume the '='
       return Some(TokenKind::AndEq);
     }
@@ -36,10 +36,10 @@ impl Lexer {
   ///       ^^ pipe equals sign
   /// ```
   pub fn lex_or(&mut self) -> Option<TokenKind> {
-    if self.match_char(self.peek(), '|') {
+    if self.match_char('|') {
       self.advance(); // consume the '='
       return Some(TokenKind::OrOr);
-    } else if self.match_char(self.peek(), '=') {
+    } else if self.match_char('=') {
       self.advance(); // consume the '='
       return Some(TokenKind::OrEq);
     }
@@ -57,7 +57,7 @@ impl Lexer {
   ///       ^^ caret equals sign
   /// ```
   pub fn lex_caret(&mut self) -> Option<TokenKind> {
-    if self.match_char(self.peek(), '=') {
+    if self.match_char('=') {
       self.advance(); // consume the '='
       return Some(TokenKind::CaretEq);
     }

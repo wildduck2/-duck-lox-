@@ -36,10 +36,10 @@ impl Lexer {
   ///            ^^^ dot equals sign
   /// ```
   pub fn lex_dot(&mut self) -> Option<TokenKind> {
-    if self.match_char(self.peek(), '.') {
+    if self.match_char('.') {
       self.advance(); // consume the '.'
       return Some(TokenKind::DotDot);
-    } else if self.match_char(self.peek(), '=') {
+    } else if self.match_char('=') {
       self.advance(); // consume the '='
       return Some(TokenKind::DotDotEq);
     }
@@ -135,7 +135,7 @@ impl Lexer {
   /// #[allow(unused)]
   /// ```
   pub fn lex_pound(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
-    if self.match_char(self.peek(), '!') {
+    if self.match_char('!') {
       return self.lex_shebang(engine);
     }
 
@@ -174,7 +174,7 @@ impl Lexer {
   ///     ^^ fat arrow
   /// ```
   pub fn lex_colon(&mut self) -> Option<TokenKind> {
-    if self.match_char(self.peek(), ':') {
+    if self.match_char(':') {
       self.advance(); // consume the ':'
       return Some(TokenKind::ColonColon);
     }

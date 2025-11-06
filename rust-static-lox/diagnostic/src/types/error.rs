@@ -7,6 +7,7 @@ pub enum DiagnosticError {
   InvalidArguments,
   InvalidShebang,
   InvalidCharacter,
+  UnterminatedString,
 }
 
 impl DiagnosticError {
@@ -16,6 +17,7 @@ impl DiagnosticError {
       Self::InvalidArguments => "E0002",
       Self::InvalidShebang => "E0003",
       Self::InvalidCharacter => "E0004",
+      Self::UnterminatedString => "E0005",
     }
   }
 

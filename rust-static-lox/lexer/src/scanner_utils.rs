@@ -56,8 +56,9 @@ impl Lexer {
       },
       '\r' | '\t' | ' ' => self.lex_whitespace(),
       '"' | '\'' | '`' => self.lex_string(engine),
-      'A'..='Z' | 'a'..='z' | '_' => self.lex_keywords(),
+
       '0'..='9' => self.lex_number(),
+      'A'..='Z' | 'a'..='z' | '_' => self.lex_keywords(),
       _ => {
         let diagnostic = Diagnostic::new(
           DiagnosticCode::Error(DiagnosticError::InvalidCharacter),

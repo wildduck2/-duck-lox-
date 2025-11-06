@@ -9,7 +9,7 @@ impl Lexer {
   ///       ^ colon colon symbol
   /// ```
   pub fn lex_colon_colon(&mut self) -> Option<TokenKind> {
-    if self.match_char(self.peek(), ':') {
+    if self.match_char(':') {
       self.advance(); // consume the ':'
       return Some(TokenKind::ColonColon);
     }
@@ -25,9 +25,9 @@ impl Lexer {
   ///       ^ dot dot equals symbol
   /// ```
   pub fn lex_dot_dot_eq(&mut self) -> Option<TokenKind> {
-    if self.match_char(self.peek(), '.') {
+    if self.match_char('.') {
       self.advance(); // consume the '.'
-      if self.match_char(self.peek(), '=') {
+      if self.match_char('=') {
         self.advance(); // consume the '='
         return Some(TokenKind::DotDotEq);
       }

@@ -13,10 +13,10 @@ impl Lexer {
   ///                     ^^ fat arrow
   /// ```
   pub fn lex_equal(&mut self) -> Option<TokenKind> {
-    if self.match_char(self.peek(), '=') {
+    if self.match_char('=') {
       self.advance(); // consume the '='
       return Some(TokenKind::EqEq);
-    } else if self.match_char(self.peek(), '>') {
+    } else if self.match_char('>') {
       self.advance(); // consume the '='
       return Some(TokenKind::FatArrow);
     }
@@ -34,7 +34,7 @@ impl Lexer {
   ///           ^^ not equals sign
   /// ```
   pub fn lex_bang(&mut self) -> Option<TokenKind> {
-    if self.match_char(self.peek(), '=') {
+    if self.match_char('=') {
       self.advance(); // consume the '='
       return Some(TokenKind::Ne);
     }
@@ -56,13 +56,13 @@ impl Lexer {
   ///           ^^^ less than or equal to sign
   /// ```
   pub fn lex_less(&mut self) -> Option<TokenKind> {
-    if self.match_char(self.peek(), '=') {
+    if self.match_char('=') {
       self.advance(); // consume the '='
       return Some(TokenKind::Le);
-    } else if self.match_char(self.peek(), '<') {
+    } else if self.match_char('<') {
       self.advance(); // consume the '='
 
-      if self.match_char(self.peek(), '=') {
+      if self.match_char('=') {
         self.advance(); // consume the '='
         return Some(TokenKind::ShiftLeftEq);
       }
@@ -87,13 +87,13 @@ impl Lexer {
   ///   x       ^^^ greater than or equal to sign
   /// ```
   pub fn lex_greater(&mut self) -> Option<TokenKind> {
-    if self.match_char(self.peek(), '=') {
+    if self.match_char('=') {
       self.advance(); // consume the '='
       return Some(TokenKind::Ge);
-    } else if self.match_char(self.peek(), '>') {
+    } else if self.match_char('>') {
       self.advance(); // consume the '>'
 
-      if self.match_char(self.peek(), '=') {
+      if self.match_char('=') {
         self.advance(); // consume the '='
         return Some(TokenKind::ShiftRightEq);
       }

@@ -84,7 +84,28 @@ impl Lexer {
       "virtual" => Some(TokenKind::KwVirtual),
       "yield" => Some(TokenKind::KwYield),
 
-      _ => None,
+      _ => {
+        // Handles regular identifiers (foo, _bar, Baz) and raw identifiers (r#type, r#match)
+        // according to Rust’s lexical rules.
+
+        let lexeme = self.get_current_lexeme();
+
+        if lexeme.starts_with("r#") && lexeme.len() > 2 {
+          // r# followed by a valid identifier
+          Some(TokenKind::RawIdent)
+        } else if lexeme
+          .chars()
+          .next()
+          .map(|ch| ch.is_ascii_digit())
+          .unwrap_or(false)
+        {
+          // Invalid identifier (starts with a digit)
+          Some(TokenKind::InvalidIdent)
+        } else {
+          // Normal identifier
+          Some(TokenKind::Ident)
+        }
+      },
     }
   }
 }

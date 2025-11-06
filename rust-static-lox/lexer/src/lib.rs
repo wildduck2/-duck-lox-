@@ -50,10 +50,11 @@ impl Lexer {
     self.emit(TokenKind::Eof);
   }
 
-  /// Returns `true` when the provided lookahead matches the target character.
-  fn match_char(&mut self, char: Option<char>, match_char: char) -> bool {
-    if let Some(char) = char {
+  /// Check is the next character matches the target character.
+  fn match_char(&mut self, match_char: char) -> bool {
+    if let Some(char) = self.peek() {
       if char == match_char {
+        self.advance();
         return true;
       }
     }
@@ -63,20 +64,11 @@ impl Lexer {
   /// Pushes a token covering the span between `start` and `current`.
   fn emit(&mut self, kind: TokenKind) {
     // ignore comments
-    // if kind.is_trivia() {
-    //   return;
-    // }
+    if kind.is_trivia() {
+      return;
+    }
 
-    // println!(
-    //   "{:?}",
-    //   Token {
-    //     kind,
-    //     span: Span {
-    //       start: self.start,
-    //       end: self.current,
-    //     },
-    //   }
-    // );
+    // println!("{:?}", self.source[self.start..self.current].to_string());
     self.tokens.push(Token {
       kind,
       span: Span {

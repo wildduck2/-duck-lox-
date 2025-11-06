@@ -8,10 +8,10 @@ impl Lexer {
   pub fn lex_line_comment(&mut self) -> Option<TokenKind> {
     self.advance(); // consume the '/'
 
-    let doc_style = if self.match_char(self.peek(), '/') {
+    let doc_style = if self.match_char('/') {
       self.advance(); // consume the '/'
       Some(DocStyle::Inner)
-    } else if self.match_char(self.peek(), '!') {
+    } else if self.match_char('!') {
       self.advance(); // consume the '!'
       Some(DocStyle::Outer)
     } else {
@@ -20,7 +20,7 @@ impl Lexer {
 
     while !self.is_eof() {
       self.advance(); // consume the current char
-      if self.match_char(self.peek(), '\n') {
+      if self.match_char('\n') {
         break;
       }
     }

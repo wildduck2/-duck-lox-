@@ -11,7 +11,7 @@ impl Lexer {
   ///           ^^ plus sign
   /// ```
   pub fn lex_plus(&mut self) -> Option<TokenKind> {
-    if self.match_char(self.peek(), '=') {
+    if self.match_char('=') {
       self.advance(); // consume the '='
       return Some(TokenKind::PlusEq);
     }
@@ -31,10 +31,10 @@ impl Lexer {
   ///                     ^^ thin arrow
   /// ```
   pub fn lex_minus(&mut self) -> Option<TokenKind> {
-    if self.match_char(self.peek(), '=') {
+    if self.match_char('=') {
       self.advance(); // consume the '='
       return Some(TokenKind::MinusEq);
-    } else if self.match_char(self.peek(), '>') {
+    } else if self.match_char('>') {
       self.advance(); // consume the '>'
       return Some(TokenKind::ThinArrow);
     }
@@ -52,7 +52,7 @@ impl Lexer {
   ///           ^^ star sign
   /// ```
   pub fn lex_star(&mut self) -> Option<TokenKind> {
-    if self.match_char(self.peek(), '=') {
+    if self.match_char('=') {
       self.advance(); // consume the '='
       return Some(TokenKind::StarEq);
     }
@@ -73,12 +73,12 @@ impl Lexer {
   /// ^^ comment sign
   /// ```
   pub fn lex_slash(&mut self) -> Option<TokenKind> {
-    if self.match_char(self.peek(), '=') {
+    if self.match_char('=') {
       self.advance(); // consume the '='
       return Some(TokenKind::SlashEq);
-    } else if self.match_char(self.peek(), '/') {
+    } else if self.match_char('/') {
       return self.lex_line_comment();
-    } else if self.match_char(self.peek(), '*') {
+    } else if self.match_char('*') {
       return self.lex_multi_line_comment();
     }
 
@@ -95,7 +95,7 @@ impl Lexer {
   ///       ^^ percent equals sign
   /// ```
   pub fn lex_percent(&mut self) -> Option<TokenKind> {
-    if self.match_char(self.peek(), '=') {
+    if self.match_char('=') {
       self.advance(); // consume the '='
       return Some(TokenKind::PercentEq);
     }
