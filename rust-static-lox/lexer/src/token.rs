@@ -113,6 +113,24 @@ pub enum RawStrError {
   /// r#####...#####"text"#####...#####  // 70000 hashes
   /// ```
   TooManyDelimiters { found: usize },
+
+  /// Missing opening quote after `r` or `r#`
+  ///
+  /// # Example
+  /// ```rust
+  /// rno_quotes       // missing opening quote
+  /// r#"no_quotes     // missing opening quote after `r#`
+  /// ```
+  MissingQuote,
+
+  /// Unterminated raw string literal
+  ///
+  /// # Example
+  /// ```rust
+  /// r"no hashes      // unterminated (missing closing `"` )
+  /// r#"still open    // unterminated (missing closing `"#` )
+  /// ```
+  Unterminated,
 }
 
 /// The kind of literal token

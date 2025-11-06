@@ -1,1 +1,6 @@
+// ✅ BASIC RAW STRINGS (no escapes, n_hashes = 0)
 r"no\escapes"
+r"simple text"
+r"multi line
+still raw"
+
