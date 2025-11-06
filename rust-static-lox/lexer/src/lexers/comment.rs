@@ -50,7 +50,7 @@ impl Lexer {
 
     while !self.is_eof() {
       let current = self.peek();
-      let next = self.peek_next();
+      let next = self.peek_next(1);
 
       // Handle newlines
       if current == Some('\n') {

@@ -20,12 +20,14 @@ impl Runner {
     source_map.add_wd(path)?;
 
     for source_file in source_map.files.values() {
+      engine.add_file(source_file.path.as_str(), source_file.src.as_str());
       println!("\n============== READ =================\n");
+
       println!("{}", &source_file.src);
 
       println!("\n============= SCANNED ===============\n");
 
-      let mut lexer = Lexer::new(source_file.src.clone());
+      let mut lexer = Lexer::new(source_file.clone());
       lexer.scan_tokens(engine);
 
       if engine.has_errors() {

@@ -115,7 +115,7 @@ impl SourceMap {
   pub fn add_wd(&mut self, path: &str) -> Result<(), std::io::Error> {
     match self.get_files(path) {
       Err(e) => {
-        println!("++++++++{}", e.to_string());
+        println!("{}", e.to_string());
         std::process::exit(64);
       },
       Ok(_) => {},

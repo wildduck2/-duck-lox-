@@ -55,7 +55,7 @@ impl Lexer {
         Some(TokenKind::Whitespace)
       },
       '\r' | '\t' | ' ' => self.lex_whitespace(),
-      '"' | '\'' | '`' => self.lex_string(engine),
+      '"' | '\'' => self.lex_string(engine),
 
       '0'..='9' => self.lex_number(),
       'A'..='Z' | 'a'..='z' | '_' => self.lex_keywords(),

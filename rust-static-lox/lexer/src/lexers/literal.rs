@@ -1,4 +1,9 @@
-use diagnostic::DiagnosticEngine;
+use diagnostic::{
+  code::DiagnosticCode,
+  diagnostic::{Diagnostic, LabelStyle},
+  types::error::DiagnosticError,
+  DiagnosticEngine, Span,
+};
 
 use crate::{
   token::{Base, LiteralKind, TokenKind},
@@ -31,7 +36,7 @@ impl Lexer {
       if c == '0' || c == '1' {
         self.advance();
         has_digits = true;
-      } else if c == '_' && self.peek_next() != Some('_') {
+      } else if c == '_' && self.peek_next(1) != Some('_') {
         self.advance();
         continue;
       } else {
@@ -70,7 +75,7 @@ impl Lexer {
       if c.is_ascii_digit() {
         self.advance();
         has_digits = true;
-      } else if c == '_' && self.peek_next() != Some('_') {
+      } else if c == '_' && self.peek_next(1) != Some('_') {
         self.advance();
         continue;
       } else if c == '.' && !has_dot && !has_exponent {
@@ -92,7 +97,7 @@ impl Lexer {
           if ec.is_ascii_digit() {
             self.advance();
             has_exp_digits = true;
-          } else if ec == '_' && self.peek_next() != Some('_') {
+          } else if ec == '_' && self.peek_next(1) != Some('_') {
             self.advance();
             continue;
           } else {
@@ -137,7 +142,7 @@ impl Lexer {
       if c.is_ascii_hexdigit() {
         self.advance();
         has_digits = true;
-      } else if c == '_' && self.peek_next() != Some('_') {
+      } else if c == '_' && self.peek_next(1) != Some('_') {
         self.advance();
         continue;
       } else {
@@ -151,6 +156,215 @@ impl Lexer {
   }
 
   pub fn lex_string(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
-    None
+    if self.get_current_lexeme() == "\'" {
+      return self.lex_char(engine);
+    }
+
+    Some(TokenKind::Literal {
+      kind: LiteralKind::Str { terminated: false },
+      suffix_start: 0,
+    })
+  }
+
+  fn lex_char(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
+    let mut len = 1;
+    let mut is_unicode = false;
+
+    while let Some(c) = self.peek() {
+      len += 1;
+      if c == '\'' {
+        self.advance();
+        break;
+      }
+
+      if c == '\\' && self.peek_next(1) == Some('u') && self.peek_next(2) == Some('{') {
+        is_unicode = true;
+      }
+
+      if c == '\\' {
+        len -= 1;
+      }
+      self.advance();
+    }
+
+    let terminated = if !self.get_current_lexeme().ends_with('\'') {
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::InvalidCharacter),
+        format!("unterminated char literal: {}", self.get_current_lexeme()),
+        self.source.path.to_string(),
+      )
+      .with_label(
+        diagnostic::Span::new(self.start + self.column - 1, self.current),
+        Some("unexpected character".to_string()),
+        LabelStyle::Primary,
+      )
+      .with_help("Use single quotes for character literals.".to_string());
+
+      engine.add(diagnostic);
+      false
+    } else {
+      true
+    };
+
+    if len > 3 && !is_unicode {
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::UnterminatedString),
+        format!(
+          "Too many characters in char literal: {}",
+          self.get_current_lexeme()
+        ),
+        self.source.path.to_string(),
+      )
+      .with_label(
+        diagnostic::Span::new(self.start + self.column - 1, self.current),
+        Some("This char literal is too long".to_string()),
+        LabelStyle::Primary,
+      )
+      .with_help("char literals can only contain ASCII characters.".to_string());
+
+      engine.add(diagnostic);
+      return None;
+    } else if len > 3 && is_unicode && !self.get_current_lexeme().ends_with("}'") {
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::UnterminatedString),
+        format!("Wrong unicode escape: {}", self.get_current_lexeme()),
+        self.source.path.to_string(),
+      )
+      .with_label(
+        diagnostic::Span::new(self.start + self.column - 1, self.current),
+        Some("There should be a closing `}` after the unicode escape".to_string()),
+        LabelStyle::Primary,
+      )
+      .with_help("Use the right escape sequence for unicode characters. `\\u{1F980}`".to_string());
+
+      engine.add(diagnostic);
+      return None;
+    }
+
+    // println!("{}", self.get_current_lexeme());
+    Some(TokenKind::Literal {
+      kind: LiteralKind::Char { terminated },
+      suffix_start: 0,
+    })
   }
 }
+
+//   /// Character literal (single Unicode scalar)
+//   ///
+//   /// # Examples
+//   /// ```rust
+//   /// 'a'             // ASCII character
+//   /// '🦀'            // Unicode emoji
+//   /// '\n'            // escape sequence
+//   /// '\u{1F980}'     // Unicode escape
+//   /// 'x              // terminated = false (malformed)
+//   /// ```
+//   Char {
+//     /// False if the closing `'` is missing
+//     terminated: bool,
+//   },
+//
+//   /// Byte literal (single ASCII byte)
+//   ///
+//   /// # Examples
+//   /// ```rust
+//   /// b'a'            // ASCII byte
+//   /// b'\n'           // escape sequence
+//   /// b'\x7F'         // hex escape
+//   /// b'              // terminated = false (malformed)
+//   /// ```
+//   ///
+//   /// **Note**: Byte literals must contain only ASCII characters (0-127)
+//   Byte {
+//     /// False if the closing `'` is missing
+//     terminated: bool,
+//   },
+//
+//   /// String literal with escape sequences
+//   ///
+//   /// # Examples
+//   /// ```rust
+//   /// "hello"         // basic string
+//   /// "foo\nbar"      // with escape
+//   /// "multi
+//   /// line"           // multiline (valid)
+//   /// "unterminated   // terminated = false (malformed)
+//   /// ```
+//   Str {
+//     /// False if the closing `"` is missing
+//     terminated: bool,
+//   },
+//
+//   /// Byte string literal (ASCII-only string as `&[u8]`)
+//   ///
+//   /// # Examples
+//   /// ```rust
+//   /// b"hello"        // ASCII bytes
+//   /// b"\x48\x69"     // hex escapes for "Hi"
+//   /// b"unterminated  // terminated = false (malformed)
+//   /// ```
+//   ByteStr {
+//     /// False if the closing `"` is missing
+//     terminated: bool,
+//   },
+//
+//   /// C string literal (null-terminated, type `&CStr`)
+//   ///
+//   /// Added in Rust 1.77 for FFI interop.
+//   ///
+//   /// # Examples
+//   /// ```rust
+//   /// c"hello"        // becomes "hello\0"
+//   /// c"with\0null"   // explicit null allowed
+//   /// c"unterminated  // terminated = false (malformed)
+//   /// ```
+//   CStr {
+//     /// False if the closing `"` is missing
+//     terminated: bool,
+//   },
+//
+//   /// Raw string literal (no escape processing)
+//   ///
+//   /// # Examples
+//   /// ```rust
+//   /// r"no\escapes"           // n_hashes = 0
+//   /// r#"with "quotes""#      // n_hashes = 1
+//   /// r##"more # freedom"##   // n_hashes = 2
+//   /// ```
+//   RawStr {
+//     /// Number of `#` delimiters used
+//     n_hashes: u16,
+//     /// Error if the raw string is malformed
+//     err: Option<RawStrError>,
+//   },
+//
+//   /// Raw byte string literal (raw + byte string combined)
+//   ///
+//   /// # Examples
+//   /// ```rust
+//   /// br"raw bytes"
+//   /// br#"with "quotes""#
+//   /// ```
+//   RawByteStr {
+//     /// Number of `#` delimiters used
+//     n_hashes: u16,
+//     /// Error if the raw byte string is malformed
+//     err: Option<RawStrError>,
+//   },
+//
+//   /// Raw C string literal (raw + C string combined)
+//   ///
+//   /// Added in Rust 1.77.
+//   ///
+//   /// # Examples
+//   /// ```rust
+//   /// cr"raw c string"
+//   /// cr#"with "quotes""#
+//   /// ```
+//   RawCStr {
+//     /// Number of `#` delimiters used
+//     n_hashes: u16,
+//     /// Error if the raw C string is malformed
+//     err: Option<RawStrError>,
+//   },
+// }

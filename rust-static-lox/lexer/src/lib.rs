@@ -2,7 +2,7 @@ use diagnostic::{
   code::DiagnosticCode,
   diagnostic::{Diagnostic, LabelStyle},
   types::error::DiagnosticError,
-  DiagnosticEngine, Span,
+  DiagnosticEngine, SourceFile, Span,
 };
 
 use crate::token::{Token, TokenKind};
@@ -13,7 +13,7 @@ pub mod token;
 
 #[derive(Debug)]
 pub struct Lexer {
-  pub source: String,
+  pub source: SourceFile,
   pub tokens: Vec<Token>,
   pub start: usize,   // Start byte offset of current token
   pub current: usize, // Current byte offset in source
@@ -23,7 +23,7 @@ pub struct Lexer {
 
 impl Lexer {
   /// Creates a lexer over the provided source text.
-  pub fn new(source: String) -> Self {
+  pub fn new(source: SourceFile) -> Self {
     Self {
       source,
       tokens: Vec::new(),
@@ -85,7 +85,7 @@ impl Lexer {
       return None;
     }
 
-    let char = self.source[(self.current as usize)..]
+    let char = self.source.src[(self.current as usize)..]
       .chars()
       .next()
       .unwrap();
@@ -94,32 +94,45 @@ impl Lexer {
   }
 
   /// Returns the character one position ahead of the cursor without advancing it.
-  fn peek_next(&self) -> Option<char> {
+  fn peek_next(&self, offset: usize) -> Option<char> {
     if self.is_eof() {
       return None;
     }
 
-    self.source[((self.current + 1) as usize)..].chars().next()
+    self.source.src[((self.current + offset) as usize)..]
+      .chars()
+      .next()
   }
 
   /// Consumes the next character and updates the byte offset and column counters.
   fn advance(&mut self) -> char {
-    let char = self.peek();
+    if self.is_eof() {
+      return '\0';
+    }
 
-    self.current += 1;
+    // get remaining string slice
+    let remaining = &self.source.src[self.current..];
+    let mut iter = remaining.char_indices();
+
+    // the first character and its byte offset (always 0)
+    let (_, ch) = iter.next().unwrap();
+
+    // compute byte offset of next character (to move current forward)
+    if let Some((next_byte_idx, _)) = iter.next() {
+      self.current += next_byte_idx;
+    } else {
+      self.current = self.source.src.len();
+    }
+
+    // update column count
     self.column += 1;
 
-    match char {
-      Some(c) => c,
-      None => {
-        panic!("Failed to advance");
-      },
-    }
+    ch
   }
 
   /// Returns the current lexeme slice spanning the active token.
   fn get_current_lexeme(&self) -> &str {
-    &self.source[self.start..self.current]
+    self.source.src.get(self.start..self.current).unwrap_or("")
   }
 
   fn get_current_offset(&self) -> usize {
@@ -128,7 +141,7 @@ impl Lexer {
 
   /// Returns `true` when the cursor has reached the end of the source text.
   fn is_eof(&self) -> bool {
-    self.current >= self.source.len()
+    self.current >= self.source.src.len()
   }
 
   /// Emits a diagnostic for an unexpected character at the current cursor.
@@ -136,10 +149,10 @@ impl Lexer {
     let diagnostic = Diagnostic::new(
       DiagnosticCode::Error(DiagnosticError::InvalidCharacter),
       format!("unexpected character: {}", self.get_current_lexeme()),
-      "demo.lox".to_string(),
+      self.source.path.to_string(),
     )
     .with_label(
-      diagnostic::Span::new(self.start, self.current),
+      diagnostic::Span::new(self.start + self.column - 1, self.current),
       Some("unexpected character".to_string()),
       LabelStyle::Primary,
     );
@@ -149,6 +162,12 @@ impl Lexer {
 
   /// Returns the source line corresponding to `line_num`, or an empty string if it is out of range.
   pub fn get_line(&self, line_num: usize) -> String {
-    self.source.lines().nth(line_num).unwrap_or("").to_string()
+    self
+      .source
+      .src
+      .lines()
+      .nth(line_num)
+      .unwrap_or("")
+      .to_string()
   }
 }
