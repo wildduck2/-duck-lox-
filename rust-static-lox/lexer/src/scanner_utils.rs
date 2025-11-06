@@ -5,10 +5,7 @@ use diagnostic::{
   DiagnosticEngine, Span,
 };
 
-use crate::{
-  token::{DocStyle, TokenKind},
-  Lexer,
-};
+use crate::{token::TokenKind, Lexer};
 
 impl Lexer {
   /// Dispatches lexing for the current character, returning the matching token or emitting diagnostics.
@@ -55,10 +52,21 @@ impl Lexer {
         Some(TokenKind::Whitespace)
       },
       '\r' | '\t' | ' ' => self.lex_whitespace(),
-      '"' | '\'' => self.lex_string(engine),
 
+      // String and character literals
+      '"' => self.lex_string(engine),  // Regular string
+      '\'' => self.lex_string(engine), // Character literal
+
+      // Prefixed literals (need to check next char)
+      'b' => self.lex_string(engine), // b"...", b'...', br"..."
+      'c' => self.lex_string(engine), // c"...", cr"..."
+      'r' => self.lex_string(engine), // r"...", r#"..."#
+
+      // Numbers
       '0'..='9' => self.lex_number(),
+      // Keywords
       'A'..='Z' | 'a'..='z' | '_' => self.lex_keywords(),
+
       _ => {
         let diagnostic = Diagnostic::new(
           DiagnosticCode::Error(DiagnosticError::InvalidCharacter),

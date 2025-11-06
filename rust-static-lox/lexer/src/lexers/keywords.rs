@@ -2,11 +2,6 @@ use crate::{token::TokenKind, Lexer};
 
 impl Lexer {
   pub fn lex_keywords(&mut self) -> Option<TokenKind> {
-    let next_char = match self.peek() {
-      Some(ch) => ch.to_string(),
-      None => "".to_string(),
-    };
-
     // Consume valid identifier characters
     while let Some(ch) = self.peek() {
       if !ch.is_ascii_alphanumeric() && ch != '_' {

@@ -1,9 +1,4 @@
-use diagnostic::{
-  code::DiagnosticCode,
-  diagnostic::{Diagnostic, LabelStyle},
-  types::error::DiagnosticError,
-  DiagnosticEngine, SourceFile, Span,
-};
+use diagnostic::{DiagnosticEngine, SourceFile, Span};
 
 use crate::token::{Token, TokenKind};
 
@@ -142,22 +137,6 @@ impl Lexer {
   /// Returns `true` when the cursor has reached the end of the source text.
   fn is_eof(&self) -> bool {
     self.current >= self.source.src.len()
-  }
-
-  /// Emits a diagnostic for an unexpected character at the current cursor.
-  fn emit_error_unexpected_character(&mut self, engine: &mut DiagnosticEngine) {
-    let diagnostic = Diagnostic::new(
-      DiagnosticCode::Error(DiagnosticError::InvalidCharacter),
-      format!("unexpected character: {}", self.get_current_lexeme()),
-      self.source.path.to_string(),
-    )
-    .with_label(
-      diagnostic::Span::new(self.start + self.column - 1, self.current),
-      Some("unexpected character".to_string()),
-      LabelStyle::Primary,
-    );
-
-    engine.add(diagnostic);
   }
 
   /// Returns the source line corresponding to `line_num`, or an empty string if it is out of range.
