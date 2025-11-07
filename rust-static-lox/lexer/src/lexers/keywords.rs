@@ -1,6 +1,20 @@
+//! Lexer for keywords and identifiers.
+//!
+//! Recognizes Rust keywords and distinguishes them from regular identifiers.
+//! Also handles raw identifiers (`r#type`) and invalid identifiers.
+
 use crate::{token::TokenKind, Lexer};
 
 impl Lexer {
+  /// Lexes a keyword or identifier.
+  ///
+  /// Consumes alphanumeric characters and underscores to form a complete
+  /// identifier, then checks if it matches a known keyword. Also handles
+  /// raw identifiers (`r#...`) and detects invalid identifiers (starting with digits).
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind)` - Keyword token, `Ident`, `RawIdent`, or `InvalidIdent`
   pub fn lex_keywords(&mut self) -> Option<TokenKind> {
     // Consume valid identifier characters
     while let Some(ch) = self.peek() {

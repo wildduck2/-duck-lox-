@@ -1,3 +1,8 @@
+//! Scanner utilities for dispatching character-based lexing.
+//!
+//! This module contains the main dispatch logic that routes characters
+//! to specialized lexer functions based on their type.
+
 use diagnostic::{
   code::DiagnosticCode,
   diagnostic::{Diagnostic, LabelStyle},
@@ -8,7 +13,26 @@ use diagnostic::{
 use crate::{token::TokenKind, Lexer};
 
 impl Lexer {
-  /// Dispatches lexing for the current character, returning the matching token or emitting diagnostics.
+  /// Dispatches lexing based on the current character.
+  ///
+  /// Routes characters to appropriate lexer functions:
+  /// - Punctuation and delimiters → specialized lexers
+  /// - Operators → arithmetic/comparison/bitwise lexers
+  /// - Digits → number lexer
+  /// - Letters/underscore → keyword/identifier lexer
+  /// - Quotes → string/character lexer
+  /// - Whitespace → whitespace lexer
+  ///
+  /// Emits diagnostics for unexpected characters.
+  ///
+  /// # Arguments
+  ///
+  /// * `c` - The current character to lex
+  /// * `engine` - Diagnostic engine for error reporting
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind)` if a token was successfully lexed, `None` otherwise
   pub fn lex_tokens(&mut self, c: char, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     match c {
       // punctuation and delimiters
@@ -85,6 +109,14 @@ impl Lexer {
     }
   }
 
+  /// Lexes whitespace characters (spaces, tabs, carriage returns).
+  ///
+  /// Consumes all consecutive whitespace characters into a single
+  /// `Whitespace` token. Newlines are handled separately in the dispatch.
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Whitespace)` after consuming all whitespace
   fn lex_whitespace(&mut self) -> Option<TokenKind> {
     while let Some(c) = self.peek() {
       if c.is_whitespace() {

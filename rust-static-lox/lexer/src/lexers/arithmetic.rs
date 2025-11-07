@@ -1,15 +1,15 @@
+//! Lexers for arithmetic operators.
+//!
+//! Handles `+`, `-`, `*`, `/`, `%` and their compound assignment variants.
+
 use crate::{token::TokenKind, Lexer};
 
 impl Lexer {
-  /// Lexes a plus sign
+  /// Lexes a plus sign (`+`) or compound assignment (`+=`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = 1;
-  ///       ^ plus sign
-  /// let x = 1 + 1;
-  ///           ^^ plus sign
-  /// ```
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Plus)` or `Some(TokenKind::PlusEq)`
   pub fn lex_plus(&mut self) -> Option<TokenKind> {
     if self.match_char('=') {
       self.advance(); // consume the '='
@@ -19,17 +19,16 @@ impl Lexer {
     return Some(TokenKind::Plus);
   }
 
-  /// Lexes a minus sign
+  /// Lexes a minus sign (`-`), compound assignment (`-=`), or thin arrow (`->`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = 1;
-  ///       ^ minus sign
-  /// let x = 1 - 1;
-  ///           ^^ minus sign
-  /// let x = fn (x: i32) -> i32 { x - 1 };
-  ///                     ^^ thin arrow
-  /// ```
+  /// Handles:
+  /// - `-` - Subtraction or unary negation
+  /// - `-=` - Subtraction assignment
+  /// - `->` - Function return type arrow
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Minus)`, `Some(TokenKind::MinusEq)`, or `Some(TokenKind::ThinArrow)`
   pub fn lex_minus(&mut self) -> Option<TokenKind> {
     if self.match_char('=') {
       self.advance(); // consume the '='
@@ -42,15 +41,13 @@ impl Lexer {
     return Some(TokenKind::Minus);
   }
 
-  /// Lexes a star sign
+  /// Lexes a star (`*`) or compound assignment (`*=`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = 1;
-  ///       ^ star sign
-  /// let x = 1 * 1;
-  ///           ^^ star sign
-  /// ```
+  /// Used for multiplication or dereferencing.
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Star)` or `Some(TokenKind::StarEq)`
   pub fn lex_star(&mut self) -> Option<TokenKind> {
     if self.match_char('=') {
       self.advance(); // consume the '='
@@ -60,18 +57,17 @@ impl Lexer {
     return Some(TokenKind::Star);
   }
 
-  /// Lexes a slash sign
+  /// Lexes a slash (`/`), compound assignment (`/=`), or comment (`//`, `/*`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = 1 / 1;
-  ///           ^ slash sign
-  /// let x /= 11;
-  ///       ^^ slash sign
+  /// Handles:
+  /// - `/` - Division operator
+  /// - `/=` - Division assignment
+  /// - `//` - Line comment
+  /// - `/*` - Block comment
   ///
-  /// // comment
-  /// ^^ comment sign
-  /// ```
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Slash)`, `Some(TokenKind::SlashEq)`, or comment token
   pub fn lex_slash(&mut self) -> Option<TokenKind> {
     if self.match_char('=') {
       self.advance(); // consume the '='
@@ -85,15 +81,13 @@ impl Lexer {
     return Some(TokenKind::Slash);
   }
 
-  /// Lexes a percent sign
+  /// Lexes a percent sign (`%`) or compound assignment (`%=`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = 1 % 1;
-  ///           ^ percent sign
-  /// let x %= 1;
-  ///       ^^ percent equals sign
-  /// ```
+  /// Used for modulo operations.
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Percent)` or `Some(TokenKind::PercentEq)`
   pub fn lex_percent(&mut self) -> Option<TokenKind> {
     if self.match_char('=') {
       self.advance(); // consume the '='

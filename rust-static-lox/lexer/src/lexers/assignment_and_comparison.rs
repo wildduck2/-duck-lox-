@@ -1,17 +1,20 @@
+//! Lexers for assignment and comparison operators.
+//!
+//! Handles `=`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `<<`, `>>`, and their variants.
+
 use crate::{token::TokenKind, Lexer};
 
 impl Lexer {
-  /// Lexes an equals sign
+  /// Lexes an equals sign (`=`), equality (`==`), or fat arrow (`=>`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = 1;
-  ///       ^ equals sign
-  /// let x = 1 == 1;
-  ///           ^^ equals sign
-  /// let x = match x { 1 => 2, _ => 3 };
-  ///                     ^^ fat arrow
-  /// ```
+  /// Handles:
+  /// - `=` - Assignment
+  /// - `==` - Equality comparison
+  /// - `=>` - Match arm arrow
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Eq)`, `Some(TokenKind::EqEq)`, or `Some(TokenKind::FatArrow)`
   pub fn lex_equal(&mut self) -> Option<TokenKind> {
     if self.match_char('=') {
       self.advance(); // consume the '='
@@ -24,15 +27,15 @@ impl Lexer {
     return Some(TokenKind::Eq);
   }
 
-  /// Lexes an exclamation mark
+  /// Lexes an exclamation mark (`!`) or inequality (`!=`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = !true;
-  ///         ^ exclamation mark
-  /// let x = 1 != 2;
-  ///           ^^ not equals sign
-  /// ```
+  /// Handles:
+  /// - `!` - Logical NOT
+  /// - `!=` - Inequality comparison
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Bang)` or `Some(TokenKind::Ne)`
   pub fn lex_bang(&mut self) -> Option<TokenKind> {
     if self.match_char('=') {
       self.advance(); // consume the '='
@@ -42,19 +45,17 @@ impl Lexer {
     return Some(TokenKind::Bang);
   }
 
-  /// Lexes a less than sign
+  /// Lexes a less-than sign (`<`), less-or-equal (`<=`), or left shift (`<<`, `<<=`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = 1 < 2;
-  ///           ^ less than sign
-  /// let x = 1 <= 2;
-  ///           ^^ less than or equal to sign
-  /// let x = 1 << 2;
-  ///           ^^ less than sign
-  /// let x = 1 <<= 2;
-  ///           ^^^ less than or equal to sign
-  /// ```
+  /// Handles:
+  /// - `<` - Less than comparison
+  /// - `<=` - Less than or equal
+  /// - `<<` - Left shift
+  /// - `<<=` - Left shift assignment
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Lt)`, `Some(TokenKind::Le)`, `Some(TokenKind::ShiftLeft)`, or `Some(TokenKind::ShiftLeftEq)`
   pub fn lex_less(&mut self) -> Option<TokenKind> {
     if self.match_char('=') {
       self.advance(); // consume the '='
@@ -73,19 +74,17 @@ impl Lexer {
     return Some(TokenKind::Lt);
   }
 
-  /// Lexes a greater than sign
+  /// Lexes a greater-than sign (`>`), greater-or-equal (`>=`), or right shift (`>>`, `>>=`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = 1 > 2;
-  ///   x       ^ greater than sign
-  /// let x = 1 >= 2;
-  ///   x       ^^ greater than or equal to sign
-  /// let x = 1 >> 2;
-  ///   x       ^^ greater than sign
-  /// let x = 1 >>> 2;
-  ///   x       ^^^ greater than or equal to sign
-  /// ```
+  /// Handles:
+  /// - `>` - Greater than comparison
+  /// - `>=` - Greater than or equal
+  /// - `>>` - Right shift
+  /// - `>>=` - Right shift assignment
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Gt)`, `Some(TokenKind::Ge)`, `Some(TokenKind::ShiftRight)`, or `Some(TokenKind::ShiftRightEq)`
   pub fn lex_greater(&mut self) -> Option<TokenKind> {
     if self.match_char('=') {
       self.advance(); // consume the '='

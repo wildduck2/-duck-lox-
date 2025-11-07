@@ -1,3 +1,12 @@
+//! Lexers for numeric and string literals.
+//!
+//! Handles:
+//! - Numeric literals: integers and floats in decimal, binary, octal, hexadecimal
+//! - String literals: regular, byte, C strings, and their raw variants
+//! - Character literals: regular and byte characters
+//!
+//! All literal lexers handle escape sequences and emit diagnostics for malformed literals.
+
 use diagnostic::{
   code::DiagnosticCode,
   diagnostic::{Diagnostic, LabelStyle},
@@ -11,6 +20,19 @@ use crate::{
 };
 
 impl Lexer {
+  /// Lexes a numeric literal (integer or float).
+  ///
+  /// Detects the numeric base from prefixes:
+  /// - `0b` - Binary
+  /// - `0o` - Octal
+  /// - `0x` - Hexadecimal
+  /// - No prefix - Decimal
+  ///
+  /// Handles floats with decimal points and exponential notation.
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Literal { kind, suffix_start })`
   pub fn lex_number(&mut self) -> Option<TokenKind> {
     let kind = if self.get_current_lexeme() == "0" {
       if self.match_char('b') {
@@ -30,6 +52,14 @@ impl Lexer {
     Some(TokenKind::Literal { kind, suffix_start })
   }
 
+  /// Lexes a binary integer literal (`0b...`).
+  ///
+  /// Consumes binary digits (0-1) and underscores (for readability).
+  /// Sets `empty_int` to `true` if no digits follow the prefix.
+  ///
+  /// # Returns
+  ///
+  /// `LiteralKind::Int { base: Base::Binary, empty_int }`
   fn lex_binary(&mut self) -> LiteralKind {
     let mut has_digits = false;
     while let Some(c) = self.peek() {
@@ -49,6 +79,13 @@ impl Lexer {
     }
   }
 
+  /// Lexes an octal integer literal (`0o...`).
+  ///
+  /// Consumes octal digits (0-7). Sets `empty_int` to `true` if no digits follow the prefix.
+  ///
+  /// # Returns
+  ///
+  /// `LiteralKind::Int { base: Base::Octal, empty_int }`
   fn lex_octal(&mut self) -> LiteralKind {
     let mut has_digits = false;
     while let Some(c) = self.peek() {
@@ -65,6 +102,18 @@ impl Lexer {
     }
   }
 
+  /// Lexes a decimal integer or float literal.
+  ///
+  /// Handles:
+  /// - Integers: `42`, `1_000_000`
+  /// - Floats: `3.14`, `1e10`, `2.5E-3`
+  ///
+  /// Detects floats by presence of decimal point or exponent marker (`e`/`E`).
+  /// Sets `empty_exponent` to `true` if exponent marker exists but no digits follow.
+  ///
+  /// # Returns
+  ///
+  /// `LiteralKind::Int` or `LiteralKind::Float` with appropriate base and flags
   fn lex_decimal(&mut self) -> LiteralKind {
     let mut has_digits = false;
     let mut has_dot = false;
@@ -123,19 +172,14 @@ impl Lexer {
     }
   }
 
-  /// Floating-point literal with optional suffix
+  /// Lexes a hexadecimal integer literal (`0x...`).
   ///
-  /// # Examples
-  /// ```rust
-  /// 3.14            // basic float
-  /// 1e10            // exponential notation
-  /// 2.5E-3          // exponential with sign
-  /// 1.0f32          // with type suffix
-  /// 1e_             // empty_exponent = true (malformed)
-  /// ```
+  /// Consumes hexadecimal digits (0-9, a-f, A-F) and underscores.
+  /// Sets `empty_int` to `true` if no digits follow the prefix.
   ///
-  /// **Note**: `1f32` is lexed as `Int` with suffix "f32", not `Float`
-
+  /// # Returns
+  ///
+  /// `LiteralKind::Int { base: Base::Hexadecimal, empty_int }`
   fn lex_hexadecimal(&mut self) -> LiteralKind {
     let mut has_digits = false;
     while let Some(c) = self.peek() {
@@ -155,6 +199,21 @@ impl Lexer {
     }
   }
 
+  /// Dispatches string/character literal lexing based on prefix.
+  ///
+  /// Routes to appropriate lexer based on the current lexeme and next character:
+  /// - `"` or `'` - Regular string or character
+  /// - `b"` or `b'` - Byte string or byte character
+  /// - `c"` or `cr"` - C string or raw C string
+  /// - `r"` or `r#"` - Raw string
+  ///
+  /// # Arguments
+  ///
+  /// * `engine` - Diagnostic engine for error reporting
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Literal)` with appropriate `LiteralKind`, or `None` on error
   pub fn lex_string(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     match (self.get_current_lexeme(), self.peek()) {
       ("b", Some('"')) => self.lex_bstr(engine),
@@ -169,6 +228,18 @@ impl Lexer {
     }
   }
 
+  /// Lexes a raw C string literal (`cr#"..."#`).
+  ///
+  /// Handles hash-delimited raw C strings (e.g., `cr#"text"#`).
+  /// Emits diagnostics for unterminated strings or too many hashes (>255).
+  ///
+  /// # Arguments
+  ///
+  /// * `engine` - Diagnostic engine for error reporting
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Literal { kind: LiteralKind::RawCStr { n_hashes } })`
   fn lex_craw_str(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     self.advance();
 
@@ -282,6 +353,18 @@ impl Lexer {
     })
   }
 
+  /// Lexes a raw string literal (`r#"..."#`).
+  ///
+  /// Handles hash-delimited raw strings (e.g., `r#"text"#`, `r##"text"##`).
+  /// Supports multi-line strings and includes recovery logic for unterminated literals.
+  ///
+  /// # Arguments
+  ///
+  /// * `engine` - Diagnostic engine for error reporting
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Literal { kind: LiteralKind::RawStr { n_hashes } })`
   fn lex_raw_str(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     const MAX_HASHES: u16 = 255;
 
@@ -452,6 +535,18 @@ impl Lexer {
     })
   }
 
+  /// Lexes a C string literal (`c"..."`).
+  ///
+  /// C strings are null-terminated and used for FFI interop.
+  /// Handles escape sequences and emits diagnostics for unterminated strings.
+  ///
+  /// # Arguments
+  ///
+  /// * `engine` - Diagnostic engine for error reporting
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Literal { kind: LiteralKind::CStr { terminated } })`
   fn lex_cstr(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     self.advance();
     self.lex_string_line(true);
@@ -481,6 +576,18 @@ impl Lexer {
     })
   }
 
+  /// Lexes a byte string literal (`b"..."` or `br#"..."#`).
+  ///
+  /// Handles both regular byte strings and raw byte strings.
+  /// Validates escape sequences and emits diagnostics for errors.
+  ///
+  /// # Arguments
+  ///
+  /// * `engine` - Diagnostic engine for error reporting
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Literal)` with `LiteralKind::ByteStr` or `LiteralKind::RawByteStr`
   fn lex_bstr(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     // The 'b' prefix has already been consumed.
     if self.peek() == Some('r') {
@@ -670,6 +777,18 @@ impl Lexer {
     })
   }
 
+  /// Lexes a byte character literal (`b'...'`).
+  ///
+  /// Byte characters must be ASCII (single byte). Emits diagnostics for
+  /// unterminated literals or characters that are too long.
+  ///
+  /// # Arguments
+  ///
+  /// * `engine` - Diagnostic engine for error reporting
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Literal { kind: LiteralKind::Byte { terminated } })` or `None` on error
   fn lex_bchar(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     let mut len = 1;
     let mut is_hex = false;
@@ -743,9 +862,24 @@ impl Lexer {
     })
   }
 
+  /// Lexes a character literal (`'...'`).
+  ///
+  /// Handles Unicode characters and escape sequences:
+  /// - Simple escapes: `\n`, `\t`, `\\`, `\'`
+  /// - Hex escapes: `\x7F`
+  /// - Unicode escapes: `\u{1F980}`
+  ///
+  /// Emits diagnostics for unterminated literals or invalid escapes.
+  ///
+  /// # Arguments
+  ///
+  /// * `engine` - Diagnostic engine for error reporting
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Literal { kind: LiteralKind::Char { terminated } })`
   fn lex_char(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     let mut terminated = false;
-    let mut is_unicode = false;
 
     // Consume opening '
     self.advance();
@@ -787,10 +921,8 @@ impl Lexer {
             },
             Some('u') if self.peek_next(1) == Some('{') => {
               // Unicode escape: \u{...}
-              is_unicode = true;
               self.advance(); // consume 'u'
               self.advance(); // consume '{'
-              let mut digits = 0;
               while let Some(ch) = self.peek() {
                 if ch == '}' {
                   break;
@@ -805,7 +937,6 @@ impl Lexer {
                   break;
                 }
                 self.advance();
-                digits += 1;
               }
               if self.peek() == Some('}') {
                 self.advance(); // consume '}'
@@ -866,6 +997,18 @@ impl Lexer {
     })
   }
 
+  /// Lexes a regular string literal (`"..."`).
+  ///
+  /// Handles escape sequences and multi-line strings.
+  /// Emits diagnostics for unterminated strings.
+  ///
+  /// # Arguments
+  ///
+  /// * `engine` - Diagnostic engine for error reporting
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Literal { kind: LiteralKind::Str { terminated } })` or `None` on error
   fn lex_str(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     self.lex_string_line(true);
 
@@ -892,6 +1035,14 @@ impl Lexer {
     })
   }
 
+  /// Helper function to lex a string line until closing quote or newline.
+  ///
+  /// Handles escape sequences (`\"`, `\\`). If `single` is `true`, stops at newline;
+  /// otherwise allows multi-line strings.
+  ///
+  /// # Arguments
+  ///
+  /// * `single` - If `true`, stop at newline; if `false`, allow multi-line
   fn lex_string_line(&mut self, single: bool) {
     while let Some(c) = self.peek() {
       if c == '\n' && single {

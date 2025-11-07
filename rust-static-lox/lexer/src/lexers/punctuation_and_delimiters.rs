@@ -1,40 +1,44 @@
+//! Lexers for punctuation and delimiter tokens.
+//!
+//! Handles single-character tokens like semicolons, commas, brackets,
+//! and multi-character sequences like `::` and `..=`.
+
 use crate::{token::TokenKind, Lexer};
 use diagnostic::DiagnosticEngine;
 
 impl Lexer {
-  /// Lexes a semicolon
+  /// Lexes a semicolon (`;`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = 1;
-  ///          ^ semicolon
-  /// ```
+  /// Used to terminate statements and separate items.
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Semi)`
   pub fn lex_semicolon(&mut self) -> Option<TokenKind> {
     return Some(TokenKind::Semi);
   }
 
-  /// Lexes a comma
+  /// Lexes a comma (`,`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = 1, y = 2;
-  ///          ^ comma
-  /// ```
+  /// Used to separate items in lists, function arguments, etc.
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Comma)`
   pub fn lex_comma(&mut self) -> Option<TokenKind> {
     return Some(TokenKind::Comma);
   }
 
-  /// Lexes a dot
+  /// Lexes a dot (`.`) or dot sequences (`..`, `..=`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = 1.0;
-  ///          ^ dot
-  /// let x = 1..2;
-  ///          ^^ dot dot symbol
-  /// let x = 1.0..=2.0;
-  ///            ^^^ dot equals sign
-  /// ```
+  /// Handles:
+  /// - `.` - Member access or decimal point
+  /// - `..` - Range operator
+  /// - `..=` - Inclusive range operator
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Dot)`, `Some(TokenKind::DotDot)`, or `Some(TokenKind::DotDotEq)`
   pub fn lex_dot(&mut self) -> Option<TokenKind> {
     if self.match_char('.') {
       self.advance(); // consume the '.'
@@ -47,93 +51,96 @@ impl Lexer {
     return Some(TokenKind::Dot);
   }
 
-  /// Lexes an open parenthesis
+  /// Lexes an open parenthesis (`(`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = (1);
-  ///         ^ open parenthesis
-  /// ```
+  /// Used for grouping expressions, function calls, and tuples.
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::OpenParen)`
   pub fn lex_open_paren(&mut self) -> Option<TokenKind> {
     return Some(TokenKind::OpenParen);
   }
 
-  /// Lexes a close parenthesis
+  /// Lexes a close parenthesis (`)`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = (1);
-  ///           ^ close parenthesis
-  /// ```
+  /// Closes grouping expressions, function calls, and tuples.
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::CloseParen)`
   pub fn lex_close_paren(&mut self) -> Option<TokenKind> {
     return Some(TokenKind::CloseParen);
   }
 
-  /// Lexes an open brace
+  /// Lexes an open brace (`{`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = { 1 };
-  ///         ^ open brace
-  /// ```
+  /// Used for blocks, struct literals, and match arms.
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::OpenBrace)`
   pub fn lex_open_brace(&mut self) -> Option<TokenKind> {
     return Some(TokenKind::OpenBrace);
   }
 
-  /// Lexes a close brace
+  /// Lexes a close brace (`}`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = { 1 };
-  ///             ^ close brace
-  /// ```
+  /// Closes blocks, struct literals, and match arms.
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::CloseBrace)`
   pub fn lex_close_brace(&mut self) -> Option<TokenKind> {
     return Some(TokenKind::CloseBrace);
   }
 
-  /// Lexes an open bracket
+  /// Lexes an open bracket (`[`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = [1];
-  ///         ^ open bracket
-  /// ```
+  /// Used for array literals and indexing expressions.
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::OpenBracket)`
   pub fn lex_open_bracket(&mut self) -> Option<TokenKind> {
     return Some(TokenKind::OpenBracket);
   }
 
-  /// Lexes a close bracket
+  /// Lexes a close bracket (`]`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = [1];
-  ///           ^ close bracket
-  /// ```
+  /// Closes array literals and indexing expressions.
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::CloseBracket)`
   pub fn lex_close_bracket(&mut self) -> Option<TokenKind> {
     return Some(TokenKind::CloseBracket);
   }
 
-  /// Lexes an at symbol
+  /// Lexes an at symbol (`@`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = @1;
-  ///         ^ at symbol
-  /// ```
+  /// Used for pattern bindings and attributes.
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::At)`
   pub fn lex_at(&mut self) -> Option<TokenKind> {
     return Some(TokenKind::At);
   }
 
-  /// Lexes a pound symbol
+  /// Lexes a pound symbol (`#`) or shebang (`#!`).
   ///
-  /// # Examples
-  /// ```rust
-  /// # // comment
-  /// #!/usr/bin/env rustrc
-  /// #![allow(dead_code)]
-  /// #[cfg(test)]
-  /// #[allow(unused)]
-  /// ```
+  /// Handles:
+  /// - `#` - Attribute or pound token
+  /// - `#!` - Shebang line (only valid at file start)
+  ///
+  /// # Arguments
+  ///
+  /// * `engine` - Diagnostic engine for error reporting
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Pound)` or `Some(TokenKind::Shebang)`, or `None` for invalid shebang
   pub fn lex_pound(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     if self.match_char('!') {
       return self.lex_shebang(engine);
@@ -142,37 +149,37 @@ impl Lexer {
     Some(TokenKind::Pound)
   }
 
-  /// Lexes a tilde symbol
+  /// Lexes a tilde symbol (`~`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = ~1;
-  ///         ^ tilde symbol
-  /// ```
+  /// Used for bitwise NOT operations.
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Tilde)`
   pub fn lex_tilde(&mut self) -> Option<TokenKind> {
     return Some(TokenKind::Tilde);
   }
 
-  /// Lexes a question mark
+  /// Lexes a question mark (`?`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = ?1;
-  ///         ^ question mark
-  /// ```
+  /// Used for optional types and error propagation.
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Question)`
   pub fn lex_question(&mut self) -> Option<TokenKind> {
     return Some(TokenKind::Question);
   }
 
-  /// Lexes a colon
+  /// Lexes a colon (`:`) or path separator (`::`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = 1:2;
-  ///         ^ colon
-  /// User::new(1, 2);
-  ///     ^^ fat arrow
-  /// ```
+  /// Handles:
+  /// - `:` - Type annotations, match patterns
+  /// - `::` - Path separator (e.g., `std::io`)
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Colon)` or `Some(TokenKind::ColonColon)`
   pub fn lex_colon(&mut self) -> Option<TokenKind> {
     if self.match_char(':') {
       self.advance(); // consume the ':'
@@ -182,13 +189,13 @@ impl Lexer {
     return Some(TokenKind::Colon);
   }
 
-  /// Lexes a dollar symbol
+  /// Lexes a dollar symbol (`$`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = $1;
-  ///         ^ dollar symbol
-  /// ```
+  /// Used in macros and template contexts.
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Dollar)`
   pub fn lex_dollar(&mut self) -> Option<TokenKind> {
     return Some(TokenKind::Dollar);
   }

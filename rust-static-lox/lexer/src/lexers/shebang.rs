@@ -1,3 +1,8 @@
+//! Lexer for shebang lines.
+//!
+//! Handles shebang lines (`#!/usr/bin/env ...`) which are only valid
+//! at the very start of a source file.
+
 use crate::{token::TokenKind, Lexer};
 use diagnostic::{
   code::DiagnosticCode,
@@ -7,13 +12,18 @@ use diagnostic::{
 };
 
 impl Lexer {
-  /// Lexes a shebang line (only valid at the very start of a file)
+  /// Lexes a shebang line (`#!...`).
   ///
-  /// # Examples
-  /// ```rust
-  /// #!/usr/bin/env rustrc
-  /// #![allow(dead_code)]
-  /// ```
+  /// Shebangs are only valid at the very beginning of a file (byte offset 1).
+  /// Consumes all characters until newline or EOF.
+  ///
+  /// # Arguments
+  ///
+  /// * `engine` - Diagnostic engine for error reporting
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Shebang)` if valid, `None` otherwise
   pub fn lex_shebang(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     // Only valid at very beginning of the file
     if self.get_current_offset() != 1 {

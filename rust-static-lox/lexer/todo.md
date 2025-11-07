@@ -8,17 +8,19 @@ A comprehensive checklist for building a production-ready Rust lexer from scratc
 
 ### 1.1 Basic Lexer Structure
 - [x] Create `Lexer` struct with:
-  - [x] `input: &str` - Source code input
-  - [x] `pos: usize` - Current byte position
-  - [x] `chars: Peekable<CharIndices>` - Character iterator with lookahead
-- [x] Implement `Lexer::new(input: &str) -> Self`
-- [x] Implement `Lexer::next_token() -> Token` (main entry point)
+  - [x] `source: SourceFile` - Source file with content
+  - [x] `current: usize` - Current byte position
+  - [x] `start: usize` - Start byte position of current token
+  - [x] `line: usize` - Current line (1-indexed)
+  - [x] `column: usize` - Current column (1-indexed)
+- [x] Implement `Lexer::new(source: SourceFile) -> Self`
+- [x] Implement `Lexer::scan_tokens()` (main entry point)
 - [x] Add helper methods:
-  - [x] `peek_char() -> Option<char>` - Look at current char without consuming
-  - [x] `peek_char_nth(n: usize) -> Option<char>` - Look ahead n characters
-  - [x] `consume_char() -> Option<char>` - Advance and return current char
-  - [x] `current_pos() -> usize` - Get current byte position
-  - [x] `remaining_input() -> &str` - Get unprocessed input
+  - [x] `peek() -> Option<char>` - Look at current char without consuming
+  - [x] `peek_next(offset: usize) -> Option<char>` - Look ahead n characters
+  - [x] `advance() -> char` - Advance and return current char
+  - [x] `get_current_offset() -> usize` - Get current byte position
+  - [x] `get_current_lexeme() -> &str` - Get current token text
 
 ### 1.2 Span/Location Tracking
 - [x] Implement span calculation (start/end positions)
@@ -65,42 +67,42 @@ A comprehensive checklist for building a production-ready Rust lexer from scratc
 
 ### 2.4 Shebang
 - [x] Implement `lex_shebang() -> Option<Token>`
-- [ ] **Only valid as first token** (position 0)
-- [ ] Must start with `#!`
-- [ ] Must be followed by `[` or `/` (not `![` for inner attribute)
-- [ ] Consume until end of line
-- [ ] Return `None` if not at position 0 or invalid
+- [x] **Only valid as first token** (position 0)
+- [x] Must start with `#!`
+- [x] Must be followed by `[` or `/` (not `![` for inner attribute)
+- [x] Consume until end of line
+- [x] Return `None` if not at position 0 or invalid
 
 ---
 
 ## Phase 3: Identifiers & Keywords 🔤
 
 ### 3.1 Regular Identifiers
-- [ ] Implement `lex_ident() -> Token`
-- [ ] Validate first character:
-  - [ ] `a-z`, `A-Z`, `_`
-  - [ ] Unicode XID_Start characters
-- [ ] Validate continuation characters:
-  - [ ] `a-z`, `A-Z`, `0-9`, `_`
-  - [ ] Unicode XID_Continue characters
-- [ ] Use `char::is_xid_start()` and `char::is_xid_continue()`
-- [ ] Mark as `InvalidIdent` if contains invalid characters (like emoji)
+- [x] Implement `lex_ident() -> Token` (via `lex_keywords()`)
+- [x] Validate first character:
+  - [x] `a-z`, `A-Z`, `_`
+  - [ ] Unicode XID_Start characters (ASCII only currently)
+- [x] Validate continuation characters:
+  - [x] `a-z`, `A-Z`, `0-9`, `_`
+  - [ ] Unicode XID_Continue characters (ASCII only currently)
+- [ ] Use `char::is_xid_start()` and `char::is_xid_continue()` (currently ASCII only)
+- [x] Mark as `InvalidIdent` if contains invalid characters (like starting with digits)
 
 ### 3.2 Raw Identifiers
-- [ ] Implement `lex_raw_ident() -> Token`
-- [ ] Detect `r#` prefix
-- [ ] Parse identifier after `r#`
-- [ ] Validate that it's a valid identifier
+- [x] Implement `lex_raw_ident() -> Token` (via `lex_keywords()`)
+- [x] Detect `r#` prefix
+- [x] Parse identifier after `r#`
+- [x] Validate that it's a valid identifier
 - [ ] Special cases:
   - [ ] `r#_` is invalid (underscore alone cannot be raw ident)
   - [ ] `r#crate` has special meaning
 
 ### 3.3 Keywords (Parser-level, but document here)
-- [ ] Document that lexer emits `Ident` for keywords
-- [ ] Parser should check against keyword list:
-  - [ ] Strict keywords: `as`, `break`, `const`, `continue`, `crate`, `else`, `enum`, `extern`, `false`, `fn`, `for`, `if`, `impl`, `in`, `let`, `loop`, `match`, `mod`, `move`, `mut`, `pub`, `ref`, `return`, `self`, `Self`, `static`, `struct`, `super`, `trait`, `true`, `type`, `unsafe`, `use`, `where`, `while`
-  - [ ] Reserved keywords: `abstract`, `become`, `box`, `do`, `final`, `macro`, `override`, `priv`, `typeof`, `unsized`, `virtual`, `yield`
-  - [ ] Weak keywords (contextual): `async`, `await`, `dyn`, `try`, `union`, `'static`
+- [x] Document that lexer emits keyword tokens (not `Ident`)
+- [x] Lexer checks against keyword list:
+  - [x] Strict keywords: `as`, `break`, `const`, `continue`, `crate`, `else`, `enum`, `extern`, `false`, `fn`, `for`, `if`, `impl`, `in`, `let`, `loop`, `match`, `mod`, `move`, `mut`, `pub`, `ref`, `return`, `self`, `Self`, `static`, `struct`, `super`, `trait`, `true`, `type`, `unsafe`, `use`, `where`, `while`
+  - [x] Reserved keywords: `abstract`, `become`, `box`, `do`, `final`, `macro`, `override`, `priv`, `typeof`, `unsized`, `virtual`, `yield`
+  - [x] Weak keywords (contextual): `async`, `await`, `dyn`, `try`, `union`
 
 ---
 
@@ -132,128 +134,127 @@ A comprehensive checklist for building a production-ready Rust lexer from scratc
 ## Phase 5: Numeric Literals 🔢
 
 ### 5.1 Integer Literals
-- [ ] Implement `lex_number() -> Token`
-- [ ] Detect base prefix:
-  - [ ] `0b` → Binary
-  - [ ] `0o` → Octal
-  - [ ] `0x` → Hexadecimal
-  - [ ] None → Decimal
-- [ ] Parse digits according to base:
-  - [ ] Binary: `0-1`
-  - [ ] Octal: `0-7`
-  - [ ] Decimal: `0-9`
-  - [ ] Hex: `0-9`, `a-f`, `A-F`
-- [ ] Handle digit separators: `1_000_000`
-- [ ] Set `empty_int: true` if no digits after prefix (e.g., `0x`)
-- [ ] Parse optional suffix: `u8`, `i32`, `u64`, `i128`, `usize`, `isize`
+- [x] Implement `lex_number() -> Token`
+- [x] Detect base prefix:
+  - [x] `0b` → Binary
+  - [x] `0o` → Octal
+  - [x] `0x` → Hexadecimal
+  - [x] None → Decimal
+- [x] Parse digits according to base:
+  - [x] Binary: `0-1`
+  - [x] Octal: `0-7`
+  - [x] Decimal: `0-9`
+  - [x] Hex: `0-9`, `a-f`, `A-F`
+- [x] Handle digit separators: `1_000_000`
+- [x] Set `empty_int: true` if no digits after prefix (e.g., `0x`)
+- [ ] Parse optional suffix: `u8`, `i32`, `u64`, `i128`, `usize`, `isize` (suffix_start tracked but not parsed)
 
 ### 5.2 Float Literals
-- [ ] Detect float when number contains:
-  - [ ] Decimal point: `3.14`
-  - [ ] Exponent: `1e10`, `2E-5`
-- [ ] Parse decimal point and fractional part
-- [ ] Parse exponent:
-  - [ ] `e` or `E` followed by optional `+`/`-`
-  - [ ] Then digits
-  - [ ] Set `empty_exponent: true` if no digits after `e`
-- [ ] Parse optional suffix: `f32`, `f64`
-- [ ] **Special case**: `1f32` is int with suffix, not float
-- [ ] Hexadecimal floats (rare): `0x1.8p3`
+- [x] Detect float when number contains:
+  - [x] Decimal point: `3.14`
+  - [x] Exponent: `1e10`, `2E-5`
+- [x] Parse decimal point and fractional part
+- [x] Parse exponent:
+  - [x] `e` or `E` followed by optional `+`/`-`
+  - [x] Then digits
+  - [x] Set `empty_exponent: true` if no digits after `e`
+- [ ] Parse optional suffix: `f32`, `f64` (suffix_start tracked but not parsed)
+- [x] **Special case**: `1f32` is int with suffix, not float (handled correctly)
+- [ ] Hexadecimal floats (rare): `0x1.8p3` (not implemented)
 
 ### 5.3 Edge Cases
-- [ ] `123` → Int (decimal)
-- [ ] `0x` → Int with `empty_int: true`
-- [ ] `1.` → Float (with empty fractional part)
-- [ ] `1e` → Float with `empty_exponent: true`
-- [ ] `1.foo()` → Int `1`, then `.`, then method call (not a float!)
-- [ ] `1.2.3` → Float `1.2`, then `.`, then `3`
+- [x] `123` → Int (decimal)
+- [x] `0x` → Int with `empty_int: true`
+- [x] `1.` → Float (with empty fractional part)
+- [x] `1e` → Float with `empty_exponent: true`
+- [ ] `1.foo()` → Int `1`, then `.`, then method call (not a float!) (needs parser coordination)
+- [ ] `1.2.3` → Float `1.2`, then `.`, then `3` (needs parser coordination)
 
 ---
 
 ## Phase 6: Character & Byte Literals 📝
 
 ### 6.1 Character Literals
-- [ ] Implement `lex_char() -> Token`
-- [ ] Detect opening `'`
-- [ ] Parse content:
-  - [ ] Regular character: `'a'`
-  - [ ] Escape sequences (see 6.3)
-  - [ ] Unicode escapes: `'\u{1F980}'`
-- [ ] Detect closing `'`
-- [ ] Set `terminated: false` if EOF or newline before closing
-- [ ] Validate:
-  - [ ] Not empty: `''` is invalid
-  - [ ] Single character (after escaping)
+- [x] Implement `lex_char() -> Token`
+- [x] Detect opening `'`
+- [x] Parse content:
+  - [x] Regular character: `'a'`
+  - [x] Escape sequences (see 6.3)
+  - [x] Unicode escapes: `'\u{1F980}'`
+- [x] Detect closing `'`
+- [x] Set `terminated: false` if EOF or newline before closing
+- [x] Validate:
+  - [x] Not empty: `''` is invalid (handled by terminated flag)
+  - [ ] Single character (after escaping) (validation in parser)
 
 ### 6.2 Byte Literals
-- [ ] Implement `lex_byte() -> Token`
-- [ ] Detect `b'` prefix
-- [ ] Parse ASCII-only content
-- [ ] Same escape rules as char, but restricted to ASCII
-- [ ] Validate byte is in range 0-127 (after escaping)
+- [x] Implement `lex_byte() -> Token` (via `lex_bchar()`)
+- [x] Detect `b'` prefix
+- [x] Parse ASCII-only content
+- [x] Same escape rules as char, but restricted to ASCII
+- [x] Validate byte is in range 0-127 (after escaping)
 
 ### 6.3 Escape Sequences
-- [ ] Implement `parse_escape_sequence() -> Result<char, Error>`
-- [ ] Simple escapes:
-  - [ ] `\n` → newline
-  - [ ] `\r` → carriage return
-  - [ ] `\t` → tab
-  - [ ] `\\` → backslash
-  - [ ] `\'` → single quote
-  - [ ] `\"` → double quote
-  - [ ] `\0` → null
-- [ ] Byte escapes: `\xHH` (2 hex digits)
-- [ ] Unicode escapes: `\u{HHHHHH}` (1-6 hex digits)
-- [ ] Validate Unicode scalar values (not surrogate pairs)
+- [x] Implement escape sequence parsing (inline in lexers)
+- [x] Simple escapes:
+  - [x] `\n` → newline
+  - [x] `\r` → carriage return
+  - [x] `\t` → tab
+  - [x] `\\` → backslash
+  - [x] `\'` → single quote
+  - [x] `\"` → double quote
+  - [x] `\0` → null
+- [x] Byte escapes: `\xHH` (2 hex digits)
+- [x] Unicode escapes: `\u{HHHHHH}` (1-6 hex digits)
+- [x] Validate Unicode scalar values (not surrogate pairs)
 
 ---
 
 ## Phase 7: String Literals 📜
 
 ### 7.1 Regular Strings
-- [ ] Implement `lex_string() -> Token`
-- [ ] Detect opening `"`
-- [ ] Parse content with escape sequences
-- [ ] Allow multi-line strings
-- [ ] Detect closing `"`
-- [ ] Set `terminated: false` if EOF before closing
+- [x] Implement `lex_string() -> Token` (via `lex_str()`)
+- [x] Detect opening `"`
+- [x] Parse content with escape sequences
+- [x] Allow multi-line strings
+- [x] Detect closing `"`
+- [x] Set `terminated: false` if EOF before closing
 
 ### 7.2 Raw Strings
-- [ ] Implement `lex_raw_string() -> Token`
-- [ ] Detect `r` followed by zero or more `#`, then `"`
-- [ ] Count opening `#` characters → `n_hashes`
-- [ ] Validate no other characters between `r` and `#*"`
-  - [ ] Set `err: InvalidStarter` if found
-- [ ] Parse content (no escapes processed)
-- [ ] Find closing: `"` followed by same number of `#`
-- [ ] Set `err: NoTerminator` if:
-  - [ ] EOF reached
-  - [ ] Different number of closing `#`
-- [ ] Set `err: TooManyDelimiters` if > 65535 `#`
+- [x] Implement `lex_raw_string() -> Token` (via `lex_raw_str()`)
+- [x] Detect `r` followed by zero or more `#`, then `"`
+- [x] Count opening `#` characters → `n_hashes`
+- [x] Validate no other characters between `r` and `#*"` (emits diagnostic)
+- [x] Parse content (no escapes processed)
+- [x] Find closing: `"` followed by same number of `#`
+- [x] Set `terminated: false` if:
+  - [x] EOF reached
+  - [x] Different number of closing `#`
+- [x] Set `n_hashes` capped at 255 if > 255 (emits diagnostic)
 
 ### 7.3 Byte Strings
-- [ ] Implement `lex_byte_string() -> Token`
-- [ ] Detect `b"` prefix
-- [ ] Same as regular strings but ASCII-only
-- [ ] Validate all bytes are 0-127 (after escaping)
+- [x] Implement `lex_byte_string() -> Token` (via `lex_bstr()`)
+- [x] Detect `b"` prefix
+- [x] Same as regular strings but ASCII-only
+- [x] Validate all bytes are 0-127 (after escaping)
 
 ### 7.4 Raw Byte Strings
-- [ ] Implement `lex_raw_byte_string() -> Token`
-- [ ] Detect `br` prefix
-- [ ] Combine raw string and byte string rules
-- [ ] No escapes, ASCII-only content
+- [x] Implement `lex_raw_byte_string() -> Token` (via `lex_bstr()`)
+- [x] Detect `br` prefix
+- [x] Combine raw string and byte string rules
+- [x] No escapes, ASCII-only content
 
 ### 7.5 C Strings (Rust 1.77+)
-- [ ] Implement `lex_c_string() -> Token`
-- [ ] Detect `c"` prefix
-- [ ] Same as regular strings
-- [ ] Automatically null-terminated
-- [ ] Cannot contain interior `\0` (except as last char)
+- [x] Implement `lex_c_string() -> Token` (via `lex_cstr()`)
+- [x] Detect `c"` prefix
+- [x] Same as regular strings
+- [x] Automatically null-terminated (semantic, not lexer concern)
+- [ ] Cannot contain interior `\0` (except as last char) (validation in parser)
 
 ### 7.6 Raw C Strings
-- [ ] Implement `lex_raw_c_string() -> Token`
-- [ ] Detect `cr` prefix
-- [ ] Combine raw string and C string rules
+- [x] Implement `lex_raw_c_string() -> Token` (via `lex_craw_str()`)
+- [x] Detect `cr` prefix
+- [x] Combine raw string and C string rules
 
 ---
 
@@ -261,40 +262,44 @@ A comprehensive checklist for building a production-ready Rust lexer from scratc
 
 ### 8.1 Single-Character Tokens
 Implement individual lexing functions for each:
-- [ ] `;` → `Semi`
-- [ ] `,` → `Comma`
-- [ ] `.` → `Dot` (check not start of `..` or number)
-- [ ] `(` → `OpenParen`
-- [ ] `)` → `CloseParen`
-- [ ] `{` → `OpenBrace`
-- [ ] `}` → `CloseBrace`
-- [ ] `[` → `OpenBracket`
-- [ ] `]` → `CloseBracket`
-- [ ] `@` → `At`
-- [ ] `#` → `Pound`
-- [ ] `~` → `Tilde`
-- [ ] `?` → `Question`
-- [ ] `:` → `Colon`
-- [ ] `$` → `Dollar`
-- [ ] `=` → `Eq`
-- [ ] `!` → `Bang`
-- [ ] `<` → `Lt`
-- [ ] `>` → `Gt`
-- [ ] `-` → `Minus`
-- [ ] `&` → `And`
-- [ ] `|` → `Or`
-- [ ] `+` → `Plus`
-- [ ] `*` → `Star`
-- [ ] `/` → `Slash`
-- [ ] `^` → `Caret`
-- [ ] `%` → `Percent`
+- [x] `;` → `Semi`
+- [x] `,` → `Comma`
+- [x] `.` → `Dot` (check not start of `..` or number)
+- [x] `(` → `OpenParen`
+- [x] `)` → `CloseParen`
+- [x] `{` → `OpenBrace`
+- [x] `}` → `CloseBrace`
+- [x] `[` → `OpenBracket`
+- [x] `]` → `CloseBracket`
+- [x] `@` → `At`
+- [x] `#` → `Pound`
+- [x] `~` → `Tilde`
+- [x] `?` → `Question`
+- [x] `:` → `Colon`
+- [x] `$` → `Dollar`
+- [x] `=` → `Eq` (also handles `==`, `=>`)
+- [x] `!` → `Bang` (also handles `!=`)
+- [x] `<` → `Lt` (also handles `<=`, `<<`, `<<=`)
+- [x] `>` → `Gt` (also handles `>=`, `>>`, `>>=`)
+- [x] `-` → `Minus` (also handles `-=`, `->`)
+- [x] `&` → `And` (also handles `&&`, `&=`)
+- [x] `|` → `Or` (also handles `||`, `|=`)
+- [x] `+` → `Plus` (also handles `+=`)
+- [x] `*` → `Star` (also handles `*=`)
+- [x] `/` → `Slash` (also handles `/=`, comments)
+- [x] `^` → `Caret` (also handles `^=`)
+- [x] `%` → `Percent` (also handles `%=`)
+- [x] `::` → `ColonColon`
+- [x] `..` → `DotDot`
+- [x] `..=` → `DotDotEq`
+- [ ] `...` → `DotDotDot` (deprecated, not implemented)
 
 ### 8.2 Disambiguation
-- [ ] `/` → Check if followed by `/` (line comment) or `*` (block comment)
-- [ ] `.` → Check if followed by digit (float literal)
-- [ ] `'` → Check if lifetime or char literal
-- [ ] `#` → Check if `#!` at position 0 (shebang)
-- [ ] Letters → Check if prefix for literal (`b`, `r`, `br`, `c`, `cr`)
+- [x] `/` → Check if followed by `/` (line comment) or `*` (block comment)
+- [ ] `.` → Check if followed by digit (float literal) (handled in number lexer)
+- [ ] `'` → Check if lifetime or char literal (currently only char literal)
+- [x] `#` → Check if `#!` at position 0 (shebang)
+- [x] Letters → Check if prefix for literal (`b`, `r`, `br`, `c`, `cr`)
 
 ---
 
@@ -323,51 +328,55 @@ Implement individual lexing functions for each:
 ## Phase 10: Main Lexer Loop 🔄
 
 ### 10.1 Token Dispatch
-- [ ] Implement main `next_token()` logic:
+- [x] Implement main `scan_tokens()` logic:
   ```rust
-  match self.peek_char() {
-      None => Eof token,
-      Some(c) => dispatch based on c
+  while !is_eof() {
+      let c = advance();
+      let token = lex_tokens(c, engine);
+      if let Some(token) = token {
+          emit(token);
+      }
   }
+  emit(Eof);
   ```
 
 ### 10.2 Character-based Dispatch
-- [ ] Whitespace chars → `lex_whitespace()`
-- [ ] `/` → Check for comments or `Slash`
-- [ ] `#` → Check for shebang or `Pound`
-- [ ] `'` → Check for lifetime or char literal
-- [ ] `"` → `lex_string()`
-- [ ] `a-z`, `A-Z`, `_` → `lex_ident()` or check prefix
-- [ ] `0-9` → `lex_number()`
-- [ ] Operators → Single-char tokens
-- [ ] Everything else → `Unknown`
+- [x] Whitespace chars → `lex_whitespace()`
+- [x] `/` → Check for comments or `Slash`
+- [x] `#` → Check for shebang or `Pound`
+- [x] `'` → Check for char literal (lifetime not yet implemented)
+- [x] `"` → `lex_string()`
+- [x] `a-z`, `A-Z`, `_` → `lex_keywords()` or check prefix
+- [x] `0-9` → `lex_number()`
+- [x] Operators → Single-char tokens
+- [ ] Everything else → `Unknown` (currently returns None with diagnostic)
 
 ### 10.3 Prefix Detection
-- [ ] After lexing potential identifier, check next char:
-  - [ ] `"` → Could be string prefix
-  - [ ] `'` → Could be byte literal prefix
-  - [ ] `#` → Could be raw string prefix
-- [ ] Backtrack if needed or use lookahead
+- [x] After lexing potential identifier, check next char:
+  - [x] `"` → Could be string prefix (handled in `lex_string()`)
+  - [x] `'` → Could be byte literal prefix (handled in `lex_string()`)
+  - [x] `#` → Could be raw string prefix (handled in `lex_string()`)
+- [x] Uses lookahead via `peek()` and `peek_next()`
 
 ---
 
 ## Phase 11: Error Handling & Validation ⚠️
 
 ### 11.1 Malformed Literals
-- [ ] Unterminated strings/chars: set `terminated: false`
-- [ ] Invalid escape sequences: document as lexer concern or parser?
-- [ ] Empty numbers after prefix: set `empty_int: true`
-- [ ] Invalid raw string delimiters: set `RawStrError`
+- [x] Unterminated strings/chars: set `terminated: false`
+- [x] Invalid escape sequences: emits diagnostics
+- [x] Empty numbers after prefix: set `empty_int: true`
+- [x] Invalid raw string delimiters: emits diagnostics, caps n_hashes
 
 ### 11.2 Invalid Characters
-- [ ] Return `Unknown` token for unrecognized characters
-- [ ] Unicode characters not valid in identifiers → `InvalidIdent`
-- [ ] Non-ASCII in byte literals → validation error
+- [ ] Return `Unknown` token for unrecognized characters (currently returns None)
+- [x] Unicode characters not valid in identifiers → `InvalidIdent` (for starting with digits)
+- [x] Non-ASCII in byte literals → validation error (emits diagnostic)
 
 ### 11.3 Contextual Validation
-- [ ] Shebang only at position 0
-- [ ] Raw identifiers cannot be `_` alone
-- [ ] Lifetimes cannot start with numbers (but lex anyway, mark invalid)
+- [x] Shebang only at position 0
+- [ ] Raw identifiers cannot be `_` alone (not validated)
+- [ ] Lifetimes cannot start with numbers (not implemented)
 
 ---
 
@@ -421,16 +430,18 @@ Implement individual lexing functions for each:
 ## Phase 14: API & Documentation 📚
 
 ### 14.1 Public API
-- [ ] Clean, ergonomic API for consumers:
+- [x] Clean, ergonomic API for consumers:
   ```rust
-  let tokens: Vec<Token> = Lexer::new(source).collect();
+  let mut lexer = Lexer::new(source);
+  lexer.scan_tokens(&mut engine);
+  let tokens = lexer.tokens;
   ```
-- [ ] Iterator implementation
-- [ ] Error recovery mode (continue after errors)
+- [ ] Iterator implementation (not implemented)
+- [x] Error recovery mode (continue after errors via diagnostics)
 
 ### 14.2 Documentation
-- [ ] Document all public types and methods
-- [ ] Add examples to struct/function docs
+- [x] Document all public types and methods
+- [x] Add examples to struct/function docs
 - [ ] Create comprehensive README
 - [ ] Document differences from rustc_lexer (if any)
 

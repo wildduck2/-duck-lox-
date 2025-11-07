@@ -1,10 +1,24 @@
+//! Lexers for comments.
+//!
+//! Handles both line comments (`//`) and block comments (`/* */`),
+//! including documentation comments (`///`, `//!`, `/** */`, `/*! */`).
+
 use crate::{
   token::{DocStyle, TokenKind},
   Lexer,
 };
 
 impl Lexer {
-  // Consumes a single-line `//` comment and returns its token.
+  /// Lexes a line comment (`//` or `///` or `//!`).
+  ///
+  /// Consumes all characters until a newline or EOF. Detects documentation
+  /// comment styles:
+  /// - `///` - Outer documentation comment
+  /// - `//!` - Inner documentation comment
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::LineComment { doc_style })`
   pub fn lex_line_comment(&mut self) -> Option<TokenKind> {
     self.advance(); // consume the '/'
 
@@ -27,7 +41,19 @@ impl Lexer {
     Some(TokenKind::LineComment { doc_style })
   }
 
-  /// Consumes a block `/* ... */` comment and returns its token.
+  /// Lexes a block comment (`/* */` or `/** */` or `/*! */`).
+  ///
+  /// Handles nested comments and detects documentation comment styles:
+  /// - `/** */` - Outer documentation comment
+  /// - `/*! */` - Inner documentation comment
+  ///
+  /// Tracks nesting depth to correctly handle nested block comments.
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::BlockComment { doc_style, terminated })`
+  ///
+  /// The `terminated` field is `false` if the closing `*/` is missing.
   pub fn lex_multi_line_comment(&mut self) -> Option<TokenKind> {
     self.advance(); // consume '/'
     self.advance(); // consume '*'

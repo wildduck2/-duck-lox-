@@ -1,17 +1,20 @@
+//! Lexers for bitwise and logical operators.
+//!
+//! Handles `&`, `|`, `^` and their compound assignment and logical variants.
+
 use crate::{token::TokenKind, Lexer};
 
 impl Lexer {
-  /// Lexes an ampersand symbol
+  /// Lexes an ampersand (`&`), logical AND (`&&`), or compound assignment (`&=`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = 1 & 2;
-  ///           ^ ampersand symbol
-  /// let x = 1 && 2;
-  ///           ^^ ampersand and ampersand symbol
-  /// let x &= 1;
-  ///       ^^ ampersand equals sign
-  /// ```
+  /// Handles:
+  /// - `&` - Bitwise AND or borrow
+  /// - `&&` - Logical AND
+  /// - `&=` - Bitwise AND assignment
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::And)`, `Some(TokenKind::AndAnd)`, or `Some(TokenKind::AndEq)`
   pub fn lex_and(&mut self) -> Option<TokenKind> {
     if self.match_char('&') {
       self.advance(); // consume the '='
@@ -24,17 +27,16 @@ impl Lexer {
     return Some(TokenKind::And);
   }
 
-  /// Lexes a pipe symbol
+  /// Lexes a pipe (`|`), logical OR (`||`), or compound assignment (`|=`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = 1 | 2;
-  ///           ^ pipe symbol
-  /// let x = 1 || 2;
-  ///           ^^ pipe and pipe symbol
-  /// let x |= 1;
-  ///       ^^ pipe equals sign
-  /// ```
+  /// Handles:
+  /// - `|` - Bitwise OR or closure parameter
+  /// - `||` - Logical OR
+  /// - `|=` - Bitwise OR assignment
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Or)`, `Some(TokenKind::OrOr)`, or `Some(TokenKind::OrEq)`
   pub fn lex_or(&mut self) -> Option<TokenKind> {
     if self.match_char('|') {
       self.advance(); // consume the '='
@@ -47,15 +49,13 @@ impl Lexer {
     return Some(TokenKind::Or);
   }
 
-  /// Lexes a caret symbol
+  /// Lexes a caret (`^`) or compound assignment (`^=`).
   ///
-  /// # Examples
-  /// ```rust
-  /// let x = 1 ^ 2;
-  ///           ^ caret symbol
-  /// let x ^= 2;
-  ///       ^^ caret equals sign
-  /// ```
+  /// Used for bitwise XOR operations.
+  ///
+  /// # Returns
+  ///
+  /// `Some(TokenKind::Caret)` or `Some(TokenKind::CaretEq)`
   pub fn lex_caret(&mut self) -> Option<TokenKind> {
     if self.match_char('=') {
       self.advance(); // consume the '='

@@ -1,3 +1,18 @@
+//! Lexer module for tokenizing source code.
+//!
+//! The lexer converts raw source text into a stream of tokens, handling:
+//! - Keywords, identifiers, and literals
+//! - Operators and punctuation
+//! - Comments and whitespace
+//! - String and character literals with escape sequences
+//! - Numeric literals in various bases (decimal, binary, octal, hexadecimal)
+//!
+//! # Architecture
+//!
+//! The lexer uses a cursor-based approach with byte offsets for accurate
+//! UTF-8 handling. It maintains state for the current position (`current`),
+//! token start position (`start`), and line/column tracking.
+
 use diagnostic::{DiagnosticEngine, SourceFile, Span};
 
 use crate::token::{Token, TokenKind};
@@ -6,6 +21,9 @@ mod lexers;
 mod scanner_utils;
 pub mod token;
 
+/// Lexer for converting source code into tokens.
+///
+/// Maintains position tracking and emits tokens with source spans.
 #[derive(Debug)]
 pub struct Lexer {
   pub source: SourceFile,
@@ -17,7 +35,21 @@ pub struct Lexer {
 }
 
 impl Lexer {
-  /// Creates a lexer over the provided source text.
+  /// Creates a new lexer for the given source file.
+  ///
+  /// Initializes all position counters to zero. The lexer is ready
+  /// to tokenize the source after construction.
+  ///
+  /// # Arguments
+  ///
+  /// * `source` - The source file to tokenize
+  ///
+  /// # Examples
+  ///
+  /// ```rust
+  /// let source = SourceFile::new("main.rs".to_string(), "fn main() {}".to_string());
+  /// let mut lexer = Lexer::new(source);
+  /// ```
   pub fn new(source: SourceFile) -> Self {
     Self {
       source,
@@ -29,7 +61,23 @@ impl Lexer {
     }
   }
 
-  /// Tokenizes the entire source, emitting tokens and diagnostics along the way.
+  /// Tokenizes the entire source file, producing a stream of tokens.
+  ///
+  /// Processes characters sequentially, delegating to specialized lexer
+  /// functions based on the current character. Emits diagnostics for
+  /// invalid characters or malformed tokens.
+  ///
+  /// # Arguments
+  ///
+  /// * `engine` - Diagnostic engine for reporting errors and warnings
+  ///
+  /// # Examples
+  ///
+  /// ```rust
+  /// let mut engine = DiagnosticEngine::new();
+  /// lexer.scan_tokens(&mut engine);
+  /// // lexer.tokens now contains all tokens from the source
+  /// ```
   pub fn scan_tokens(&mut self, engine: &mut DiagnosticEngine) {
     while !self.is_eof() {
       self.start = self.current;
@@ -45,7 +93,26 @@ impl Lexer {
     self.emit(TokenKind::Eof);
   }
 
-  /// Check is the next character matches the target character.
+  /// Conditionally consumes the next character if it matches the expected character.
+  ///
+  /// This is a lookahead operation: if the next character matches, it is consumed
+  /// and `true` is returned. Otherwise, the cursor is unchanged and `false` is returned.
+  ///
+  /// # Arguments
+  ///
+  /// * `match_char` - The character to match against
+  ///
+  /// # Returns
+  ///
+  /// `true` if the character matched and was consumed, `false` otherwise
+  ///
+  /// # Examples
+  ///
+  /// ```rust
+  /// // If source is "==", after match_char('='):
+  /// // - First call: matches '=', consumes it, returns true
+  /// // - Second call: matches '=', consumes it, returns true
+  /// ```
   fn match_char(&mut self, match_char: char) -> bool {
     if let Some(char) = self.peek() {
       if char == match_char {
@@ -56,7 +123,23 @@ impl Lexer {
     return false;
   }
 
-  /// Pushes a token covering the span between `start` and `current`.
+  /// Emits a token with a span covering the text from `start` to `current`.
+  ///
+  /// Trivia tokens (whitespace, comments) are filtered out and not added
+  /// to the token stream. After emitting, `start` is updated to `current`.
+  ///
+  /// # Arguments
+  ///
+  /// * `kind` - The kind of token to emit
+  ///
+  /// # Examples
+  ///
+  /// ```rust
+  /// // After lexing "fn", start=0, current=2:
+  /// lexer.emit(TokenKind::KwFn);
+  /// // Token added with span (0, 2)
+  /// // start is now 2
+  /// ```
   fn emit(&mut self, kind: TokenKind) {
     // ignore comments
     if kind.is_trivia() {
@@ -77,7 +160,22 @@ impl Lexer {
     self.start = self.current;
   }
 
-  /// Returns the next character without consuming it, or `None` at end of input.
+  /// Returns the next character without consuming it.
+  ///
+  /// This is a pure lookahead operation that does not advance the cursor.
+  /// Returns `None` if at end of file.
+  ///
+  /// # Returns
+  ///
+  /// `Some(char)` if a character is available, `None` at EOF
+  ///
+  /// # Examples
+  ///
+  /// ```rust
+  /// // If source is "abc" and current=0:
+  /// lexer.peek() // Some('a')
+  /// lexer.current // still 0
+  /// ```
   fn peek(&self) -> Option<char> {
     if self.is_eof() {
       return None;
@@ -91,7 +189,27 @@ impl Lexer {
     Some(char)
   }
 
-  /// Returns the character one position ahead of the cursor without advancing it.
+  /// Returns a character at a specified offset from the current position.
+  ///
+  /// Useful for multi-character lookahead (e.g., checking if `//` starts a comment).
+  /// Does not advance the cursor.
+  ///
+  /// # Arguments
+  ///
+  /// * `offset` - Byte offset from current position (0 = current char, 1 = next char)
+  ///
+  /// # Returns
+  ///
+  /// `Some(char)` if available at that offset, `None` otherwise
+  ///
+  /// # Examples
+  ///
+  /// ```rust
+  /// // If source is "abc" and current=0:
+  /// lexer.peek_next(0) // Some('a')
+  /// lexer.peek_next(1) // Some('b')
+  /// lexer.peek_next(2) // Some('c')
+  /// ```
   fn peek_next(&self, offset: usize) -> Option<char> {
     if self.is_eof() {
       return None;
@@ -102,7 +220,22 @@ impl Lexer {
       .next()
   }
 
-  /// Consumes the next character and updates the byte offset and column counters.
+  /// Advances the cursor by one character and returns it.
+  ///
+  /// Handles UTF-8 correctly by computing the byte offset of the next character.
+  /// Updates `current` (byte offset) and `column` (character column) accordingly.
+  ///
+  /// # Returns
+  ///
+  /// The consumed character, or `'\0'` if at EOF
+  ///
+  /// # Examples
+  ///
+  /// ```rust
+  /// // If source is "abc" and current=0:
+  /// lexer.advance() // 'a', current=1, column=1
+  /// lexer.advance() // 'b', current=2, column=2
+  /// ```
   fn advance(&mut self) -> char {
     if self.is_eof() {
       return '\0';
@@ -128,21 +261,62 @@ impl Lexer {
     ch
   }
 
-  /// Returns the current lexeme slice spanning the active token.
+  /// Returns the text slice for the current token being lexed.
+  ///
+  /// The slice spans from `start` (inclusive) to `current` (exclusive).
+  /// Returns an empty string if the range is invalid.
+  ///
+  /// # Returns
+  ///
+  /// A string slice of the current token's text
+  ///
+  /// # Examples
+  ///
+  /// ```rust
+  /// // After lexing "fn" (start=0, current=2):
+  /// lexer.get_current_lexeme() // "fn"
+  /// ```
   fn get_current_lexeme(&self) -> &str {
     self.source.src.get(self.start..self.current).unwrap_or("")
   }
 
+  /// Returns the current byte offset in the source.
+  ///
+  /// Useful for diagnostics and span calculations.
+  ///
+  /// # Returns
+  ///
+  /// The current byte offset (0-indexed)
   fn get_current_offset(&self) -> usize {
     self.current
   }
 
-  /// Returns `true` when the cursor has reached the end of the source text.
+  /// Checks if the cursor has reached the end of the source file.
+  ///
+  /// # Returns
+  ///
+  /// `true` if `current >= source.len()`, `false` otherwise
   fn is_eof(&self) -> bool {
     self.current >= self.source.src.len()
   }
 
-  /// Returns the source line corresponding to `line_num`, or an empty string if it is out of range.
+  /// Retrieves a specific line from the source file.
+  ///
+  /// # Arguments
+  ///
+  /// * `line_num` - Zero-indexed line number
+  ///
+  /// # Returns
+  ///
+  /// The line content as a `String`, or empty string if out of range
+  ///
+  /// # Examples
+  ///
+  /// ```rust
+  /// // For source "line1\nline2\nline3":
+  /// lexer.get_line(0) // "line1"
+  /// lexer.get_line(1) // "line2"
+  /// ```
   pub fn get_line(&self, line_num: usize) -> String {
     self
       .source
