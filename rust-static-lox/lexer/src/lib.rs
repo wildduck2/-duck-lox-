@@ -63,7 +63,10 @@ impl Lexer {
       return;
     }
 
-    // println!("{:?}", self.source[self.start..self.current].to_string());
+    println!(
+      "{:?}",
+      self.source.src[self.start..self.current].to_string()
+    );
     self.tokens.push(Token {
       kind,
       span: Span {

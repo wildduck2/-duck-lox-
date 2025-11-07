@@ -8,6 +8,7 @@ pub enum DiagnosticError {
   InvalidShebang,
   InvalidCharacter,
   UnterminatedString,
+  TooManyRawStrHashes,
 }
 
 impl DiagnosticError {
@@ -18,6 +19,7 @@ impl DiagnosticError {
       Self::InvalidShebang => "E0003",
       Self::InvalidCharacter => "E0004",
       Self::UnterminatedString => "E0005",
+      Self::TooManyRawStrHashes => "E0006",
     }
   }
 

@@ -2,11 +2,11 @@ use diagnostic::{
   code::DiagnosticCode,
   diagnostic::{Diagnostic, LabelStyle},
   types::error::DiagnosticError,
-  DiagnosticEngine, Span,
+  DiagnosticEngine,
 };
 
 use crate::{
-  token::{Base, LiteralKind, TokenKind},
+  token::{Base, LiteralKind, RawStrError, TokenKind},
   Lexer,
 };
 
@@ -156,56 +156,200 @@ impl Lexer {
   }
 
   pub fn lex_string(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
-    if self.get_current_lexeme() == "b" && self.peek() == Some('\'') {
-      return self.lex_bchar(engine);
-    } else if self.get_current_lexeme() == "b" && self.peek() == Some('"') {
-      return self.lex_bstr(engine);
-    } else if self.get_current_lexeme() == "c" && self.peek() == Some('"') {
-      return self.lex_cstr(engine);
-    // } else if self.get_current_lexeme() == "r" && self.peek() == Some('"') {
-    //   return self.lex_raw_str(engine);
-    } else if self.get_current_lexeme() == "\'" {
-      return self.lex_char(engine);
-    } else if self.get_current_lexeme() == "\"" {
-      return self.lex_str(engine);
+    match (self.get_current_lexeme(), self.peek()) {
+      ("b", Some('"')) => self.lex_bstr(engine),
+      ("c", Some('"')) => self.lex_cstr(engine),
+      ("r", Some('"')) | ("r", Some('#')) => self.lex_raw_str(engine),
+      ("\"", _) => self.lex_str(engine),
+      ("b", Some('\'')) => self.lex_bchar(engine),
+      ("'", _) => self.lex_char(engine),
+      _ => Some(TokenKind::Literal {
+        kind: LiteralKind::Str { terminated: false },
+        suffix_start: 0,
+      }),
+    }
+  }
+
+  fn lex_raw_str(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
+    const MAX_HASHES: u16 = 255;
+
+    // Count the number of '#' characters after 'r'
+    let mut n_hashes: u16 = 0;
+    while self.peek() == Some('#') {
+      n_hashes = n_hashes.saturating_add(1);
+      self.advance();
     }
 
-    Some(TokenKind::Literal {
-      kind: LiteralKind::Str { terminated: false },
-      suffix_start: 0,
-    })
-  }
-  //
-  //   /// C string literal (null-terminated, type `&CStr`)
-  //   ///
-  //   /// Added in Rust 1.77 for FFI interop.
-  //   ///
-  //   /// # Examples
-  //   /// ```rust
-  //   /// c"hello"        // becomes "hello\0"
-  //   /// c"with\0null"   // explicit null allowed
-  //   /// c"unterminated  // terminated = false (malformed)
-  //   /// ```
-  //   CStr {
-  //     /// False if the closing `"` is missing
-  //     terminated: bool,
-  //   },
+    // Optional: parity with Rust (cap hashes)
+    if n_hashes > MAX_HASHES {
+      let diag = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::TooManyRawStrHashes),
+        format!(
+          "Raw string uses {} hashes; maximum is {}.",
+          n_hashes, MAX_HASHES
+        ),
+        self.source.path.to_string(),
+      )
+      .with_label(
+        diagnostic::Span::new(self.start, self.current),
+        Some("Too many '#' characters here".to_string()),
+        LabelStyle::Primary,
+      );
+      engine.add(diag);
+      n_hashes = MAX_HASHES;
+    }
 
-  fn lex_cstr(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
+    // Expect opening quote `"`
+    if self.peek() != Some('"') {
+      let diag = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::UnterminatedString),
+        format!(
+          "Expected '\"' after 'r{}' in raw string literal",
+          "#".repeat(n_hashes as usize)
+        ),
+        self.source.path.to_string(),
+      )
+      .with_label(
+        diagnostic::Span::new(self.start, self.current),
+        Some("Expected opening quote here".to_string()),
+        LabelStyle::Primary,
+      )
+      .with_help(
+        "Raw strings must start with r\"...\", r#\"...\"#, r##\"...\"##, etc.".to_string(),
+      );
+      engine.add(diag);
+
+      return Some(TokenKind::Literal {
+        kind: LiteralKind::RawStr {
+          err: Some(RawStrError::Unterminated),
+          n_hashes,
+        },
+        suffix_start: self.current as u32,
+      });
+    }
+
+    // Consume opening quote
     self.advance();
 
-    while let Some(c) = self.peek() {
+    let mut err: Option<RawStrError> = None;
+    let mut found_end = false;
+
+    // Scan until we find the closing delimiter: '"' + n_hashes of '#'
+    'outer: while let Some(c) = self.peek() {
+      // NEW: if we see a newline, do a *lookahead* for "raw prefix" at the start of next line.
+      // If the next non-space/tab chars on the *next line* form r#*",
+      // we treat this current raw string as unterminated and recover at EOL.
       if c == '\n' {
-        break;
+        let saved = self.current;
+
+        // step to next line
+        self.advance(); // consume '\n'
+
+        // skip horizontal whitespace only (spaces/tabs); stop on others
+        while matches!(self.peek(), Some(' ' | '\t')) {
+          self.advance();
+        }
+
+        let mut looks_like_raw_prefix = false;
+        if self.peek() == Some('r') {
+          self.advance(); // consume 'r'
+                          // zero or more '#'
+          while self.peek() == Some('#') {
+            self.advance();
+          }
+          // must be a '"'
+          looks_like_raw_prefix = self.peek() == Some('"');
+        }
+
+        // restore position regardless of outcome
+        self.current = saved;
+
+        if looks_like_raw_prefix {
+          break 'outer; // stop scanning; we'll recover at EOL below
+        } else {
+          // valid multi-line content; keep the newline
+          self.advance(); // consume the '\n' we inspected earlier
+          continue;
+        }
       }
 
       if c == '"' {
+        let saved = self.current;
+        self.advance(); // consume '"'
+
+        let mut matched: u16 = 0;
+        while matched < n_hashes && self.peek() == Some('#') {
+          matched += 1;
+          self.advance();
+        }
+
+        if matched == n_hashes {
+          found_end = true;
+          break 'outer;
+        } else {
+          // Not a real closing delimiter; restore to just after the '"'
+          self.current = saved + 1;
+        }
+      } else {
+        // ordinary content
         self.advance();
-        break;
+      }
+    }
+
+    if !found_end {
+      // Robust recovery: advance to end-of-line (or EOF) so next token starts cleanly
+      let recover_start = self.current;
+      while let Some(ch) = self.peek() {
+        if ch == '\n' {
+          break;
+        }
+        self.advance();
       }
 
-      self.advance();
+      let diag = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::UnterminatedString),
+        format!(
+          "Unterminated raw string literal: expected closing '\"{}'",
+          "#".repeat(n_hashes as usize)
+        ),
+        self.source.path.to_string(),
+      )
+      .with_label(
+        diagnostic::Span::new(self.start, self.current),
+        Some("This raw string literal is not terminated".to_string()),
+        LabelStyle::Primary,
+      )
+      .with_help(format!(
+        "Raw strings must end with \"{h}\" (e.g., r{h}\"...\"{h}).",
+        h = "#".repeat(n_hashes as usize),
+      ));
+      engine.add(diag);
+      err = Some(RawStrError::Unterminated);
+
+      // If we're at a newline, consume exactly one so the next token begins on the next line
+      if self.peek() == Some('\n') {
+        self.advance();
+      }
+
+      // Safety: if nothing moved (e.g., EOF), bump one char to avoid stalling the lexer
+      if self.current == recover_start {
+        if self.peek().is_some() {
+          self.advance();
+        }
+      }
     }
+
+    Some(TokenKind::Literal {
+      kind: LiteralKind::RawStr { err, n_hashes },
+      // Right after the closing delimiter, or after recovery on error.
+      suffix_start: self.current as u32,
+    })
+  }
+
+  fn lex_cstr(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
+    self.advance();
+    self.lex_string_line(true);
+
     let terminated = if !self.get_current_lexeme().ends_with('"') {
       let diagnostic = Diagnostic::new(
         DiagnosticCode::Error(DiagnosticError::UnterminatedString),
@@ -233,19 +377,7 @@ impl Lexer {
 
   fn lex_bstr(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     self.advance();
-
-    while let Some(c) = self.peek() {
-      if c == '\n' {
-        break;
-      }
-
-      if c == '"' {
-        self.advance();
-        break;
-      }
-
-      self.advance();
-    }
+    self.lex_string_line(true);
 
     let terminated = if !self.get_current_lexeme().ends_with('"') {
       let diagnostic = Diagnostic::new(
@@ -431,25 +563,7 @@ impl Lexer {
   }
 
   fn lex_str(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
-    while let Some(c) = self.peek() {
-      if c == '\n' {
-        break;
-      }
-
-      if c == '\\' {
-        self.advance();
-        if self.peek() == Some('"') {
-          self.advance();
-        }
-        continue;
-      }
-
-      if c == '"' {
-        self.advance();
-        break;
-      }
-      self.advance();
-    }
+    self.lex_string_line(true);
 
     if !self.get_current_lexeme().ends_with('"') {
       let diagnostic = Diagnostic::new(
@@ -473,38 +587,31 @@ impl Lexer {
       suffix_start: self.current as u32,
     })
   }
+
+  fn lex_string_line(&mut self, single: bool) {
+    while let Some(c) = self.peek() {
+      if c == '\n' && single {
+        break;
+      }
+
+      if c == '\\' {
+        self.advance();
+        if self.peek() == Some('"') {
+          self.advance();
+        }
+        continue;
+      }
+
+      if c == '"' {
+        self.advance();
+        break;
+      }
+
+      self.advance();
+    }
+  }
 }
 
-//
-//   /// C string literal (null-terminated, type `&CStr`)
-//   ///
-//   /// Added in Rust 1.77 for FFI interop.
-//   ///
-//   /// # Examples
-//   /// ```rust
-//   /// c"hello"        // becomes "hello\0"
-//   /// c"with\0null"   // explicit null allowed
-//   /// c"unterminated  // terminated = false (malformed)
-//   /// ```
-//   CStr {
-//     /// False if the closing `"` is missing
-//     terminated: bool,
-//   },
-//
-//   /// Raw string literal (no escape processing)
-//   ///
-//   /// # Examples
-//   /// ```rust
-//   /// r"no\escapes"           // n_hashes = 0
-//   /// r#"with "quotes""#      // n_hashes = 1
-//   /// r##"more # freedom"##   // n_hashes = 2
-//   /// ```
-//   RawStr {
-//     /// Number of `#` delimiters used
-//     n_hashes: u16,
-//     /// Error if the raw string is malformed
-//     err: Option<RawStrError>,
-//   },
 //
 //   /// Raw byte string literal (raw + byte string combined)
 //   ///
