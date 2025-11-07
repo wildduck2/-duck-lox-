@@ -12,7 +12,7 @@ impl Runner {
   pub fn run_interactive_mode(&mut self, engine: &mut DiagnosticEngine) {}
 
   pub fn run_file(
-    mut self,
+    &mut self,
     path: &str,
     engine: &mut DiagnosticEngine,
   ) -> Result<(), std::io::Error> {
@@ -32,10 +32,7 @@ impl Runner {
 
       if engine.has_errors() {
         engine.print_diagnostics();
-        return Err(std::io::Error::new(
-          std::io::ErrorKind::Other,
-          "lexing error",
-        ));
+        return Err(std::io::Error::other("lexing error"));
       }
 
       println!("{:?}", lexer.tokens);
@@ -48,10 +45,7 @@ impl Runner {
       //
       // if engine.has_errors() || engine.has_warnings() {
       //   engine.print_diagnostics();
-      //   return Err(std::io::Error::new(
-      //     std::io::ErrorKind::Other,
-      //     "parsing error",
-      //   ));
+      //   return Err(std::io::Error::other("parsing error"));
       // }
     }
 

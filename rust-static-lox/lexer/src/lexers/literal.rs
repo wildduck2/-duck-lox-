@@ -1012,12 +1012,6 @@ impl Lexer {
           }
         },
         '\n' => {
-          let diag = Diagnostic::new(
-            DiagnosticCode::Error(DiagnosticError::InvalidCharacter),
-            "Char literal cannot contain newline".to_string(),
-            self.source.path.to_string(),
-          );
-          engine.add(diag);
           break;
         },
         _ => {
@@ -1027,17 +1021,7 @@ impl Lexer {
     }
 
     if !terminated {
-      let diag = Diagnostic::new(
-        DiagnosticCode::Error(DiagnosticError::UnterminatedString),
-        format!("Unterminated char literal: {}", self.get_current_lexeme()),
-        self.source.path.to_string(),
-      )
-      .with_label(
-        diagnostic::Span::new(self.start, self.current),
-        Some("This char literal is not terminated".to_string()),
-        LabelStyle::Primary,
-      );
-      engine.add(diag);
+      return self.lex_lifetime(engine);
     }
 
     Some(TokenKind::Literal {

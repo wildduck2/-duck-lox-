@@ -249,3 +249,110 @@ br###""###
 //br####"unterminated"###   // less closing hashes
 //br"unterminated literal
 
+
+// ===============================================
+// ✅ NORMAL STRINGS
+// ===============================================
+"hello"
+"with escapes: \\n \\t \\r \\\""
+"multi-line\nstring"
+"escaped quote: \"inside\""
+"unicode: 😊 and 🚀"
+""
+
+
+
+// ===============================================
+// ✅ RAW STRINGS
+// ===============================================
+r"no escapes here"
+r#"with "quotes""#
+r##"multi ## level"##
+r###"C:\\Program Files\\MyApp"###
+r####"json: {\"key\": \"value\"}"####
+r#"this
+is
+multi-line
+raw
+string"#
+
+// ❌ unterminated
+//r"unterminated
+//r#"missing end quote
+//r##"wrong end"#
+
+
+// ===============================================
+// ✅ BYTE STRINGS
+// ===============================================
+b"bytes"
+b"with escapes: \\n \\t \\r \\\""
+b"binary data: \x41\x42\x43"    // ABC
+//b"unterminated
+//b"weird \\xGZ bad escape"       // should emit InvalidEscape
+b""
+
+
+
+ // ===============================================
+ // ✅ RAW BYTE STRINGS
+ // ===============================================
+br"raw bytes"
+br#"with "quotes""#
+br##"C:\\Program Files\\Data"##
+br###"multi-line
+raw bytes"###
+//br####"unterminated
+/br#"bad end"##
+br####"json: {\"x\": 1, \"y\": 2}"####
+
+
+
+// ===============================================
+// ✅ C STRINGS (new in Rust 1.77)
+// ===============================================
+c"simple c string"
+c"with escapes: \\n \\r \\t \\\""
+//c"unterminated
+//c"bad escape \\xG1"
+c""
+
+
+
+// ===============================================
+// ✅ RAW C STRINGS
+// ===============================================
+cr"raw c string"
+cr#"with "quotes""#
+cr##"C:\\Program Files\\MyApp"##
+cr###"multi
+line
+raw c string"###
+//cr####"unterminated
+//cr#"bad closing"##
+
+
+
+// ===============================================
+// ✅ CHARACTER LITERALS
+// ===============================================
+'a'
+'\\n'
+'\\x41'    // 'A'
+'\\u{1F980}' // 🦀
+//'too long'     // should error
+//'unterminated
+
+
+
+// ===============================================
+// ✅ BYTE CHARACTER LITERALS
+// ===============================================
+b'a'
+b'\\x41'  // 'A'
+b'\\n'
+//b'too long'
+//b'unterminated
+
+
+

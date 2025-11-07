@@ -142,14 +142,10 @@ impl Lexer {
   /// ```
   fn emit(&mut self, kind: TokenKind) {
     // ignore comments
-    if kind.is_trivia() {
+    if kind.is_trivia() || kind.is_error() {
       return;
     }
 
-    println!(
-      "{:?}",
-      self.source.src[self.start..self.current].to_string()
-    );
     self.tokens.push(Token {
       kind,
       span: Span {

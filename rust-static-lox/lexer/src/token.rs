@@ -108,7 +108,7 @@ pub enum LiteralKind {
   /// 1e_             // empty_exponent = true (malformed)
   /// ```
   ///
-  /// **Note**: `1f32` is lexed as `Int` with suffix "f32", not `Float`
+  /// **NOTE**: `1f32` is lexed as `Int` with suffix "f32", not `Float`
   Float {
     /// The numeric base (usually Decimal, but hex floats exist in some contexts)
     base: Base,
@@ -137,7 +137,7 @@ pub enum LiteralKind {
   /// b'              // terminated = false (malformed)
   /// ```
   ///
-  /// **Note**: Byte literals must contain only ASCII characters (0-127)
+  /// **NOTE**: Byte literals must contain only ASCII characters (0-127)
   Byte,
 
   /// String literal with escape sequences
@@ -329,6 +329,7 @@ pub enum TokenKind {
     starts_with_number: bool,
   },
 
+  /// NOTE: this is a placeholder for future compatibility
   /// Raw lifetime (hypothetical - for future compatibility)
   RawLifetime,
 
@@ -364,6 +365,7 @@ pub enum TokenKind {
   /// ```
   UnknownPrefix,
 
+  /// NOTE: this is a placeholder for future compatibility
   /// Unknown prefix on a lifetime
   ///
   /// # Example
@@ -707,9 +709,9 @@ impl LiteralKind {
   pub fn is_string_like(&self) -> bool {
     matches!(
       self,
-      LiteralKind::Str { .. }
-        | LiteralKind::ByteStr { .. }
-        | LiteralKind::CStr { .. }
+      LiteralKind::Str
+        | LiteralKind::ByteStr
+        | LiteralKind::CStr
         | LiteralKind::RawStr { .. }
         | LiteralKind::RawByteStr { .. }
         | LiteralKind::RawCStr { .. }
@@ -737,6 +739,6 @@ impl LiteralKind {
   /// assert!(!LiteralKind::Str { terminated: true }.is_char_like());
   /// ```
   pub fn is_char_like(&self) -> bool {
-    matches!(self, LiteralKind::Char { .. } | LiteralKind::Byte { .. })
+    matches!(self, LiteralKind::Char | LiteralKind::Byte)
   }
 }
