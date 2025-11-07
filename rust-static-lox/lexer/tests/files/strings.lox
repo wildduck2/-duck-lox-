@@ -176,3 +176,76 @@ c"hello\tworld!\n\\\"C\\\""
 
 // Explicit embedded nulls mid-string
 c"abc\0def\0ghi"
+
+// ✅ BASIC BYTE STRINGS
+b"abc"
+b"with spaces"
+b"with \\ escapes"
+b"with \"quote\" inside"
+b"multi\nline"      // should treat \n as escape, not literal newline
+
+// ✅ RAW BYTE STRINGS
+br"raw bytes"
+br#"with "quotes""#
+br##"multiple ## in text"##
+br###"even more ### freedom"###
+
+// ✅ EMPTY BYTE STRINGS
+b""
+br""
+br#""#
+br##""##
+
+// ✅ MULTI-LINE RAW BYTE STRINGS
+br"multi
+line raw bytes"
+br#"multi
+line "raw" bytes"#
+
+// ✅ BYTE STRINGS WITH SYMBOLS AND ESCAPES
+b"symbols !@#$%^&*()_+-=[]{};:',.<>/?"
+br#"raw symbols !@#$%^&*()_+-=[]{};:',.<>/?"#
+br##"contains "quote" and #"hashes"##
+
+// ✅ PATHS AND REGEXES
+b"C:\\Program Files\\MyApp\\data"
+br"regex: ^[a-zA-Z0-9_]+$"
+br#"C:\Users\wildduck\Documents\"#
+br##"r#"meta"#"##
+
+// ✅ UNTERMINATED BYTE STRINGS (should emit err = Some(Unterminated))
+b"unterminated
+br"also unterminated
+br#"missing end quote
+br##"wrong end"#          // opened with 2 hashes, closed with 1
+br###"wrong end"##        // opened with 3 hashes, closed with 2
+br####"still unterminated // missing close entirely
+
+// ✅ RAW BYTE STRING WITH QUOTES AND HASHES INSIDE
+br###"nested "raw" content with ### inside"###
+br####"hashes #### inside but closed properly"####
+
+// ✅ VALID RAW BYTE STRINGS WITH NEWLINES
+br#"this is
+a valid multi-line raw byte string"#
+
+// ✅ REALISTIC EXAMPLES
+b"GET /api/v1/users HTTP/1.1\r\nHost: example.com\r\n"
+br#"{"json": "no escapes"}"#
+br##"C:\Program Files\MyApp\config.bin"##
+br##"r#"meta"#"##
+
+// ✅ EDGE CASES
+br"\\no escape interpretation"
+b"\\yes this escape becomes \\"
+br#"raw with # and "mixed" quotes"#
+
+// ✅ TESTING MIXED HASHES
+br#""#
+br##""##
+br###""###
+
+// ✅ INVALID EDGE CASES
+//br####"unterminated"###   // less closing hashes
+//br"unterminated literal
+

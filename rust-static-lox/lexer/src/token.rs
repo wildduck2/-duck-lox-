@@ -62,77 +62,6 @@ pub enum Base {
   Hexadecimal = 16,
 }
 
-/// Errors that can occur when lexing raw string literals
-///
-/// Raw strings use the syntax `r#"..."#` where the number of `#` delimiters
-/// must match exactly on both the opening and closing sides.
-///
-/// # Examples of Valid Raw Strings
-/// ```rust
-/// r"no hashes needed"
-/// r#"can contain "quotes" now"#
-/// r##"can contain "# now"##
-/// ```
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum RawStrError {
-  /// Invalid characters between `r` and the opening quote
-  ///
-  /// Only `#` characters are allowed between `r` and `"`.
-  ///
-  /// # Example
-  /// ```rust
-  /// r#~"invalid"  // bad_char = '~'
-  /// ```
-  InvalidStarter { bad_char: char },
-
-  /// The raw string was not properly terminated
-  ///
-  /// Either EOF was reached, or the closing delimiter didn't match
-  /// the opening delimiter's hash count.
-  ///
-  /// # Examples
-  /// ```rust
-  /// r##"hello     // expected "##, found EOF
-  /// r##"hello"#   // expected "##, found "#
-  /// ```
-  NoTerminator {
-    /// Number of `#` characters in the opening delimiter
-    expected: usize,
-    /// Number of `#` characters found in the (potential) closing delimiter
-    found: usize,
-    /// Byte offset where a possible but mismatched terminator was found
-    possible_terminator_offset: Option<usize>,
-  },
-
-  /// Too many `#` delimiters (exceeds u16::MAX = 65535)
-  ///
-  /// Rust limits raw string delimiters to prevent abuse.
-  ///
-  /// # Example
-  /// ```rust
-  /// r#####...#####"text"#####...#####  // 70000 hashes
-  /// ```
-  TooManyDelimiters { found: usize },
-
-  /// Missing opening quote after `r` or `r#`
-  ///
-  /// # Example
-  /// ```rust
-  /// rno_quotes       // missing opening quote
-  /// r#"no_quotes     // missing opening quote after `r#`
-  /// ```
-  MissingQuote,
-
-  /// Unterminated raw string literal
-  ///
-  /// # Example
-  /// ```rust
-  /// r"no hashes      // unterminated (missing closing `"` )
-  /// r#"still open    // unterminated (missing closing `"#` )
-  /// ```
-  Unterminated,
-}
-
 /// The kind of literal token
 ///
 /// Rust supports various literal types for numbers, characters, and strings.
@@ -272,8 +201,6 @@ pub enum LiteralKind {
   RawStr {
     /// Number of `#` delimiters used
     n_hashes: u16,
-    /// Error if the raw string is malformed
-    err: Option<RawStrError>,
   },
 
   /// Raw byte string literal (raw + byte string combined)
@@ -286,8 +213,6 @@ pub enum LiteralKind {
   RawByteStr {
     /// Number of `#` delimiters used
     n_hashes: u16,
-    /// Error if the raw byte string is malformed
-    err: Option<RawStrError>,
   },
 
   /// Raw C string literal (raw + C string combined)
@@ -302,8 +227,6 @@ pub enum LiteralKind {
   RawCStr {
     /// Number of `#` delimiters used
     n_hashes: u16,
-    /// Error if the raw C string is malformed
-    err: Option<RawStrError>,
   },
 }
 

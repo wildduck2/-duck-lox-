@@ -9,6 +9,8 @@ pub enum DiagnosticError {
   InvalidCharacter,
   UnterminatedString,
   TooManyRawStrHashes,
+  InvalidStringStart,
+  InvalidEscape,
 }
 
 impl DiagnosticError {
@@ -20,6 +22,8 @@ impl DiagnosticError {
       Self::InvalidCharacter => "E0004",
       Self::UnterminatedString => "E0005",
       Self::TooManyRawStrHashes => "E0006",
+      Self::InvalidStringStart => "E0007",
+      Self::InvalidEscape => "E0008",
     }
   }
 

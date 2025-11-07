@@ -1,49 +1,115 @@
-// ✅ BASIC RAW STRINGS (no escapes, n_hashes = 0)
-r"no\escapes"
-r"simple text"
-r"multi line
-still raw"
+// ===============================================
+// ✅ NORMAL STRINGS
+// ===============================================
+"hello"
+"with escapes: \\n \\t \\r \\\""
+"multi-line\nstring"
+"escaped quote: \"inside\""
+"unicode: 😊 and 🚀"
+""
 
-// ✅ RAW STRINGS WITH QUOTES (using hashes)
-r#"with "quotes""#           // n_hashes = 1
-r##"with "inner #" quotes"## // n_hashes = 2
-r###"even "more ## freedom"### // n_hashes = 3
 
-// ✅ MIXED CONTENT (hashes and symbols inside)
-r#"contains # but not a delimiter"#   // valid, single #
-r##"contains ## inside but fine"##    // valid, double ##
 
-// ✅ STRINGS WITH NEWLINES
-r"this is
-a multi-line raw string"
-r#"multi-line "with quotes"
-still works fine"#
+// ===============================================
+// ✅ RAW STRINGS
+// ===============================================
+r"no escapes here"
+r#"with "quotes""#
+r##"multi ## level"##
+r###"C:\\Program Files\\MyApp"###
+r####"json: {\"key\": \"value\"}"####
+r#"this
+is
+multi-line
+raw
+string"#
 
-// ✅ EDGE CASES (escaped backslashes are literal)
-r"\\not escaped\\"
-r#"\\still literal \"stuff\""#
+// ❌ unterminated
+//r"unterminated
+//r#"missing end quote
+//r##"wrong end"#
 
-// ✅ EMPTY RAW STRINGS
-r""
-r#""#
-r##""##
 
-// ❌ INVALID / MALFORMED RAW STRINGS (should set err = Some(RawStrError))
-r"unterminated               // ❌ missing closing quote
-r#"missing end quote         // ❌ missing closing "#
-r##"mismatch"#               // ❌ opened with 2 hashes, closed with 1
-r###"wrong end"##            // ❌ opened with 3 hashes, closed with 2
-r####"unterminated"###       // ❌ still unterminated
+// ===============================================
+// ✅ BYTE STRINGS
+// ===============================================
+b"bytes"
+b"with escapes: \\n \\t \\r \\\""
+b"binary data: \x41\x42\x43"    // ABC
+//b"unterminated
+//b"weird \\xGZ bad escape"       // should emit InvalidEscape
+b""
 
-// ✅ COMPLEX NESTED-LOOKING BUT VALID
-r###"A "nested" looking raw string with ### inside"###
 
-// ✅ RAW STRING WITH HASHES IN CONTENT (edge lexical match)
-r####"hashes #### inside but closed properly"####
 
-// ✅ REALISTIC EXAMPLES
-r"SELECT * FROM users WHERE name = '\n'";   // SQL query (no escapes)
-r#"{"json": "no escapes"}"#                 // JSON-like
-r##"C:\Program Files\MyApp"##               // Windows path
-r##"r#"meta"#"##                            // meta raw string
+ // ===============================================
+ // ✅ RAW BYTE STRINGS
+ // ===============================================
+br"raw bytes"
+br#"with "quotes""#
+br##"C:\\Program Files\\Data"##
+br###"multi-line
+raw bytes"###
+//br####"unterminated
+/br#"bad end"##
+br####"json: {\"x\": 1, \"y\": 2}"####
+
+
+
+// ===============================================
+// ✅ C STRINGS (new in Rust 1.77)
+// ===============================================
+c"simple c string"
+c"with escapes: \\n \\r \\t \\\""
+//c"unterminated
+//c"bad escape \\xG1"
+c""
+
+
+
+// ===============================================
+// ✅ RAW C STRINGS
+// ===============================================
+cr"raw c string"
+cr#"with "quotes""#
+cr##"C:\\Program Files\\MyApp"##
+cr###"multi
+line
+raw c string"###
+//cr####"unterminated
+//cr#"bad closing"##
+
+
+
+// ===============================================
+// ✅ CHARACTER LITERALS
+// ===============================================
+'a'
+'\\n'
+'\\x41'    // 'A'
+'\\u{1F980}' // 🦀
+//'too long'     // should error
+//'unterminated
+
+
+
+// ===============================================
+// ✅ BYTE CHARACTER LITERALS
+// ===============================================
+b'a'
+b'\\x41'  // 'A'
+b'\\n'
+//b'too long'
+//b'unterminated
+
+
+
+// ===============================================
+// ✅ MIXED AND COMPLEX
+// ===============================================
+r#"mixing raw "and" quotes"#
+br##"complex ## raw ## byte"##
+cr###"nested ### raw c string"###
+b"combining \\n escapes"
+"final test string"
 
