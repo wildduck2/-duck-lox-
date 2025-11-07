@@ -11,6 +11,8 @@ pub enum DiagnosticError {
   TooManyRawStrHashes,
   InvalidStringStart,
   InvalidEscape,
+  UnknownPrefix,
+  ReservedPrefix,
 }
 
 impl DiagnosticError {
@@ -24,6 +26,8 @@ impl DiagnosticError {
       Self::TooManyRawStrHashes => "E0006",
       Self::InvalidStringStart => "E0007",
       Self::InvalidEscape => "E0008",
+      Self::UnknownPrefix => "E0009",
+      Self::ReservedPrefix => "E0010",
     }
   }
 

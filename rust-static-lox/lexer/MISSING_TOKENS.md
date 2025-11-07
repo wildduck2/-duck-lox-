@@ -9,7 +9,6 @@ This document lists all token types that are **defined** in `TokenKind` but **no
 | **Lifetimes** | `Lifetime`, `RawLifetime` | High | Medium |
 | **Prefix Errors** | `UnknownPrefix`, `UnknownPrefixLifetime`, `ReservedPrefix` | Medium | Low |
 | **Error Recovery** | `Unknown` | Low | Low |
-| **Deprecated Operators** | `DotDotDot` | Low | Low |
 
 ---
 
@@ -111,64 +110,8 @@ z"text"     // ReservedPrefix - reserved for future use
 2. Still emit diagnostic for the error
 3. This allows parser to continue with error recovery
 
----
-
-## 4. Deprecated Operator
-
-### Missing: `DotDotDot` (`...`)
-
-**Current Status**: ❌ Not implemented
-
-**What needs to be done**:
-- Handle the deprecated `...` operator (replaced by `..=`)
-- Should emit a warning diagnostic
-
-**Implementation Location**: 
-- Update `lex_dot()` in `lexers/punctuation_and_delimiters.rs`
-
-**Examples**:
-```rust
-1...10  // DotDotDot (deprecated, should use ..=)
-```
-
-**Current Behavior**: 
-- `...` would be lexed as `Dot` `.` `DotDot` (three separate tokens)
-- No recognition of the deprecated operator
-
-**Implementation Steps**:
-1. In `lex_dot()`, after matching `..`, check for third `.`
-2. If found → `DotDotDot` with deprecation warning
-3. Otherwise → `DotDot` (current behavior)
-
----
-
-## Implementation Priority
-
-### High Priority
-1. **Lifetime tokens** - Essential for Rust-like syntax, needed for type annotations and generic parameters
-
-### Medium Priority
-2. **Prefix error tokens** - Better error messages for invalid prefixes
-3. **Unknown token** - Better error recovery
-
-### Low Priority
-4. **DotDotDot** - Deprecated operator, low usage
-
----
-
 ## Quick Reference: All Token Types
 
-### ✅ Implemented (All others)
-- All keywords (KwIf, KwElse, etc.)
-- All punctuation (Semi, Comma, Dot, etc.)
-- All operators (Plus, Minus, Eq, etc.)
-- All compound operators (PlusEq, ShiftLeft, etc.)
-- All literals (Literal with various kinds)
-- Identifiers (Ident, RawIdent, InvalidIdent)
-- Comments (LineComment, BlockComment)
-- Whitespace
-- Shebang
-- Eof
 
 ### ❌ Not Implemented
 - `Lifetime { starts_with_number: bool }`
@@ -177,7 +120,6 @@ z"text"     // ReservedPrefix - reserved for future use
 - `UnknownPrefixLifetime`
 - `ReservedPrefix`
 - `Unknown`
-- `DotDotDot`
 
 ---
 

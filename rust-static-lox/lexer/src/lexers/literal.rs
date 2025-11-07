@@ -213,17 +213,72 @@ impl Lexer {
   ///
   /// # Returns
   ///
-  /// `Some(TokenKind::Literal)` with appropriate `LiteralKind`, or `None` on error
+  /// `Some(TokenKind::Literal)` with appropriate `LiteralKind`, or `` on error
   pub fn lex_string(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
-    match (self.get_current_lexeme(), self.peek()) {
+    let first = self.get_current_lexeme(); // e.g. "b", "c", "r", or "\""
+    let second = self.peek(); // next char, e.g. 'r', '"', etc.
+
+    // Special case: this should never handle character literals
+    if first == "'" {
+      return self.lex_char(engine);
+    }
+
+    // Combine prefix (1–2 chars, e.g. br, cr)
+    let mut prefix = first.to_string();
+    if let Some(ch) = second {
+      if ch.is_ascii_alphabetic() {
+        prefix.push(ch);
+      }
+    }
+
+    // Define allowed and reserved prefixes
+    const VALID_PREFIXES: &[&str] = &["b", "br", "c", "cr", "r", "\""];
+    const RESERVED_PREFIXES: &[&str] = &["f", "cf", "rf"];
+
+    // Check prefix validity only for potential prefixed literals
+    if first != "\"" {
+      if RESERVED_PREFIXES.contains(&prefix.as_str()) {
+        let diag = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::ReservedPrefix),
+          format!("'{}' is a reserved prefix for string literals", prefix),
+          self.source.path.to_string(),
+        )
+        .with_label(
+          diagnostic::Span::new(self.start, self.current),
+          Some("Reserved literal prefix".to_string()),
+          LabelStyle::Primary,
+        )
+        .with_help("This prefix is reserved for future use.".to_string());
+        engine.add(diag);
+        return Some(TokenKind::ReservedPrefix);
+      }
+
+      if !VALID_PREFIXES.contains(&prefix.as_str()) {
+        let diag = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::UnknownPrefix),
+          format!("Unknown literal prefix '{}'", prefix),
+          self.source.path.to_string(),
+        )
+        .with_label(
+          diagnostic::Span::new(self.start, self.current),
+          Some("Unrecognized literal prefix".to_string()),
+          LabelStyle::Primary,
+        )
+        .with_help("Valid prefixes: b, br, c, cr, r.".to_string());
+        engine.add(diag);
+        return Some(TokenKind::UnknownPrefix);
+      }
+    }
+
+    // Dispatch to the right literal lexer
+    match (first, second) {
       ("b", Some('"')) => self.lex_bstr(engine),
       ("b", Some('r')) => self.lex_bstr(engine),
-      ("c", Some('r')) => self.lex_craw_str(engine),
       ("c", Some('"')) => self.lex_cstr(engine),
+      ("c", Some('r')) => self.lex_craw_str(engine),
       ("r", Some('"')) | ("r", Some('#')) => self.lex_raw_str(engine),
       ("\"", _) => self.lex_str(engine),
       ("b", Some('\'')) => self.lex_bchar(engine),
-      ("'", _) => self.lex_char(engine),
       _ => None,
     }
   }
@@ -546,12 +601,12 @@ impl Lexer {
   ///
   /// # Returns
   ///
-  /// `Some(TokenKind::Literal { kind: LiteralKind::CStr { terminated } })`
+  /// `Some(TokenKind::Literal { kind: LiteralKind::CStr })`
   fn lex_cstr(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     self.advance();
     self.lex_string_line(true);
 
-    let terminated = if !self.get_current_lexeme().ends_with('"') {
+    if !self.get_current_lexeme().ends_with('"') {
       let diagnostic = Diagnostic::new(
         DiagnosticCode::Error(DiagnosticError::UnterminatedString),
         format!("Unterminated string literal: {}", self.get_current_lexeme()),
@@ -564,14 +619,10 @@ impl Lexer {
       )
       .with_help("Use double quotes for string literals.".to_string());
       engine.add(diagnostic);
-
-      false
-    } else {
-      true
-    };
+    }
 
     Some(TokenKind::Literal {
-      kind: LiteralKind::CStr { terminated },
+      kind: LiteralKind::CStr,
       suffix_start: self.current as u32,
     })
   }
@@ -686,7 +737,7 @@ impl Lexer {
       .with_help("Byte strings must start with b\"...\" or br\"...\".".to_string());
       engine.add(diag);
       return Some(TokenKind::Literal {
-        kind: LiteralKind::ByteStr { terminated: false },
+        kind: LiteralKind::ByteStr,
         suffix_start: self.current as u32,
       });
     }
@@ -772,7 +823,7 @@ impl Lexer {
     }
 
     Some(TokenKind::Literal {
-      kind: LiteralKind::ByteStr { terminated },
+      kind: LiteralKind::ByteStr,
       suffix_start: self.current as u32,
     })
   }
@@ -817,7 +868,7 @@ impl Lexer {
       self.advance();
     }
 
-    let terminated = if !self.get_current_lexeme().ends_with('\'') {
+    if !self.get_current_lexeme().ends_with('\'') {
       let diagnostic = Diagnostic::new(
         DiagnosticCode::Error(DiagnosticError::UnterminatedString),
         format!("Unterminated string literal: {}", self.get_current_lexeme()),
@@ -831,9 +882,7 @@ impl Lexer {
       .with_help("Use double quotes for string literals.".to_string());
       engine.add(diagnostic);
 
-      false
-    } else {
-      true
+      return Some(TokenKind::Unknown);
     };
 
     if len > 3 && !is_hex {
@@ -853,11 +902,11 @@ impl Lexer {
       .with_help("byte char literals can only contain ASCII characters.".to_string());
 
       engine.add(diagnostic);
-      return None;
+      return Some(TokenKind::Unknown);
     }
 
     Some(TokenKind::Literal {
-      kind: LiteralKind::Byte { terminated },
+      kind: LiteralKind::Byte,
       suffix_start: self.current as u32,
     })
   }
@@ -992,7 +1041,7 @@ impl Lexer {
     }
 
     Some(TokenKind::Literal {
-      kind: LiteralKind::Char { terminated },
+      kind: LiteralKind::Char,
       suffix_start: self.current as u32,
     })
   }
@@ -1026,11 +1075,15 @@ impl Lexer {
       .with_help("Use double quotes for string literals.".to_string());
       engine.add(diagnostic);
 
-      return None;
+      // Return the unterminated string token so parser can continue
+      return Some(TokenKind::Literal {
+        kind: LiteralKind::Str,
+        suffix_start: self.current as u32,
+      });
     }
 
     Some(TokenKind::Literal {
-      kind: LiteralKind::Str { terminated: false },
+      kind: LiteralKind::Str,
       suffix_start: self.current as u32,
     })
   }

@@ -65,7 +65,7 @@ impl Lexer {
 
         engine.add(diagnostic);
 
-        None
+        Some(TokenKind::Unknown)
       },
     }
   }

@@ -78,13 +78,12 @@ impl Lexer {
       '\r' | '\t' | ' ' => self.lex_whitespace(),
 
       // String and character literals
-      '"' => self.lex_string(engine),  // Regular string
       '\'' => self.lex_string(engine), // Character literal
-
       // Prefixed literals (need to check next char)
       'b' => self.lex_string(engine), // b"...", b'...', br"..."
       'c' => self.lex_string(engine), // c"...", cr"..."
       'r' => self.lex_string(engine), // r"...", r#"..."#
+      '"' => self.lex_string(engine), // Regular string
 
       // Numbers
       '0'..='9' => self.lex_number(),
@@ -104,7 +103,7 @@ impl Lexer {
         );
 
         engine.add(diagnostic);
-        None
+        Some(TokenKind::Unknown)
       },
     }
   }

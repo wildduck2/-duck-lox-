@@ -104,12 +104,3 @@ b'\\n'
 
 
 
-// ===============================================
-// ✅ MIXED AND COMPLEX
-// ===============================================
-r#"mixing raw "and" quotes"#
-br##"complex ## raw ## byte"##
-cr###"nested ### raw c string"###
-b"combining \\n escapes"
-"final test string"
-

@@ -73,9 +73,9 @@ pub enum Base {
 /// 42              // Int { base: Decimal, empty_int: false }
 /// 0xFF            // Int { base: Hexadecimal, empty_int: false }
 /// 3.14            // Float { base: Decimal, empty_exponent: false }
-/// 'x'             // Char { terminated: true }
-/// "hello"         // Str { terminated: true }
-/// r#"raw"#        // RawStr { n_hashes: 1, err: None }
+/// 'x'             // Char
+/// "hello"         // Str
+/// r#"raw"#        // RawStr { n_hashes: 1 }
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LiteralKind {
@@ -124,12 +124,8 @@ pub enum LiteralKind {
   /// '🦀'            // Unicode emoji
   /// '\n'            // escape sequence
   /// '\u{1F980}'     // Unicode escape
-  /// 'x              // terminated = false (malformed)
   /// ```
-  Char {
-    /// False if the closing `'` is missing
-    terminated: bool,
-  },
+  Char,
 
   /// Byte literal (single ASCII byte)
   ///
@@ -142,10 +138,7 @@ pub enum LiteralKind {
   /// ```
   ///
   /// **Note**: Byte literals must contain only ASCII characters (0-127)
-  Byte {
-    /// False if the closing `'` is missing
-    terminated: bool,
-  },
+  Byte,
 
   /// String literal with escape sequences
   ///
@@ -155,12 +148,9 @@ pub enum LiteralKind {
   /// "foo\nbar"      // with escape
   /// "multi
   /// line"           // multiline (valid)
-  /// "unterminated   // terminated = false (malformed)
+  /// "unterminated   // (malformed)
   /// ```
-  Str {
-    /// False if the closing `"` is missing
-    terminated: bool,
-  },
+  Str,
 
   /// Byte string literal (ASCII-only string as `&[u8]`)
   ///
@@ -168,12 +158,9 @@ pub enum LiteralKind {
   /// ```rust
   /// b"hello"        // ASCII bytes
   /// b"\x48\x69"     // hex escapes for "Hi"
-  /// b"unterminated  // terminated = false (malformed)
+  /// b"unterminated  // (malformed)
   /// ```
-  ByteStr {
-    /// False if the closing `"` is missing
-    terminated: bool,
-  },
+  ByteStr,
 
   /// C string literal (null-terminated, type `&CStr`)
   ///
@@ -183,12 +170,9 @@ pub enum LiteralKind {
   /// ```rust
   /// c"hello"        // becomes "hello\0"
   /// c"with\0null"   // explicit null allowed
-  /// c"unterminated  // terminated = false (malformed)
+  /// c"unterminated  // (malformed)
   /// ```
-  CStr {
-    /// False if the closing `"` is missing
-    terminated: bool,
-  },
+  CStr,
 
   /// Raw string literal (no escape processing)
   ///
@@ -534,7 +518,6 @@ pub enum TokenKind {
   FatArrow,   // => (match arm)
   DotDot,     // .. (range, struct update)
   DotDotEq,   // ..= (inclusive range)
-  DotDotDot,  // ... (reserved/deprecated)
 
   // =========================================================================
   // SPECIAL TOKENS
