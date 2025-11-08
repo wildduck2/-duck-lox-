@@ -109,14 +109,14 @@ A comprehensive checklist for building a production-ready Rust lexer from scratc
 ## Phase 4: Lifetimes 🕐
 
 ### 4.1 Regular Lifetimes
-- [ ] Implement `lex_lifetime() -> Token`
-- [ ] Detect `'` followed by identifier
-- [ ] Parse identifier part (same rules as regular idents)
-- [ ] Check if starts with number:
-  - [ ] `'1abc` → set `starts_with_number: true` (invalid)
-- [ ] Special lifetimes:
-  - [ ] `'_` (anonymous lifetime)
-  - [ ] `'static` (special, but treated as regular ident)
+- [x] Implement `lex_lifetime() -> Token`
+- [x] Detect `'` followed by identifier
+- [x] Parse identifier part (same rules as regular idents)
+- [x] Check if starts with number:
+  - [x] `'1abc` → set `starts_with_number: true` (invalid)
+- [x] Special lifetimes:
+  - [x] `'_` (anonymous lifetime)
+  - [x] `'static` (special, but treated as regular ident)
 
 ### 4.2 Raw Lifetimes
 - [ ] Implement `lex_raw_lifetime() -> Token`
@@ -125,9 +125,9 @@ A comprehensive checklist for building a production-ready Rust lexer from scratc
 - [ ] Allow keywords as lifetime names
 
 ### 4.3 Lifetime vs Char Literal Disambiguation
-- [ ] If `'` followed by identifier start → lifetime
-- [ ] If `'` followed by anything else → try char literal
-- [ ] Handle edge cases like `'1` (invalid lifetime)
+- [x] If `'` followed by identifier start → lifetime
+- [x] If `'` followed by anything else → try char literal
+- [x] Handle edge cases like `'1` (invalid lifetime)
 
 ---
 

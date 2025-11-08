@@ -1,1 +1,18 @@
-'a
+// Decimal
+let a = 123u8;
+let b = 456i32;
+
+// Hexadecimal
+let c = 0xFFu16;
+let d = 0x10i64;
+
+// Octal
+let e = 0o77u8;
+
+// Binary
+let f = 0b1011i128;
+
+// Floating point
+let g = 3.14f64;
+let h = 2.71828f32;
+

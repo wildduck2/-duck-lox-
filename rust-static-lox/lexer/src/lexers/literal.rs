@@ -33,19 +33,19 @@ impl Lexer {
   /// # Returns
   ///
   /// `Some(TokenKind::Literal { kind, suffix_start })`
-  pub fn lex_number(&mut self) -> Option<TokenKind> {
+  pub fn lex_number(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     let kind = if self.get_current_lexeme() == "0" {
       if self.match_char('b') {
-        self.lex_binary()
+        self.lex_binary(engine)
       } else if self.match_char('o') {
-        self.lex_octal()
+        self.lex_octal(engine)
       } else if self.match_char('x') {
-        self.lex_hexadecimal()
+        self.lex_hexadecimal(engine)
       } else {
-        self.lex_decimal()
+        self.lex_decimal(engine)
       }
     } else {
-      self.lex_decimal()
+      self.lex_decimal(engine)
     };
 
     let suffix_start = self.current as u32;
@@ -60,8 +60,9 @@ impl Lexer {
   /// # Returns
   ///
   /// `LiteralKind::Int { base: Base::Binary, empty_int }`
-  fn lex_binary(&mut self) -> LiteralKind {
+  fn lex_binary(&mut self, engine: &mut DiagnosticEngine) -> LiteralKind {
     let mut has_digits = false;
+    let suffix_start = self.current;
     while let Some(c) = self.peek() {
       if c == '0' || c == '1' {
         self.advance();
@@ -70,12 +71,14 @@ impl Lexer {
         self.advance();
         continue;
       } else {
+        self.check_suffix_type(c, suffix_start, engine);
         break;
       }
     }
     LiteralKind::Int {
       base: Base::Binary,
       empty_int: !has_digits,
+      suffix_start,
     }
   }
 
@@ -86,19 +89,22 @@ impl Lexer {
   /// # Returns
   ///
   /// `LiteralKind::Int { base: Base::Octal, empty_int }`
-  fn lex_octal(&mut self) -> LiteralKind {
+  fn lex_octal(&mut self, engine: &mut DiagnosticEngine) -> LiteralKind {
     let mut has_digits = false;
+    let suffix_start = self.current;
     while let Some(c) = self.peek() {
-      if c >= '0' && c <= '7' {
+      if ('0'..='7').contains(&c) {
         self.advance();
         has_digits = true;
       } else {
+        self.check_suffix_type(c, suffix_start, engine);
         break;
       }
     }
     LiteralKind::Int {
       base: Base::Octal,
       empty_int: !has_digits,
+      suffix_start,
     }
   }
 
@@ -114,11 +120,12 @@ impl Lexer {
   /// # Returns
   ///
   /// `LiteralKind::Int` or `LiteralKind::Float` with appropriate base and flags
-  fn lex_decimal(&mut self) -> LiteralKind {
+  fn lex_decimal(&mut self, engine: &mut DiagnosticEngine) -> LiteralKind {
     let mut has_digits = false;
     let mut has_dot = false;
     let mut has_exponent = false;
     let mut has_exp_digits = false;
+    let suffix_start = self.current;
 
     while let Some(c) = self.peek() {
       if c.is_ascii_digit() {
@@ -155,6 +162,7 @@ impl Lexer {
         }
         break;
       } else {
+        self.check_suffix_type(c, suffix_start, engine);
         break;
       }
     }
@@ -168,7 +176,107 @@ impl Lexer {
       LiteralKind::Int {
         base: Base::Decimal,
         empty_int: !has_digits,
+        suffix_start,
       }
+    }
+  }
+
+  fn check_suffix_type(
+    &mut self,
+    c: char,
+    mut suffix_start: usize,
+    engine: &mut DiagnosticEngine,
+  ) -> bool {
+    if c == 'u' || c == 'i' {
+      suffix_start = self.current;
+      return self.inner_check_suffix_type(c, suffix_start, engine);
+    }
+
+    false
+  }
+
+  fn inner_check_suffix_type(
+    &mut self,
+    c: char,
+    suffix_start: usize,
+    engine: &mut DiagnosticEngine,
+  ) -> bool {
+    self.advance();
+    match self.peek() {
+      Some('8') => {
+        self.advance();
+        false
+      },
+      Some('1') => {
+        self.advance();
+
+        if self.peek() == Some('6') {
+          self.advance();
+          return true;
+        } else if self.peek() == Some('2') {
+          self.advance();
+
+          if self.peek() == Some('8') {
+            self.advance();
+            return true;
+          }
+        }
+
+        false
+      },
+      Some('3') => {
+        self.advance();
+
+        if self.peek() == Some('2') {
+          self.advance();
+          return true;
+        }
+
+        false
+      },
+      Some('6') => {
+        self.advance();
+
+        if self.peek() == Some('4') {
+          self.advance();
+          return true;
+        }
+
+        false
+      },
+      Some('s') => {
+        self.advance();
+        if self.peek() == Some('i') {
+          self.advance();
+
+          if self.peek() == Some('z') {
+            self.advance();
+
+            if self.peek() == Some('e') {
+              self.advance();
+              return true;
+            }
+          }
+        }
+
+        false
+      },
+      _ => {
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::InvalidCharacter),
+          format!("Invalid character: {}", c),
+          self.source.path.to_string(),
+        )
+        .with_label(
+          diagnostic::Span::new(suffix_start, self.current),
+          Some("Invalid character here".to_string()),
+          LabelStyle::Primary,
+        )
+        .with_help("Invalid character.".to_string());
+
+        engine.add(diagnostic);
+        false
+      },
     }
   }
 
@@ -180,8 +288,9 @@ impl Lexer {
   /// # Returns
   ///
   /// `LiteralKind::Int { base: Base::Hexadecimal, empty_int }`
-  fn lex_hexadecimal(&mut self) -> LiteralKind {
+  fn lex_hexadecimal(&mut self, engine: &mut DiagnosticEngine) -> LiteralKind {
     let mut has_digits = false;
+    let suffix_start = self.current;
     while let Some(c) = self.peek() {
       if c.is_ascii_hexdigit() {
         self.advance();
@@ -190,12 +299,14 @@ impl Lexer {
         self.advance();
         continue;
       } else {
+        self.check_suffix_type(c, suffix_start, engine);
         break;
       }
     }
     LiteralKind::Int {
       base: Base::Hexadecimal,
       empty_int: !has_digits,
+      suffix_start,
     }
   }
 
@@ -576,10 +687,8 @@ impl Lexer {
       }
 
       // Safety: if nothing moved (e.g., EOF), bump one char to avoid stalling the lexer
-      if self.current == recover_start {
-        if self.peek().is_some() {
-          self.advance();
-        }
+      if self.current == recover_start && self.peek().is_some() {
+        self.advance();
       }
     }
 

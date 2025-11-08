@@ -86,7 +86,7 @@ impl Lexer {
       '"' => self.lex_string(engine), // Regular string
 
       // Numbers
-      '0'..='9' => self.lex_number(),
+      '0'..='9' => self.lex_number(engine),
       // Keywords
       'A'..='Z' | 'a'..='z' | '_' => self.lex_keywords(),
 

@@ -13,6 +13,7 @@ pub enum DiagnosticError {
   InvalidEscape,
   UnknownPrefix,
   ReservedPrefix,
+  InvalidLifetime,
 }
 
 impl DiagnosticError {
@@ -28,6 +29,7 @@ impl DiagnosticError {
       Self::InvalidEscape => "E0008",
       Self::UnknownPrefix => "E0009",
       Self::ReservedPrefix => "E0010",
+      Self::InvalidLifetime => "E0011",
     }
   }
 

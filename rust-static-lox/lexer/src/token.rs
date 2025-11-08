@@ -95,6 +95,8 @@ pub enum LiteralKind {
     base: Base,
     /// True if no digits follow the base prefix (e.g., `0x` with nothing after)
     empty_int: bool,
+    /// The start of the suffix (e.g., `u8` | `u32`)
+    suffix_start: usize,
   },
 
   /// Floating-point literal with optional suffix
