@@ -1,10 +1,2 @@
-let f1 = 1.0f32;
-let f2 = 3.14f64;
-
-// Floats with exponent and suffix
-let f3 = 2.5e10f32;
-let f4 = 1.2E-5f64;
-
-// Floats with underscores and suffix
-let f5 = 1_000.000_001f64;
-let f6 = 0.000_001f32;
+111111
+//"Hello, World!"

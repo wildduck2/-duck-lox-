@@ -3,8 +3,11 @@ use crate::types::Severity;
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiagnosticError {
+  // general
   CodeNotFound,
   InvalidArguments,
+
+  // lexer
   InvalidShebang,
   InvalidCharacter,
   UnterminatedString,
@@ -14,6 +17,9 @@ pub enum DiagnosticError {
   UnknownPrefix,
   ReservedPrefix,
   InvalidLifetime,
+
+  // parser
+  UnexpectedToken,
 }
 
 impl DiagnosticError {
@@ -30,6 +36,7 @@ impl DiagnosticError {
       Self::UnknownPrefix => "E0009",
       Self::ReservedPrefix => "E0010",
       Self::InvalidLifetime => "E0011",
+      Self::UnexpectedToken => "E0012",
     }
   }
 

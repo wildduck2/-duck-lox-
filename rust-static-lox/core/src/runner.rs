@@ -1,6 +1,6 @@
 use diagnostic::{DiagnosticEngine, SourceMap};
 use lexer::Lexer;
-// use parser::Parser;
+use parser::Parser;
 
 pub struct Runner {}
 
@@ -35,18 +35,18 @@ impl Runner {
         return Err(std::io::Error::other("lexing error"));
       }
 
-      println!("{:?}", lexer.tokens);
-      // println!("TooLongVecOfTokens[{}]", lexer.tokens.len());
+      // println!("{:?}", lexer.tokens);
+      println!("TooLongVecOfTokens[{}]", lexer.tokens.len());
 
-      // println!("\n============= PARSED ===============\n");
-      //
-      // let mut parser = Parser::new(lexer.tokens, source_file.clone());
-      // parser.parse(engine);
-      //
-      // if engine.has_errors() || engine.has_warnings() {
-      //   engine.print_diagnostics();
-      //   return Err(std::io::Error::other("parsing error"));
-      // }
+      println!("\n============= PARSED ===============\n");
+
+      let mut parser = Parser::new(lexer.tokens, source_file.clone());
+      parser.parse(engine);
+
+      if engine.has_errors() || engine.has_warnings() {
+        engine.print_diagnostics();
+        return Err(std::io::Error::other("parsing error"));
+      }
     }
 
     Ok(())

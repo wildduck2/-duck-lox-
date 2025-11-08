@@ -98,7 +98,7 @@ impl Parser {
   pub fn synchronize(&mut self, engine: &mut DiagnosticEngine) {
     while !self.is_eof() {
       match self.current_token().kind {
-        TokenKind::Semicolon => {
+        TokenKind::Semi => {
           // Stop skipping once we hit a statement boundary.
           self.advance(engine);
           break;
@@ -187,20 +187,20 @@ impl Parser {
   /// Provides contextual help based on what was expected vs found
   fn get_token_help(expected: &TokenKind, found: &Token) -> String {
     match (expected, &found.kind) {
-      (TokenKind::Semicolon, _) => "Statements must end with a semicolon".to_string(),
-      (TokenKind::RightParen, TokenKind::Semicolon) => {
+      (TokenKind::Semi, _) => "Statements must end with a semicolon".to_string(),
+      (TokenKind::OpenParen, TokenKind::Semi) => {
         "Did you forget to close the parentheses before the semicolon?".to_string()
       },
-      (TokenKind::RightBrace, TokenKind::Eof) => {
+      (TokenKind::CloseBrace, TokenKind::Eof) => {
         "Did you forget to close a block with '}'?".to_string()
       },
-      (TokenKind::LeftParen, _) => {
+      (TokenKind::CloseParen, _) => {
         "Control flow statements require parentheses around conditions".to_string()
       },
-      (TokenKind::Colon, TokenKind::Semicolon) => {
+      (TokenKind::Colon, TokenKind::Semi) => {
         "Ternary expressions use ':' to separate the branches".to_string()
       },
-      (TokenKind::Equal, _) => "Use '=' for assignment".to_string(),
+      (TokenKind::Eq, _) => "Use '=' for assignment".to_string(),
       _ => String::new(),
     }
   }

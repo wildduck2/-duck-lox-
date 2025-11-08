@@ -6,7 +6,10 @@ use diagnostic::{
 };
 use lexer::token::{Token, TokenKind};
 
-use crate::{ast::Item, Parser};
+use crate::{
+  ast::{Expr, Item},
+  Parser,
+};
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -61,7 +64,7 @@ impl Parser {
       _ => {
         // Fallback to an expression statement when no declaration keyword is found.
         let expr = self.parse_expr_stmt(engine)?;
-        let hi = self.expect(TokenKind::Semicolon, engine)?; // ensure the statement is terminated
+        let hi = self.expect(TokenKind::Semi, engine)?; // ensure the statement is terminated
         println!("{:?}", expr);
 
         Err(())
@@ -72,9 +75,15 @@ impl Parser {
 
   fn parse_expr_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     self.parse_expr(ExprContext::Default, engine);
+
+    Err(())
   }
 
-  fn parse_expr(&mut self, context: ExprContext, engine: &mut DiagnosticEngine) -> Expr {
+  fn parse_expr(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Expr, ()> {
     Err(())
   }
 }
