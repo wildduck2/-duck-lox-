@@ -11,3 +11,8 @@ categories.workspace = true
 
 [dependencies]
 diagnostic = { path = "../diagnostic" }
+
+[lib]
+name = "lexer"
+path = "src/lib.rs"
+doctest = false

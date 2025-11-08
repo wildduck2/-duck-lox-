@@ -276,17 +276,6 @@ impl Lexer {
     self.source.src.get(self.start..self.current).unwrap_or("")
   }
 
-  /// Returns the current byte offset in the source.
-  ///
-  /// Useful for diagnostics and span calculations.
-  ///
-  /// # Returns
-  ///
-  /// The current byte offset (0-indexed)
-  fn get_current_offset(&self) -> usize {
-    self.current
-  }
-
   /// Checks if the cursor has reached the end of the source file.
   ///
   /// # Returns

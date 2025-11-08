@@ -25,12 +25,10 @@ impl Lexer {
   ///
   /// `Some(TokenKind::Shebang)` if valid, `None` otherwise
   pub fn lex_shebang(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
-    // Only valid at very beginning of the file
-    if self.get_current_offset() != 1 {
+    // Only valid at very beginning of the file (before any other text)
+    if self.start != 0 {
       return None;
     }
-
-    self.advance(); // consume '!'
 
     // Look ahead to decide what kind of shebang it is
     match self.peek() {
