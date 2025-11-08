@@ -4,7 +4,7 @@ A comprehensive checklist for building a production-ready Rust lexer from scratc
 
 ---
 
-## Phase 1: Core Infrastructure 🏗️
+## Phase 1: Core Infrastructure  
 
 ### 1.1 Basic Lexer Structure
 - [x] Create `Lexer` struct with:
@@ -30,7 +30,7 @@ A comprehensive checklist for building a production-ready Rust lexer from scratc
 
 ---
 
-## Phase 2: Whitespace & Comments 📝
+## Phase 2: Whitespace & Comments  
 
 ### 2.1 Whitespace
 - [x] Implement `lex_whitespace() -> Token`
@@ -75,7 +75,7 @@ A comprehensive checklist for building a production-ready Rust lexer from scratc
 
 ---
 
-## Phase 3: Identifiers & Keywords 🔤
+## Phase 3: Identifiers & Keywords  
 
 ### 3.1 Regular Identifiers
 - [x] Implement `lex_ident() -> Token` (via `lex_keywords()`)
@@ -106,7 +106,7 @@ A comprehensive checklist for building a production-ready Rust lexer from scratc
 
 ---
 
-## Phase 4: Lifetimes 🕐
+## Phase 4: Lifetimes  
 
 ### 4.1 Regular Lifetimes
 - [x] Implement `lex_lifetime() -> Token`
@@ -131,7 +131,7 @@ A comprehensive checklist for building a production-ready Rust lexer from scratc
 
 ---
 
-## Phase 5: Numeric Literals 🔢
+## Phase 5: Numeric Literals  
 
 ### 5.1 Integer Literals
 - [x] Implement `lex_number() -> Token`
@@ -172,7 +172,7 @@ A comprehensive checklist for building a production-ready Rust lexer from scratc
 
 ---
 
-## Phase 6: Character & Byte Literals 📝
+## Phase 6: Character & Byte Literals  
 
 ### 6.1 Character Literals
 - [x] Implement `lex_char() -> Token`
@@ -210,7 +210,7 @@ A comprehensive checklist for building a production-ready Rust lexer from scratc
 
 ---
 
-## Phase 7: String Literals 📜
+## Phase 7: String Literals  
 
 ### 7.1 Regular Strings
 - [x] Implement `lex_string() -> Token` (via `lex_str()`)
@@ -258,7 +258,7 @@ A comprehensive checklist for building a production-ready Rust lexer from scratc
 
 ---
 
-## Phase 8: Operators & Punctuation ⚙️
+## Phase 8: Operators & Punctuation  
 
 ### 8.1 Single-Character Tokens
 Implement individual lexing functions for each:
@@ -302,7 +302,7 @@ Implement individual lexing functions for each:
 
 ---
 
-## Phase 9: Unknown Prefixes & Reserved Syntax 🚫
+## Phase 9: Unknown Prefixes & Reserved Syntax  
 
 ### 9.1 Unknown Literal Prefixes
 - [x] Implement `detect_unknown_prefix() -> Option<Token>`
@@ -324,7 +324,7 @@ Implement individual lexing functions for each:
 
 ---
 
-## Phase 10: Main Lexer Loop 🔄
+## Phase 10: Main Lexer Loop  
 
 ### 10.2 Character-based Dispatch
 - [x] Whitespace chars → `lex_whitespace()`
@@ -346,7 +346,7 @@ Implement individual lexing functions for each:
 
 ---
 
-## Phase 11: Error Handling & Validation ⚠️
+## Phase 11: Error Handling & Validation  
 
 ### 11.1 Malformed Literals
 - [x] Unterminated strings/chars: set `terminated: false`
@@ -366,7 +366,7 @@ Implement individual lexing functions for each:
 
 ---
 
-## Phase 12: Testing 🧪
+## Phase 12: Testing  
 
 ### 12.1 Unit Tests Per Feature
 - [ ] Whitespace: various Unicode whitespace
@@ -393,7 +393,7 @@ Implement individual lexing functions for each:
 
 ---
 
-## Phase 13: Optimizations 🚀
+## Phase 13: Optimizations 
 
 ### 13.1 Performance
 - [ ] Profile hot paths with `cargo flamegraph`
@@ -413,7 +413,7 @@ Implement individual lexing functions for each:
 
 ---
 
-## Phase 14: API & Documentation 📚
+## Phase 14: API & Documentation  
 
 ### 14.1 Public API
 - [x] Clean, ergonomic API for consumers:
@@ -428,8 +428,8 @@ Implement individual lexing functions for each:
 ### 14.2 Documentation
 - [x] Document all public types and methods
 - [x] Add examples to struct/function docs
-- [ ] Create comprehensive README
-- [ ] Document differences from rustc_lexer (if any)
+- [x] Create comprehensive README
+- [x] Document differences from rustc_lexer (if any)
 
 ### 14.3 Examples
 - [ ] Simple token printer example
@@ -438,7 +438,7 @@ Implement individual lexing functions for each:
 
 ---
 
-## Phase 15: Advanced Features (Optional) ✨
+## Phase 15: Advanced Features (Optional)  
 
 ### 15.1 Error Recovery
 - [ ] Continue lexing after errors
@@ -462,59 +462,22 @@ Implement individual lexing functions for each:
 
 ---
 
-## Phase 16: Validation & Release 🎉
+## Phase 16: Validation & Release  
 
 ### 16.1 Compliance Testing
-- [ ] Test against Rust specification
-- [ ] Compare output with rustc_lexer on Rust repo
-- [ ] Test edition-specific features (2015, 2018, 2021, 2024)
+- [x] Test against Rust specification
+- [x] Compare output with rustc_lexer on Rust repo
 
 ### 16.2 Code Quality
-- [ ] Run clippy with strict lints
-- [ ] Ensure no unsafe code (or justify it)
+- [x] Run clippy with strict lints
+- [x] Ensure no unsafe code (or justify it)
 - [ ] 100% documentation coverage
-- [ ] Format with rustfmt
+- [x] Format with rustfmt
 
-### 16.3 CI/CD
-- [ ] Set up GitHub Actions
-- [ ] Test on multiple Rust versions
-- [ ] Test on different platforms (Linux, macOS, Windows)
-- [ ] Automated releases with cargo-release
-
-### 16.4 Publication
-- [ ] Choose appropriate license (MIT/Apache-2.0)
-- [ ] Publish to crates.io
-- [ ] Announce on Rust forums/Reddit
-- [ ] Add to Awesome Rust list
-
----
-
-## Estimated Time ⏱️
-
-- **Phase 1-2**: 1-2 days (infrastructure + whitespace/comments)
-- **Phase 3-4**: 2-3 days (identifiers + lifetimes)
-- **Phase 5**: 3-4 days (numeric literals, tricky!)
-- **Phase 6-7**: 4-5 days (char/byte/string literals, many variants)
-- **Phase 8-9**: 1-2 days (operators + error cases)
-- **Phase 10**: 1 day (main loop integration)
-- **Phase 11**: 2-3 days (error handling polish)
-- **Phase 12**: 3-5 days (comprehensive testing)
-- **Phase 13**: 2-3 days (optimizations)
-- **Phase 14**: 2-3 days (API + docs)
-- **Phase 15**: Variable (optional features)
-- **Phase 16**: 1-2 days (final validation)
-
-**Total**: ~25-35 days for a solid, production-ready lexer
-
----
-
-## Key Resources 📖
+## Key Resources  
 
 - [Rust Reference - Lexical Structure](https://doc.rust-lang.org/reference/lexical-structure.html)
 - [rustc_lexer source code](https://github.com/rust-lang/rust/tree/master/compiler/rustc_lexer)
 - [Unicode XID specification](http://www.unicode.org/reports/tr31/)
 - [Rust Edition Guide](https://doc.rust-lang.org/edition-guide/)
 
----
-
-Good luck building your Rust lexer! 🦀
