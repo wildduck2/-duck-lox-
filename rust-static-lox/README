@@ -2,3 +2,15 @@
 ============
 
 This is not yet implemented.
+
+Change Log
+----------
+2025-11-08
+- Added unified numeric literal suffix scanning (integers `u8`/`i32` etc. and floats `f32`/`f64`) across every base, plus diagnostics for malformed suffixes and reserved prefixes.
+- Introduced lifetime lexing (`'a`, `'static`, `'_`) with invalid-number detection, integrating it with the character literal fallback path.
+- Completed the literal pipeline (raw/byte/C strings, escape validation, prefix filtering) and tightened shebang parsing semantics.
+- Expanded lexer regression tests (keywords/operators, literal coverage, numeric suffix failures, lifetimes) to guard the new behavior.
+
+2025-11-07
+- Implemented the full string and character literal system (regular, byte, raw, byte-raw, C, raw-C) including escape/unicode handling and diagnostics for unterminated/invalid tokens.
+- Added raw-string recovery at EOL, escape validation diagnostics, and supporting helpers within the literal module.
