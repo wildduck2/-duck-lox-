@@ -1,10 +1,11 @@
 #[cfg(test)]
 mod lexer_tests {
-  use diagnostic::{DiagnosticEngine, SourceMap};
+  use diagnostic::{DiagnosticEngine, SourceFile, SourceMap};
   use lexer::{
     token::{Base, LiteralKind, Token, TokenKind},
     Lexer,
   };
+  use rand::{distributions::Standard, rngs::StdRng, Rng, SeedableRng};
 
   fn lex_test_file(file: &str) -> (Lexer, DiagnosticEngine) {
     let mut engine = DiagnosticEngine::new();
@@ -27,6 +28,14 @@ mod lexer_tests {
 
   fn token_text<'a>(lexer: &'a Lexer, token: &Token) -> &'a str {
     &lexer.source.src[token.span.start..token.span.end]
+  }
+
+  fn lex_inline(name: &str, src: &str) -> (Lexer, DiagnosticEngine) {
+    let mut engine = DiagnosticEngine::new();
+    let source = SourceFile::new(name.to_string(), src.to_string());
+    let mut lexer = Lexer::new(source);
+    lexer.scan_tokens(&mut engine);
+    (lexer, engine)
   }
 
   #[test]
@@ -426,5 +435,241 @@ mod lexer_tests {
       tokens.iter().any(|t| matches!(t.kind, TokenKind::Ident)),
       "regular identifiers should be present"
     );
+  }
+
+  #[test]
+  fn test_operator_tokens() {
+    let (lexer, engine) = lex_test_file("tests/files/operators.lox");
+    if engine.has_errors() {
+      engine.print_diagnostics();
+    }
+    assert!(!engine.has_errors(), "operator matrix should be valid");
+
+    let expected = [
+      TokenKind::Semi,
+      TokenKind::Comma,
+      TokenKind::Dot,
+      TokenKind::OpenParen,
+      TokenKind::CloseParen,
+      TokenKind::OpenBrace,
+      TokenKind::CloseBrace,
+      TokenKind::OpenBracket,
+      TokenKind::CloseBracket,
+      TokenKind::At,
+      TokenKind::Pound,
+      TokenKind::Tilde,
+      TokenKind::Question,
+      TokenKind::Colon,
+      TokenKind::Dollar,
+      TokenKind::Eq,
+      TokenKind::EqEq,
+      TokenKind::Ne,
+      TokenKind::Lt,
+      TokenKind::Le,
+      TokenKind::Gt,
+      TokenKind::Ge,
+      TokenKind::Plus,
+      TokenKind::PlusEq,
+      TokenKind::Minus,
+      TokenKind::MinusEq,
+      TokenKind::Star,
+      TokenKind::StarEq,
+      TokenKind::Slash,
+      TokenKind::SlashEq,
+      TokenKind::And,
+      TokenKind::AndEq,
+      TokenKind::AndAnd,
+      TokenKind::Or,
+      TokenKind::OrEq,
+      TokenKind::OrOr,
+      TokenKind::Caret,
+      TokenKind::CaretEq,
+      TokenKind::ShiftLeft,
+      TokenKind::ShiftRight,
+      TokenKind::ColonColon,
+      TokenKind::ThinArrow,
+      TokenKind::FatArrow,
+      TokenKind::DotDot,
+    ];
+
+    for k in expected {
+      assert_contains(&lexer.tokens, k);
+    }
+  }
+
+  #[test]
+  fn test_unknown_tokens() {
+    let (_lexer, engine) = lex_test_file("tests/files/unknown_tokens.lox");
+    assert!(engine.has_errors(), "unknown tokens should emit diagnostics");
+  }
+
+  #[test]
+  fn test_identifier_variants() {
+    let (lexer, engine) = lex_test_file("tests/files/identifiers.lox");
+    if engine.has_errors() {
+      engine.print_diagnostics();
+    }
+    assert!(
+      !engine.has_errors(),
+      "identifier sample should be clean (no diagnostics expected)"
+    );
+
+    assert!(
+      lexer
+        .tokens
+        .iter()
+        .any(|tok| matches!(tok.kind, TokenKind::Ident)),
+      "expected regular identifiers"
+    );
+    assert!(
+      lexer
+        .tokens
+        .iter()
+        .any(|tok| tok.kind == TokenKind::KwLet),
+      "expected keyword token"
+    );
+  }
+
+  #[test]
+  fn test_unicode_whitespace() {
+    let (_lexer, engine) = lex_test_file("tests/files/unicode_whitespace.lox");
+
+    if engine.has_errors() {
+      engine.print_diagnostics();
+    }
+    assert!(
+      engine.has_errors(),
+      "current lexer treats unicode whitespace as invalid characters"
+    );
+  }
+
+  #[test]
+  fn test_nested_and_doc_comments() {
+    let (_lexer, engine) = lex_test_file("tests/files/comments_nested.lox");
+    assert!(
+      !engine.has_errors(),
+      "nested/doc comments should lex without diagnostics for now"
+    );
+  }
+
+  #[test]
+  fn test_char_and_byte_literals() {
+    let (lexer, _engine) = lex_test_file("tests/files/chars_bytes.lox");
+    assert!(
+      lexer
+        .tokens
+        .iter()
+        .any(|tok| matches!(tok.kind, TokenKind::Literal { kind: LiteralKind::Char, .. })),
+      "expected character literal tokens"
+    );
+    assert!(
+      lexer.tokens.iter().any(|tok| matches!(
+        tok.kind,
+        TokenKind::Literal {
+          kind: LiteralKind::Byte,
+          ..
+        }
+      )),
+      "expected byte literal tokens"
+    );
+  }
+
+  #[test]
+  fn test_integration_valid_source() {
+    let (lexer, engine) = lex_test_file("tests/files/integration_valid.rs");
+    if engine.has_errors() {
+      engine.print_diagnostics();
+    }
+    assert!(
+      !engine.has_errors(),
+      "sample Rust program should lex without diagnostics"
+    );
+    assert!(
+      lexer.tokens.len() > 10,
+      "expected a healthy number of tokens from integration sample"
+    );
+  }
+
+  #[test]
+  fn test_integration_intentional_errors() {
+    let (_lexer, engine) = lex_test_file("tests/files/integration_errors.lox");
+    assert!(engine.has_errors(), "intentional errors should be reported");
+  }
+
+  #[test]
+  fn test_edge_case_inputs() {
+    let (_lexer, engine) = lex_inline("empty", "");
+    assert!(
+      !engine.has_errors(),
+      "empty file should not generate diagnostics"
+    );
+
+    let (lexer_ws, engine_ws) = lex_test_file("tests/files/whitespace.lox");
+    assert!(
+      !engine_ws.has_errors(),
+      "whitespace-only file should be clean"
+    );
+    assert_eq!(lexer_ws.tokens.len(), 1);
+
+    let (_lexer_comments, engine_comments) = lex_test_file("tests/files/comments.lox");
+    assert!(
+      !engine_comments.has_errors(),
+      "comment-only file should not error"
+    );
+  }
+
+  #[test]
+  fn test_large_file_performance() {
+    let mut builder = String::new();
+    while builder.len() < 1_100_000 {
+      builder.push_str("let value = 42;\n");
+    }
+    let (lexer, engine) = lex_inline("large", &builder);
+    assert!(
+      !engine.has_errors(),
+      "large repetitive file should lex without diagnostics"
+    );
+    assert!(lexer.tokens.len() > 10_000);
+  }
+
+  #[test]
+  fn fuzz_random_bytes_smoke() {
+    let mut rng = StdRng::seed_from_u64(0xDEADBEEF);
+    for i in 0..5 {
+      let len = 2048;
+      let bytes: Vec<u8> = (&mut rng).sample_iter(Standard).take(len).collect();
+      let src = String::from_utf8_lossy(&bytes).into_owned();
+      let (_lexer, _engine) = lex_inline(&format!("fuzz-rand-{i}"), &src);
+    }
+  }
+
+  #[test]
+  fn fuzz_semi_valid_smoke() {
+    let mut rng = StdRng::seed_from_u64(0xFEEDFACE);
+    let pieces = [
+      "let ",
+      "fn ",
+      "mut ",
+      "x",
+      "y",
+      " = ",
+      "42",
+      "0xFF",
+      ";\n",
+      "if ",
+      "{",
+      "}",
+      "while ",
+      "true",
+      "false",
+    ];
+
+    for i in 0..5 {
+      let mut src = String::new();
+      for _ in 0..256 {
+        src.push_str(pieces[rng.gen_range(0..pieces.len())]);
+      }
+      let (_lexer, _engine) = lex_inline(&format!("fuzz-semi-{i}"), &src);
+    }
   }
 }

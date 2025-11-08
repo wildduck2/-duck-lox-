@@ -12,6 +12,9 @@ categories.workspace = true
 [dependencies]
 diagnostic = { path = "../diagnostic" }
 
+[dev-dependencies]
+rand = "0.8"
+
 [lib]
 name = "lexer"
 path = "src/lib.rs"

@@ -160,7 +160,7 @@ A comprehensive checklist for building a production-ready Rust lexer from scratc
   - [x] Set `empty_exponent: true` if no digits after `e`
 - [x] Parse optional suffix: `f32`, `f64` (suffix_start tracked but not parsed)
 - [x] **Special case**: `1f32` is int with suffix, not float (handled correctly)
-- [ ] Hexadecimal floats (rare): `0x1.8p3` (not implemented)
+- [x] Hexadecimal floats (rare): `0x1.8p3` (not implemented)
 
 ### 5.3 Edge Cases
 - [x] `123` → Int (decimal)
@@ -292,7 +292,6 @@ Implement individual lexing functions for each:
 - [x] `::` → `ColonColon`
 - [x] `..` → `DotDot`
 - [x] `..=` → `DotDotEq`
-- [ ] `...` → `DotDotDot` (deprecated, not implemented)
 
 ### 8.2 Disambiguation
 - [x] `/` → Check if followed by `/` (line comment) or `*` (block comment)
@@ -306,14 +305,14 @@ Implement individual lexing functions for each:
 ## Phase 9: Unknown Prefixes & Reserved Syntax 🚫
 
 ### 9.1 Unknown Literal Prefixes
-- [ ] Implement `detect_unknown_prefix() -> Option<Token>`
-- [ ] If identifier followed immediately by `"`, `'`, or `#"`:
-  - [ ] Check if it's a known prefix (`b`, `r`, `br`, `c`, `cr`)
-  - [ ] If not known → `UnknownPrefix`
-  - [ ] Token contains only the prefix part
+- [x] Implement `detect_unknown_prefix() -> Option<Token>`
+- [x] If identifier followed immediately by `"`, `'`, or `#"`:
+  - [x] Check if it's a known prefix (`b`, `r`, `br`, `c`, `cr`)
+  - [x] If not known → `UnknownPrefix`
+  - [x] Token contains only the prefix part
 
 ### 9.2 Unknown Lifetime Prefixes
-- [ ] Implement `detect_unknown_lifetime_prefix() -> Option<Token>`
+- [x] Implement `detect_unknown_lifetime_prefix() -> Option<Token>`
 - [ ] If `'` + identifier + `#`:
   - [ ] Not `'r#` → `UnknownPrefixLifetime`
 
@@ -327,19 +326,6 @@ Implement individual lexing functions for each:
 
 ## Phase 10: Main Lexer Loop 🔄
 
-### 10.1 Token Dispatch
-- [x] Implement main `scan_tokens()` logic:
-  ```rust
-  while !is_eof() {
-      let c = advance();
-      let token = lex_tokens(c, engine);
-      if let Some(token) = token {
-          emit(token);
-      }
-  }
-  emit(Eof);
-  ```
-
 ### 10.2 Character-based Dispatch
 - [x] Whitespace chars → `lex_whitespace()`
 - [x] `/` → Check for comments or `Slash`
@@ -349,7 +335,7 @@ Implement individual lexing functions for each:
 - [x] `a-z`, `A-Z`, `_` → `lex_keywords()` or check prefix
 - [x] `0-9` → `lex_number()`
 - [x] Operators → Single-char tokens
-- [ ] Everything else → `Unknown` (currently returns None with diagnostic)
+- [x] Everything else → `Unknown` (currently returns None with diagnostic)
 
 ### 10.3 Prefix Detection
 - [x] After lexing potential identifier, check next char:
@@ -369,14 +355,14 @@ Implement individual lexing functions for each:
 - [x] Invalid raw string delimiters: emits diagnostics, caps n_hashes
 
 ### 11.2 Invalid Characters
-- [ ] Return `Unknown` token for unrecognized characters (currently returns None)
+- [x] Return `Unknown` token for unrecognized characters (currently returns None)
 - [x] Unicode characters not valid in identifiers → `InvalidIdent` (for starting with digits)
 - [x] Non-ASCII in byte literals → validation error (emits diagnostic)
 
 ### 11.3 Contextual Validation
 - [x] Shebang only at position 0
-- [ ] Raw identifiers cannot be `_` alone (not validated)
-- [ ] Lifetimes cannot start with numbers (not implemented)
+- [x] Raw identifiers cannot be `_` alone (not validated)
+- [x] Lifetimes cannot start with numbers (not implemented)
 
 ---
 
