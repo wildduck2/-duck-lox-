@@ -20,19 +20,13 @@ use crate::{
 };
 
 impl Lexer {
-  /// Lexes a numeric literal (integer or float).
+  /// Lex a numeric literal starting at the current offset.
   ///
-  /// Detects the numeric base from prefixes:
-  /// - `0b` - Binary
-  /// - `0o` - Octal
-  /// - `0x` - Hexadecimal
-  /// - No prefix - Decimal
+  /// Detects base by prefix:
+  /// - `0b` binary, `0o` octal, `0x` hexadecimal, otherwise decimal
   ///
-  /// Handles floats with decimal points and exponential notation.
-  ///
-  /// # Returns
-  ///
-  /// `Some(TokenKind::Literal { kind, suffix_start })`
+  /// Delegates to base-specific lexers (including float handling) and
+  /// returns `TokenKind::Literal { kind, suffix_start }`.
   pub fn lex_number(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     let kind = if self.get_current_lexeme() == "0" {
       if self.match_char('b') {
@@ -52,14 +46,11 @@ impl Lexer {
     Some(TokenKind::Literal { kind, suffix_start })
   }
 
-  /// Lexes a binary integer literal (`0b...`).
+  /// Lex a binary integer: `0b[01_]+`.
   ///
-  /// Consumes binary digits (0-1) and underscores (for readability).
-  /// Sets `empty_int` to `true` if no digits follow the prefix.
-  ///
-  /// # Returns
-  ///
-  /// `LiteralKind::Int { base: Base::Binary, empty_int }`
+  /// Accepts `_` separators (not doubled). Records `empty_int` if no
+  /// digits follow `0b`. Also probes for an optional integer suffix
+  /// (e.g. `u8`, `i32`) starting at `suffix_start`.
   fn lex_binary(&mut self, engine: &mut DiagnosticEngine) -> LiteralKind {
     let mut has_digits = false;
     let suffix_start = self.current;
@@ -71,7 +62,7 @@ impl Lexer {
         self.advance();
         continue;
       } else {
-        self.check_suffix_type(c, suffix_start, engine);
+        self.check_suffix_type(c, suffix_start, false, engine);
         break;
       }
     }
@@ -82,13 +73,11 @@ impl Lexer {
     }
   }
 
-  /// Lexes an octal integer literal (`0o...`).
+  /// Lex an octal integer: `0o[0-7_]+`.
   ///
-  /// Consumes octal digits (0-7). Sets `empty_int` to `true` if no digits follow the prefix.
-  ///
-  /// # Returns
-  ///
-  /// `LiteralKind::Int { base: Base::Octal, empty_int }`
+  /// Accepts `_` separators (not doubled). Records `empty_int` if no
+  /// digits follow `0o`. Also probes for an optional integer suffix
+  /// (e.g. `u16`, `usize`) starting at `suffix_start`.
   fn lex_octal(&mut self, engine: &mut DiagnosticEngine) -> LiteralKind {
     let mut has_digits = false;
     let suffix_start = self.current;
@@ -97,7 +86,7 @@ impl Lexer {
         self.advance();
         has_digits = true;
       } else {
-        self.check_suffix_type(c, suffix_start, engine);
+        self.check_suffix_type(c, suffix_start, false, engine);
         break;
       }
     }
@@ -108,18 +97,17 @@ impl Lexer {
     }
   }
 
-  /// Lexes a decimal integer or float literal.
+  /// Lex a decimal number: integer or float.
   ///
-  /// Handles:
-  /// - Integers: `42`, `1_000_000`
-  /// - Floats: `3.14`, `1e10`, `2.5E-3`
+  /// Integer: `[0-9][0-9_]*`
+  /// Float forms supported:
+  /// - fractional: `123.45`
+  /// - exponent: `1e10`, `2.5E-3` (with optional `+`/`-`)
   ///
-  /// Detects floats by presence of decimal point or exponent marker (`e`/`E`).
-  /// Sets `empty_exponent` to `true` if exponent marker exists but no digits follow.
-  ///
-  /// # Returns
-  ///
-  /// `LiteralKind::Int` or `LiteralKind::Float` with appropriate base and flags
+  /// Tracks `_` separators, flags missing exponent digits, and records
+  /// integer/float kind. Probes for suffixes:
+  /// - integer: `u8|u16|u32|u64|u128|usize|i8|i16|i32|i64|i128|isize`
+  /// - float: `f32|f64`
   fn lex_decimal(&mut self, engine: &mut DiagnosticEngine) -> LiteralKind {
     let mut has_digits = false;
     let mut has_dot = false;
@@ -162,7 +150,7 @@ impl Lexer {
         }
         break;
       } else {
-        self.check_suffix_type(c, suffix_start, engine);
+        self.check_suffix_type(c, suffix_start, has_dot || has_exponent, engine);
         break;
       }
     }
@@ -181,12 +169,40 @@ impl Lexer {
     }
   }
 
+  /// Internal: recognize and consume a numeric **suffix** at the current position.
+  ///
+  /// Supports:
+  /// - integers: `u8|u16|u32|u64|u128|usize|i8|i16|i32|i64|i128|isize`
+  /// - floats: `f32|f64` (only if `is_float == true`)
+  ///
+  /// Returns `true` if a valid suffix was fully consumed, `false` otherwise.
+  /// Emits a diagnostic on obviously invalid trailing characters.
   fn check_suffix_type(
     &mut self,
     c: char,
     mut suffix_start: usize,
+    is_float: bool,
     engine: &mut DiagnosticEngine,
   ) -> bool {
+    if c == 'f' && is_float {
+      self.advance(); // consume f
+
+      if self.peek() == Some('3') {
+        self.advance();
+        if self.peek() == Some('2') {
+          self.advance();
+          return true;
+        }
+      } else if self.peek() == Some('6') {
+        self.advance();
+
+        if self.peek() == Some('4') {
+          self.advance();
+          return true;
+        }
+      }
+    }
+
     if c == 'u' || c == 'i' {
       suffix_start = self.current;
       return self.inner_check_suffix_type(c, suffix_start, engine);
@@ -195,6 +211,10 @@ impl Lexer {
     false
   }
 
+  /// Internal: helper used by `check_suffix_type` to parse concrete integer suffixes.
+  /// Consumes characters after the leading `u`/`i`. Returns `true` on success.
+  ///
+  /// On failure, emits a focused diagnostic pointing at the suffix span.
   fn inner_check_suffix_type(
     &mut self,
     c: char,
@@ -280,51 +300,102 @@ impl Lexer {
     }
   }
 
-  /// Lexes a hexadecimal integer literal (`0x...`).
+  /// Lex a hexadecimal number (`0x`/`0X`), supporting **ints and hex floats**.
   ///
-  /// Consumes hexadecimal digits (0-9, a-f, A-F) and underscores.
-  /// Sets `empty_int` to `true` if no digits follow the prefix.
+  /// Integer: `0x[0-9A-Fa-f_]+`
+  /// Hex-float (C/Rust-style): `0xA.BCp±E` where exponent is base-2 (`p`/`P`)
+  ///   - optional fraction after `.`
+  ///   - exponent requires at least one digit; optional `+`/`-`
   ///
-  /// # Returns
-  ///
-  /// `LiteralKind::Int { base: Base::Hexadecimal, empty_int }`
+  /// Accepts `_` separators (not doubled). Probes for valid suffixes
+  /// after the numeric part. Emits diagnostics for malformed exponents.
   fn lex_hexadecimal(&mut self, engine: &mut DiagnosticEngine) -> LiteralKind {
     let mut has_digits = false;
+    let mut has_dot = false;
+    let mut has_exponent = false;
+    let mut has_exp_digits = false;
     let suffix_start = self.current;
+
+    // consume hex digits and optional dot
     while let Some(c) = self.peek() {
       if c.is_ascii_hexdigit() {
         self.advance();
         has_digits = true;
       } else if c == '_' && self.peek_next(1) != Some('_') {
         self.advance();
-        continue;
+      } else if c == '.' && !has_dot {
+        has_dot = true;
+        self.advance();
       } else {
-        self.check_suffix_type(c, suffix_start, engine);
         break;
       }
     }
-    LiteralKind::Int {
-      base: Base::Hexadecimal,
-      empty_int: !has_digits,
-      suffix_start,
+
+    // check for exponent part (p or P)
+    if let Some(c) = self.peek() {
+      if (c == 'p' || c == 'P') {
+        has_exponent = true;
+        self.advance();
+
+        // optional sign
+        if let Some(sign) = self.peek() {
+          if sign == '+' || sign == '-' {
+            self.advance();
+          }
+        }
+
+        // exponent digits
+        while let Some(ec) = self.peek() {
+          if ec.is_ascii_digit() {
+            self.advance();
+            has_exp_digits = true;
+          } else if ec == '_' && self.peek_next(1) != Some('_') {
+            self.advance();
+          } else {
+            break;
+          }
+        }
+
+        if !has_exp_digits {
+          let diag = Diagnostic::new(
+            DiagnosticCode::Error(DiagnosticError::InvalidCharacter),
+            "Invalid hexadecimal float: missing exponent digits".to_string(),
+            self.source.path.to_string(),
+          );
+          engine.add(diag);
+        }
+      }
+    }
+
+    // suffix check (like u8 or f64)
+    if let Some(c) = self.peek() {
+      self.check_suffix_type(c, suffix_start, has_dot || has_exponent, engine);
+    }
+
+    if has_dot || has_exponent {
+      LiteralKind::Float {
+        base: Base::Hexadecimal,
+        empty_exponent: has_exponent && !has_exp_digits,
+      }
+    } else {
+      LiteralKind::Int {
+        base: Base::Hexadecimal,
+        empty_int: !has_digits,
+        suffix_start,
+      }
     }
   }
 
-  /// Dispatches string/character literal lexing based on prefix.
+  /// Dispatch string-like and character-like literals based on the current prefix.
   ///
-  /// Routes to appropriate lexer based on the current lexeme and next character:
-  /// - `"` or `'` - Regular string or character
-  /// - `b"` or `b'` - Byte string or byte character
-  /// - `c"` or `cr"` - C string or raw C string
-  /// - `r"` or `r#"` - Raw string
+  /// Routes:
+  /// - `"` → normal string
+  /// - `b"` / `br` → byte / raw byte string
+  /// - `c"` / `cr` → C / raw C string
+  /// - `r` + `#*` → raw string
+  /// - `'` → character (delegates to `lex_char`)
   ///
-  /// # Arguments
-  ///
-  /// * `engine` - Diagnostic engine for error reporting
-  ///
-  /// # Returns
-  ///
-  /// `Some(TokenKind::Literal)` with appropriate `LiteralKind`, or `` on error
+  /// Emits “unknown/reserved prefix” diagnostics for unrecognized two-char prefixes.
   pub fn lex_string(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     let first = self.get_current_lexeme(); // e.g. "b", "c", "r", or "\""
     let second = self.peek(); // next char, e.g. 'r', '"', etc.
@@ -394,18 +465,11 @@ impl Lexer {
     }
   }
 
-  /// Lexes a raw C string literal (`cr#"..."#`).
+  /// Lex a **raw C string**: `cr"..."`, `cr#"...\"..."#`, etc.
   ///
-  /// Handles hash-delimited raw C strings (e.g., `cr#"text"#`).
-  /// Emits diagnostics for unterminated strings or too many hashes (>255).
-  ///
-  /// # Arguments
-  ///
-  /// * `engine` - Diagnostic engine for error reporting
-  ///
-  /// # Returns
-  ///
-  /// `Some(TokenKind::Literal { kind: LiteralKind::RawCStr { n_hashes } })`
+  /// Counts `#` fences, requires opening `"`, scans until matching `"###...###`.
+  /// Emits diagnostics for too many `#` or unterminated literals. Returns
+  /// `LiteralKind::RawCStr { n_hashes }`.
   fn lex_craw_str(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     self.advance();
 
@@ -519,18 +583,11 @@ impl Lexer {
     })
   }
 
-  /// Lexes a raw string literal (`r#"..."#`).
+  /// Lex a **raw string**: `r"..."`, `r#"...\"..."#`, multi-line allowed.
   ///
-  /// Handles hash-delimited raw strings (e.g., `r#"text"#`, `r##"text"##`).
-  /// Supports multi-line strings and includes recovery logic for unterminated literals.
-  ///
-  /// # Arguments
-  ///
-  /// * `engine` - Diagnostic engine for error reporting
-  ///
-  /// # Returns
-  ///
-  /// `Some(TokenKind::Literal { kind: LiteralKind::RawStr { n_hashes } })`
+  /// Counts `#` fences, requires opening `"`, scans until matching terminator.
+  /// Includes recovery for probable next-line raw prefixes. Emits diagnostics
+  /// for too many `#` or unterminated literals. Returns `LiteralKind::RawStr { n_hashes }`.
   fn lex_raw_str(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     const MAX_HASHES: u16 = 255;
 
@@ -699,18 +756,10 @@ impl Lexer {
     })
   }
 
-  /// Lexes a C string literal (`c"..."`).
+  /// Lex a **C string**: `c"..."`.
   ///
-  /// C strings are null-terminated and used for FFI interop.
-  /// Handles escape sequences and emits diagnostics for unterminated strings.
-  ///
-  /// # Arguments
-  ///
-  /// * `engine` - Diagnostic engine for error reporting
-  ///
-  /// # Returns
-  ///
-  /// `Some(TokenKind::Literal { kind: LiteralKind::CStr })`
+  /// Normal escape handling (as per your language rules) and unterminated
+  /// diagnostics. Returns `LiteralKind::CStr`.
   fn lex_cstr(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     self.advance();
     self.lex_string_line(true);
@@ -736,18 +785,12 @@ impl Lexer {
     })
   }
 
-  /// Lexes a byte string literal (`b"..."` or `br#"..."#`).
+  /// Lex a byte string: `b"..."` or raw byte string: `br#"..."#`.
   ///
-  /// Handles both regular byte strings and raw byte strings.
-  /// Validates escape sequences and emits diagnostics for errors.
+  /// For `b"..."`, validates escapes (e.g. `\\`, `\"`, `\xNN`) and reports errors.
+  /// For `br...`, counts `#` fences and matches closing delimiter.
   ///
-  /// # Arguments
-  ///
-  /// * `engine` - Diagnostic engine for error reporting
-  ///
-  /// # Returns
-  ///
-  /// `Some(TokenKind::Literal)` with `LiteralKind::ByteStr` or `LiteralKind::RawByteStr`
+  /// Returns `LiteralKind::ByteStr` or `LiteralKind::RawByteStr { n_hashes }`.
   fn lex_bstr(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     // The 'b' prefix has already been consumed.
     if self.peek() == Some('r') {
@@ -937,18 +980,10 @@ impl Lexer {
     })
   }
 
-  /// Lexes a byte character literal (`b'...'`).
+  /// Lex a **byte character**: `b'X'` or escaped (`b'\xNN'`).
   ///
-  /// Byte characters must be ASCII (single byte). Emits diagnostics for
-  /// unterminated literals or characters that are too long.
-  ///
-  /// # Arguments
-  ///
-  /// * `engine` - Diagnostic engine for error reporting
-  ///
-  /// # Returns
-  ///
-  /// `Some(TokenKind::Literal { kind: LiteralKind::Byte { terminated } })` or `None` on error
+  /// Enforces single-byte content. Emits diagnostics for unterminated or
+  /// overlong forms. Returns `LiteralKind::Byte`.
   fn lex_bchar(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     let mut len = 1;
     let mut is_hex = false;
@@ -1020,22 +1055,11 @@ impl Lexer {
     })
   }
 
-  /// Lexes a character literal (`'...'`).
+  /// Lex a **character literal**: `'x'`, `'\n'`, `'\x7F'`, `'\u{1F980}'`.
   ///
-  /// Handles Unicode characters and escape sequences:
-  /// - Simple escapes: `\n`, `\t`, `\\`, `\'`
-  /// - Hex escapes: `\x7F`
-  /// - Unicode escapes: `\u{1F980}`
-  ///
-  /// Emits diagnostics for unterminated literals or invalid escapes.
-  ///
-  /// # Arguments
-  ///
-  /// * `engine` - Diagnostic engine for error reporting
-  ///
-  /// # Returns
-  ///
-  /// `Some(TokenKind::Literal { kind: LiteralKind::Char { terminated } })`
+  /// Validates escapes and reports errors for unterminated forms or bad escapes.
+  /// If no closing `'` is found before newline/EOF, falls back to `lex_lifetime`
+  /// to interpret leading `'` as a lifetime token. Returns `LiteralKind::Char`.
   fn lex_char(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     let mut terminated = false;
 
@@ -1139,18 +1163,9 @@ impl Lexer {
     })
   }
 
-  /// Lexes a regular string literal (`"..."`).
+  /// Lex a **normal string**: `"..."`.
   ///
-  /// Handles escape sequences and multi-line strings.
-  /// Emits diagnostics for unterminated strings.
-  ///
-  /// # Arguments
-  ///
-  /// * `engine` - Diagnostic engine for error reporting
-  ///
-  /// # Returns
-  ///
-  /// `Some(TokenKind::Literal { kind: LiteralKind::Str { terminated } })` or `None` on error
+  /// Handles escapes and reports unterminated strings. Returns `LiteralKind::Str`.
   fn lex_str(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     self.lex_string_line(true);
 
@@ -1181,14 +1196,9 @@ impl Lexer {
     })
   }
 
-  /// Helper function to lex a string line until closing quote or newline.
+  /// Helper for string scanning until closing `"` (or newline if `single == true`).
   ///
-  /// Handles escape sequences (`\"`, `\\`). If `single` is `true`, stops at newline;
-  /// otherwise allows multi-line strings.
-  ///
-  /// # Arguments
-  ///
-  /// * `single` - If `true`, stop at newline; if `false`, allow multi-line
+  /// Understands simple escapes so the scanner doesn’t prematurely stop at `\"`.
   fn lex_string_line(&mut self, single: bool) {
     while let Some(c) = self.peek() {
       if c == '\n' && single {

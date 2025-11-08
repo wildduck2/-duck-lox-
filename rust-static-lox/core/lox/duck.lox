@@ -1,18 +1,10 @@
-// Decimal
-let a = 123u8;
-let b = 456i32;
+let f1 = 1.0f32;
+let f2 = 3.14f64;
 
-// Hexadecimal
-let c = 0xFFu16;
-let d = 0x10i64;
+// Floats with exponent and suffix
+let f3 = 2.5e10f32;
+let f4 = 1.2E-5f64;
 
-// Octal
-let e = 0o77u8;
-
-// Binary
-let f = 0b1011i128;
-
-// Floating point
-let g = 3.14f64;
-let h = 2.71828f32;
-
+// Floats with underscores and suffix
+let f5 = 1_000.000_001f64;
+let f6 = 0.000_001f32;

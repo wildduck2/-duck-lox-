@@ -25,6 +25,10 @@ mod lexer_tests {
     );
   }
 
+  fn token_text<'a>(lexer: &'a Lexer, token: &Token) -> &'a str {
+    &lexer.source.src[token.span.start..token.span.end]
+  }
+
   #[test]
   fn test_whitespaces() {
     let (lexer, engine) = lex_test_file("tests/files/whitespace.lox");
@@ -122,7 +126,8 @@ mod lexer_tests {
         TokenKind::Literal {
           kind: LiteralKind::Int {
             base: Base::Hexadecimal,
-            empty_int: true
+            empty_int: true,
+            ..
           },
           ..
         }
@@ -145,24 +150,32 @@ mod lexer_tests {
       "Malformed exponents not detected"
     );
 
-    // ✅ Suffix split check (Float followed by Ident)
-    let mut found_suffix_pair = false;
-    for win in tokens.windows(2) {
-      if matches!(
-        win[0].kind,
-        TokenKind::Literal {
-          kind: LiteralKind::Float { .. },
-          ..
-        }
-      ) && matches!(win[1].kind, TokenKind::Ident)
-      {
-        found_suffix_pair = true;
-        break;
-      }
+    // ✅ Numeric suffixes stay on the literal token (no stray identifiers)
+    let suffix_literals = ["0xFFu8", "123usize", "3.14f32", "1.0f64"];
+    for expected in suffix_literals {
+      assert!(
+        tokens.iter().any(|tok| {
+          matches!(tok.kind, TokenKind::Literal { .. }) && token_text(&lexer, tok) == expected
+        }),
+        "expected literal `{expected}` to remain a single token"
+      );
     }
+
+    let forbidden_suffix_idents = ["f32", "f64", "u8", "usize"];
+    for ident in forbidden_suffix_idents {
+      assert!(
+        tokens.iter().all(|tok| {
+          !matches!(tok.kind, TokenKind::Ident) || token_text(&lexer, tok) != ident
+        }),
+        "suffix `{ident}` should not be emitted as a standalone identifier"
+      );
+    }
+
     assert!(
-      found_suffix_pair,
-      "Float + suffix identifier pair (like 1.0f32) not found"
+      tokens.iter().any(|tok| {
+        matches!(tok.kind, TokenKind::Ident) && token_text(&lexer, tok) == "flags"
+      }),
+      "`0b1010flags` should still leave the trailing identifier `flags`"
     );
   }
 
@@ -244,6 +257,43 @@ mod lexer_tests {
     assert!(
       engine.error_count() >= 3,
       "expected at least three prefix diagnostics (unknown + reserved variants)"
+    );
+  }
+
+  #[test]
+  fn test_lifetimes() {
+    let (lexer, engine) = lex_test_file("tests/files/lifetimes.lox");
+
+    assert!(
+      engine.error_count() >= 1,
+      "numeric-start lifetimes should trigger diagnostics"
+    );
+
+    let mut lifetimes = Vec::new();
+    for tok in &lexer.tokens {
+      if let TokenKind::Lifetime { starts_with_number } = tok.kind {
+        lifetimes.push((token_text(&lexer, tok).to_string(), starts_with_number));
+      }
+    }
+
+    assert!(lifetimes.contains(&(String::from("'a"), false)));
+    assert!(lifetimes.contains(&(String::from("'static"), false)));
+    assert!(lifetimes.contains(&(String::from("'_"), false)));
+    assert!(lifetimes.contains(&(String::from("'life"), false)));
+  }
+
+  #[test]
+  fn test_invalid_numeric_suffixes() {
+    let (_lexer, engine) = lex_test_file("tests/files/numeric_suffix_errors.lox");
+
+    assert!(
+      engine.has_errors(),
+      "invalid numeric suffixes should emit diagnostics"
+    );
+    assert!(
+      engine.error_count() >= 3,
+      "expected multiple suffix diagnostics (saw {})",
+      engine.error_count()
     );
   }
 

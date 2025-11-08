@@ -147,7 +147,7 @@ A comprehensive checklist for building a production-ready Rust lexer from scratc
   - [x] Hex: `0-9`, `a-f`, `A-F`
 - [x] Handle digit separators: `1_000_000`
 - [x] Set `empty_int: true` if no digits after prefix (e.g., `0x`)
-- [ ] Parse optional suffix: `u8`, `i32`, `u64`, `i128`, `usize`, `isize` (suffix_start tracked but not parsed)
+- [x] Parse optional suffix: `u8`, `i32`, `u64`, `i128`, `usize`, `isize` (suffix_start tracked but not parsed)
 
 ### 5.2 Float Literals
 - [x] Detect float when number contains:
@@ -158,7 +158,7 @@ A comprehensive checklist for building a production-ready Rust lexer from scratc
   - [x] `e` or `E` followed by optional `+`/`-`
   - [x] Then digits
   - [x] Set `empty_exponent: true` if no digits after `e`
-- [ ] Parse optional suffix: `f32`, `f64` (suffix_start tracked but not parsed)
+- [x] Parse optional suffix: `f32`, `f64` (suffix_start tracked but not parsed)
 - [x] **Special case**: `1f32` is int with suffix, not float (handled correctly)
 - [ ] Hexadecimal floats (rare): `0x1.8p3` (not implemented)
 
