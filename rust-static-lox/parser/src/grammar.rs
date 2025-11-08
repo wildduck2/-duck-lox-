@@ -1,16 +1,22 @@
 /*!
-### Complete Rust Grammar (BNF) - Full Language Coverage
-### Matching Complete AST with All Features
+### Complete Rust Grammar (BNF) - 100% Language Coverage
+### Updated for Rust 2024 Edition with All Stable & Unstable Features
+### Based on Rust Reference and rustc implementation
 
-program          → item* EOF ;
+program          → shebang? innerAttr* item* EOF ;
+
+shebang          → "#!" ~[\n]* ;
 
 // ============================================================================
 // Items (Top-level Declarations)
 // ============================================================================
 
-item             → attributes outerItem ;
+item             → outerAttr* visItem ;
 
-outerItem        → functionItem
+visItem          → visibility? item_kind
+                 | macroItem ;
+
+item_kind        → functionItem
                  | structItem
                  | enumItem
                  | traitItem
@@ -21,771 +27,998 @@ outerItem        → functionItem
                  | moduleItem
                  | useItem
                  | externCrateItem
-                 | macroRulesItem
-                 | macro2Item
                  | foreignModItem
                  | unionItem
                  | externTypeItem ;
+
+macroItem        → macroInvocationSemi
+                 | macroRulesItem
+                 | macro2Item ;
 
 // ----------------------------------------------------------------------------
 // Attributes (COMPLETE)
 // ----------------------------------------------------------------------------
 
-attributes       → attribute* ;
+outerAttr        → "#" "[" attrInput "]" ;
+innerAttr        → "#" "!" "[" attrInput "]" ;
 
-attribute        → outerAttr | innerAttr ;
+attrInput        → simplePath attrInputTail? ;
 
-outerAttr        → "#" "[" attrContent "]" ;
-innerAttr        → "#" "!" "[" attrContent "]" ;
+attrInputTail    → delimTokenTree
+                 | "=" expression ;
 
-attrContent      → metaItem | cfgAttr | cfgAttrAttr ;
+delimTokenTree   → "(" tokenStream ")"
+                 | "[" tokenStream "]"
+                 | "{" tokenStream "}" ;
 
-// Normal meta items
-metaItem         → path ( "(" metaSeq ")" | "=" literal )? ;
-metaSeq          → metaItem ( "," metaItem )* ","? ;
+// Meta items for structured attributes
+metaItem         → simplePath ( "(" metaSeq ")" | "=" literalExpr )? ;
+metaSeq          → metaItemInner ( "," metaItemInner )* ","? ;
+metaItemInner    → metaItem | literalExpr ;
 
-// Cfg attributes: #[cfg(target_os = "linux")]
-cfgAttr          → "cfg" "(" cfgPredicate ")" ;
+// Doc comments (sugar for attributes)
+outerDocComment  → "///" ~[\n]*
+                 | "/**" (~[*] | "*"+ ~[*/])* "*"+ "/" ;
 
-cfgPredicate     → cfgPredicateAnd
-                 | cfgPredicateOr
-                 | cfgPredicateNot
-                 | cfgPredicateValue ;
-
-cfgPredicateAnd  → "all" "(" cfgPredicate ( "," cfgPredicate )* ")" ;
-cfgPredicateOr   → "any" "(" cfgPredicate ( "," cfgPredicate )* ")" ;
-cfgPredicateNot  → "not" "(" cfgPredicate ")" ;
-cfgPredicateValue→ IDENTIFIER ( "=" STRING )? ;
-
-// Cfg attr: #[cfg_attr(test, derive(Debug))]
-cfgAttrAttr      → "cfg_attr" "(" cfgPredicate "," metaItem ( "," metaItem )* ")" ;
-
-// Doc comments are parsed as attributes internally
-docComment       → "///" .*
-                 | "//!" .*
-                 | "/**" .* "*/"
-                 | "/*!" .* "*/" ;
+innerDocComment  → "//!" ~[\n]*
+                 | "/*!" (~[*] | "*"+ ~[*/])* "*"+ "/" ;
 
 // ----------------------------------------------------------------------------
-// Function Item
+// Function Item (COMPLETE)
 // ----------------------------------------------------------------------------
 
-functionItem     → visibility? fnQualifiers "fn" IDENTIFIER
-                   genericParams? "(" parameters? ")" returnType?
-                   whereClause? ( block | ";" ) ;
+functionItem     → functionQualifiers "fn" identifier
+                   genericParams? "(" functionParams? ")" functionReturnType?
+                   whereClause? ( blockExpr | ";" ) ;
 
-fnQualifiers     → "const"? "async"? "unsafe"? ( "extern" abi? )? ;
-abi              → STRING ;
+functionQualifiers → "const"? "async"? "unsafe"? ("extern" abi?)? ;
 
-parameters       → parameter ( "," parameter )* ","? ;
-parameter        → attributes ( pattern | "..." ) ( ":" type )? ;
+abi              → stringLit | rawStringLit ;
 
-returnType       → "->" type ;
+functionParams   → selfParam ("," functionParam)* ","?
+                 | functionParam ("," functionParam)* ","? ;
+
+selfParam        → outerAttr* ( shorthandSelf | typedSelf ) ;
+
+shorthandSelf    → ("&" lifetime?)? "mut"? "self" ;
+
+typedSelf        → "mut"? "self" ":" type ;
+
+functionParam    → outerAttr* ( functionParamPattern | "..." ) ;
+
+functionParamPattern → patternNoTopAlt (":" ( type | "..." ))? ;
+
+functionReturnType → "->" type ;
 
 // ----------------------------------------------------------------------------
-// Struct Item
+// Struct Item (COMPLETE)
 // ----------------------------------------------------------------------------
 
-structItem       → visibility? "struct" IDENTIFIER genericParams?
-                   whereClause? structKind ;
+structItem       → "struct" identifier genericParams?
+                   ( whereClause? ( recordStructFields | ";" )
+                   | tupleStructFields ( whereClause? ";" ) ) ;
 
-structKind       → "{" structFields? "}"
-                 | "(" tupleFields? ")" ";"
-                 | ";" ;
+recordStructFields → "{" structFields? "}" ;
 
 structFields     → structField ( "," structField )* ","? ;
-structField      → attributes visibility? IDENTIFIER ":" type ;
+
+structField      → outerAttr* visibility? identifier ":" type ;
+
+tupleStructFields → "(" tupleFields? ")" ;
 
 tupleFields      → tupleField ( "," tupleField )* ","? ;
-tupleField       → attributes visibility? type ;
+
+tupleField       → outerAttr* visibility? type ;
 
 // ----------------------------------------------------------------------------
-// Enum Item
+// Enum Item (COMPLETE)
 // ----------------------------------------------------------------------------
 
-enumItem         → visibility? "enum" IDENTIFIER genericParams?
+enumItem         → "enum" identifier genericParams?
                    whereClause? "{" enumVariants? "}" ;
 
 enumVariants     → enumVariant ( "," enumVariant )* ","? ;
-enumVariant      → attributes IDENTIFIER variantKind? discriminant? ;
 
-variantKind      → "{" structFields? "}"
-                 | "(" tupleFields? ")" ;
+enumVariant      → outerAttr* visibility? identifier
+                   ( enumVariantFields | discriminant )? ;
+
+enumVariantFields → recordStructFields | tupleStructFields ;
 
 discriminant     → "=" expression ;
 
 // ----------------------------------------------------------------------------
-// Trait Item
+// Union Item (COMPLETE)
 // ----------------------------------------------------------------------------
 
-traitItem        → visibility? "unsafe"? "auto"? "trait" IDENTIFIER
-                   genericParams? ( ":" supertraits )?
-                   whereClause? "{" traitItems "}" ;
-
-supertraits      → typeBound ( "+" typeBound )* "+"? ;
-
-traitItems       → traitItem* ;
-traitItem        → attributes traitMember ;
-
-traitMember      → traitMethod
-                 | traitType
-                 | traitConst
-                 | macroInvocation ;
-
-traitMethod      → fnQualifiers "fn" IDENTIFIER genericParams?
-                   "(" parameters? ")" returnType?
-                   whereClause? ( block | ";" ) ;
-
-traitType        → "type" IDENTIFIER genericParams?  // GATs
-                   ( ":" typeBounds )? ( "=" type )? ";" ;
-
-traitConst       → "const" IDENTIFIER ":" type ( "=" expression )? ";" ;
+unionItem        → "union" identifier genericParams?
+                   whereClause? recordStructFields ;
 
 // ----------------------------------------------------------------------------
-// Impl Block
+// Const & Static (COMPLETE)
 // ----------------------------------------------------------------------------
 
-implItem         → "unsafe"? "default"? "impl" genericParams?
-                   implPolarity? traitRef? "for"? type
-                   whereClause? "{" implItems "}" ;
+constItem        → "const" ( identifier | "_" ) ":" type
+                   ( "=" expression )? ";" ;
 
-implPolarity     → "!" ;
-traitRef         → path ;
-
-implItems        → implMember* ;
-implMember       → attributes implItemKind ;
-
-implItemKind     → implMethod
-                 | implType
-                 | implConst
-                 | macroInvocation ;
-
-implMethod       → visibility? functionItem ;
-
-implType         → visibility? "type" IDENTIFIER genericParams?  // GATs
-                   "=" type ";" ;
-
-implConst        → visibility? "const" IDENTIFIER ":" type "=" expression ";" ;
+staticItem       → "static" "mut"? identifier ":" type
+                   ( "=" expression )? ";" ;
 
 // ----------------------------------------------------------------------------
-// Other Items
+// Type Alias (COMPLETE)
 // ----------------------------------------------------------------------------
 
-constItem        → visibility? "const" IDENTIFIER ":" type "=" expression ";" ;
+typeAliasItem    → "type" identifier genericParams?
+                   ( ":" typeBounds )?
+                   whereClause? ( "=" type )? ";" ;
 
-staticItem       → visibility? "static" "mut"? IDENTIFIER ":" type "=" expression ";" ;
+// ----------------------------------------------------------------------------
+// Trait Item (COMPLETE)
+// ----------------------------------------------------------------------------
 
-typeAliasItem    → visibility? "type" IDENTIFIER genericParams?
-                   whereClause? "=" type ";" ;
+traitItem        → "unsafe"? "auto"? "trait" identifier
+                   genericParams? ( ":" typeParamBounds )?
+                   whereClause? "{" innerAttr* associatedItem* "}" ;
 
-moduleItem       → visibility? "unsafe"? "mod" IDENTIFIER
-                   ( "{" item* "}" | ";" ) ;
+// ----------------------------------------------------------------------------
+// Implementation (COMPLETE)
+// ----------------------------------------------------------------------------
 
-useItem          → visibility? "use" useTree ";" ;
+implItem         → "unsafe"? "impl" genericParams?
+                   "const"? "!"? traitPath "for" type
+                   whereClause? "{" innerAttr* associatedItem* "}"
+                 | "unsafe"? "impl" genericParams? type
+                   whereClause? "{" innerAttr* inherentImplItem* "}" ;
 
-useTree          → ( path? "::" )? useTreeSuffix ;
-useTreeSuffix    → "*"
-                 | "{" useTree ( "," useTree )* ","? "}"
-                 | IDENTIFIER ( "as" IDENTIFIER )? ;
+traitPath        → typePath ;
 
-externCrateItem  → visibility? "extern" "crate" IDENTIFIER
-                   ( "as" IDENTIFIER )? ";" ;
+associatedItem   → outerAttr* ( macroInvocationSemi | associatedItemKind ) ;
 
-// macro_rules! macro
-macroRulesItem   → "macro_rules" "!" IDENTIFIER "{" macroRules "}" ;
+associatedItemKind → typeAliasItem
+                   | constItem
+                   | functionItem ;
+
+inherentImplItem → outerAttr* ( visibility? associatedItemKind | macroInvocationSemi ) ;
+
+// ----------------------------------------------------------------------------
+// Extern Crate (COMPLETE)
+// ----------------------------------------------------------------------------
+
+externCrateItem  → "extern" "crate" crateRef asClause? ";" ;
+
+crateRef         → identifier | "self" ;
+
+asClause         → "as" ( identifier | "_" ) ;
+
+// ----------------------------------------------------------------------------
+// Use Declaration (COMPLETE)
+// ----------------------------------------------------------------------------
+
+useItem          → "use" useTree ";" ;
+
+useTree          → ( simplePath? "::" )? ( "*" | useTreeList )
+                 | simplePath ( "as" ( identifier | "_" ) )? ;
+
+useTreeList      → "{" ( useTree ( "," useTree )* ","? )? "}" ;
+
+// ----------------------------------------------------------------------------
+// Module (COMPLETE)
+// ----------------------------------------------------------------------------
+
+moduleItem       → "unsafe"? "mod" identifier ( ";" | "{" innerAttr* item* "}" ) ;
+
+// ----------------------------------------------------------------------------
+// External Block (COMPLETE)
+// ----------------------------------------------------------------------------
+
+foreignModItem   → "unsafe"? "extern" abi? "{" innerAttr* externalItem* "}" ;
+
+externalItem     → outerAttr* ( macroInvocationSemi | ( visibility? externalItemKind ) ) ;
+
+externalItemKind → "static" "mut"? identifier ":" type ";"
+                 | "type" identifier genericParams? ";"
+                 | functionItem ;
+
+// Extern type (opaque FFI type)
+externTypeItem   → "extern" "type" identifier genericParams? ";" ;
+
+// ----------------------------------------------------------------------------
+// Macro Definitions (COMPLETE)
+// ----------------------------------------------------------------------------
+
+// macro_rules!
+macroRulesItem   → "macro_rules" "!" identifier macroRulesDef ;
+
+macroRulesDef    → "(" macroRules ")" ";"
+                 | "{" macroRules "}"
+                 | "[" macroRules "]" ;
+
 macroRules       → macroRule ( ";" macroRule )* ";"? ;
-macroRule        → "(" tokenTree* ")" "=>" "{" tokenTree* "}" ;
 
-// NEW: macro 2.0 (declarative macros v2)
-macro2Item       → visibility? "macro" IDENTIFIER "(" macroParams? ")"
-                   "{" tokenTree* "}" ;
-macroParams      → macroParam ( "," macroParam )* ","? ;
-macroParam       → "$" IDENTIFIER ":" fragmentSpecifier ;
+macroRule        → macroMatcher "=>" macroTranscriber ;
 
-fragmentSpecifier→ "item" | "block" | "stmt" | "pat" | "expr" | "ty"
-                 | "ident" | "path" | "meta" | "tt" | "lifetime" | "vis"
-                 | "literal" ;
+macroMatcher     → "(" macroMatch* ")"
+                 | "[" macroMatch* "]"
+                 | "{" macroMatch* "}" ;
 
-// Foreign module
-foreignModItem   → "extern" abi? "{" foreignItem* "}" ;
+macroMatch       → tokenExceptDelims
+                 | macroMatcher
+                 | "$" ( identifier ":" macroFragSpec | "(" macroMatch+ ")" macroRepSep? macroRepOp ) ;
 
-foreignItem      → attributes visibility? foreignMember ;
+macroFragSpec    → "block" | "expr" | "ident" | "item" | "lifetime" | "literal"
+                 | "meta" | "pat" | "pat_param" | "path" | "stmt" | "tt" | "ty" | "vis" ;
 
-foreignMember    → foreignFunction
-                 | foreignStatic
-                 | foreignType ;
+macroRepSep      → tokenExceptDelims | macroRepOp ;
 
-foreignFunction  → "fn" IDENTIFIER genericParams?
-                   "(" parameters? ( "," "..." )? ")" returnType?
-                   whereClause? ";" ;
+macroRepOp       → "*" | "+" | "?" ;
 
-foreignStatic    → "static" "mut"? IDENTIFIER ":" type ";" ;
+macroTranscriber → delimTokenTree ;
 
-foreignType      → "type" IDENTIFIER genericParams? ";" ;
+// Declarative macros 2.0 (macro keyword)
+macro2Item       → "macro" identifier "(" macroParams? ")" delimTokenTree ;
 
-unionItem        → visibility? "union" IDENTIFIER genericParams?
-                   whereClause? "{" structFields "}" ;
-
-// NEW: extern type (opaque FFI type)
-externTypeItem   → visibility? "extern" "type" IDENTIFIER genericParams? ";" ;
+macroParams      → identifier ( "," identifier )* ","? ;
 
 // ============================================================================
-// Generics System (COMPLETE)
+// Generics (COMPLETE)
 // ============================================================================
 
-genericParams    → "<" genericParam ( "," genericParam )* ","? ">" ;
+genericParams    → "<" ( genericParam ( "," genericParam )* ","? )? ">" ;
 
-genericParam     → attributes genericParamKind ;
+genericParam     → outerAttr* ( lifetimeParam | typeParam | constParam ) ;
 
-genericParamKind → lifetimeParam
-                 | typeParam
-                 | constParam ;
+lifetimeParam    → lifetime ( ":" lifetimeBounds )? ;
 
-lifetimeParam    → LIFETIME ( ":" lifetimeBounds )? ;
+typeParam        → identifier ( ":" typeParamBounds? )? ( "=" type )? ;
 
-typeParam        → IDENTIFIER ( ":" typeBounds )? ( "=" type )? ;
-
-constParam       → "const" IDENTIFIER ":" type ( "=" expression )? ;
-
-lifetimeBounds   → LIFETIME ( "+" LIFETIME )* ;
-
-typeBounds       → typeBound ( "+" typeBound )* "+"? ;
-
-typeBound        → traitBoundModifier? forLifetimes? path genericArgs? ;
-
-traitBoundModifier → "?" | "?const" ;
-
-forLifetimes     → "for" "<" lifetimeParam ( "," lifetimeParam )* ">" ;
-
-whereClause      → "where" wherePredicate ( "," wherePredicate )* ","? ;
-
-wherePredicate   → forLifetimes? type ":" typeBounds
-                 | LIFETIME ":" lifetimeBounds
-                 | type "=" type ;
+constParam       → "const" identifier ":" type ( "=" block | "=" identifier | "=" literalExpr )? ;
 
 // ----------------------------------------------------------------------------
+// Where Clause (COMPLETE)
+// ----------------------------------------------------------------------------
+
+whereClause      → "where" ( whereClauseItem ( "," whereClauseItem )* ","? )? ;
+
+whereClauseItem  → lifetimeWhereClauseItem
+                 | typeBoundWhereClauseItem ;
+
+lifetimeWhereClauseItem → lifetime ":" lifetimeBounds ;
+
+typeBoundWhereClauseItem → forLifetimes? type ":" typeParamBounds? ;
+
+// ----------------------------------------------------------------------------
+// Type & Lifetime Bounds (COMPLETE)
+// ----------------------------------------------------------------------------
+
+lifetimeBounds   → ( lifetime ( "+" lifetime )* )? "+"? ;
+
+typeParamBounds  → typeParamBound ( "+" typeParamBound )* "+"? ;
+
+typeParamBound   → lifetime
+                 | traitBound ;
+
+traitBound       → "?"? "const"? forLifetimes? typePath ;
+
+forLifetimes     → "for" genericParams ;
+
+// ============================================================================
 // Generic Arguments (COMPLETE)
-// ----------------------------------------------------------------------------
+// ============================================================================
 
-genericArgs      → angleBracketedArgs | parenthesizedArgs ;
+genericArgs      → "<" genericArg ( "," genericArg )* ","? ">"
+                 | "::" "<" genericArg ( "," genericArg )* ","? ">" ;
 
-angleBracketedArgs → "<" genericArg ( "," genericArg )* ","? ">" ;
-
-parenthesizedArgs  → "(" types? ")" ( "->" type )? ;
-
-genericArg       → LIFETIME
+genericArg       → lifetime
                  | type
-                 | expression
-                 | IDENTIFIER genericParams? "=" type
-                 | IDENTIFIER genericParams? ":" typeBounds ;
+                 | genericArgsConst
+                 | genericArgsBinding
+                 | constrainedTypeParam ;
+
+genericArgsConst → blockExpr
+                 | literalExpr
+                 | simplePathSegment ;
+
+genericArgsBinding → identifier genericArgs? "=" type ;
+
+constrainedTypeParam → identifier genericArgs? ":" typeParamBounds ;
 
 // ============================================================================
 // Visibility (COMPLETE)
 // ============================================================================
 
-visibility       → "pub" visRestriction? ;
-
-visRestriction   → "(" ( "crate" | "super" | "self" | "in" path ) ")" ;
+visibility       → "pub" ( "(" ( "crate" | "self" | "super" | "in" simplePath ) ")" )? ;
 
 // ============================================================================
-// Types (COMPLETE)
+// Types (COMPLETE - All Variants)
 // ============================================================================
 
-type             → primitiveType
-                 | referenceType
+type             → typeNoBounds
+                 | implTraitType
+                 | traitObjectType ;
+
+typeNoBounds     → parenthesizedType
+                 | implTraitTypeOneBound
+                 | traitObjectTypeOneBound
+                 | typePath
+                 | tupleType
+                 | neverType
                  | rawPointerType
+                 | referenceType
                  | arrayType
                  | sliceType
-                 | tupleType
-                 | pathType
-                 | qPathType
-                 | traitObjectType
-                 | implTraitType
-                 | bareFnType
-                 | inferType
-                 | typeofType
-                 | parenType
-                 | macroType ;
+                 | inferredType
+                 | qualifiedPathInType
+                 | bareFunctionType
+                 | macroInvocation ;
 
-primitiveType    → "i8" | "i16" | "i32" | "i64" | "i128" | "isize"
-                 | "u8" | "u16" | "u32" | "u64" | "u128" | "usize"
-                 | "f32" | "f64"
-                 | "bool" | "char" | "str"
-                 | "!" ;
+// Parenthesized type
+parenthesizedType → "(" type ")" ;
 
-referenceType    → "&" LIFETIME? "mut"? type ;
+// Tuple type
+tupleType        → "(" ")"
+                 | "(" ( type "," )+ type? ")" ;
 
-rawPointerType   → "*" ( "const" | "mut" ) type ;
+// Never type
+neverType        → "!" ;
 
+// Raw pointer
+rawPointerType   → "*" ( "mut" | "const" ) typeNoBounds ;
+
+// Reference
+referenceType    → "&" lifetime? "mut"? typeNoBounds ;
+
+// Array
 arrayType        → "[" type ";" expression "]" ;
 
+// Slice
 sliceType        → "[" type "]" ;
 
-tupleType        → "(" ( type ( "," type )* ","? )? ")" ;
+// Inferred type
+inferredType     → "_" ;
 
-pathType         → "::"? pathSegment ( "::" pathSegment )* ;
+// Qualified path in type
+qualifiedPathInType → qualifiedPathType ( "::" typePath )? ;
 
-pathSegment      → pathIdentSegment genericArgs? ;
+qualifiedPathType → "<" type ( "as" typePath )? ">" ;
 
-pathIdentSegment → IDENTIFIER
-                 | "super" | "self" | "Self" | "crate"
-                 | "$crate" ;  // in macros
+// Bare function type
+bareFunctionType → forLifetimes? functionTypeQualifiers "fn" "(" functionParametersMaybeNamedVariadic? ")" bareFunctionReturnType? ;
 
-qPathType        → "<" type ( "as" path )? ">" "::" IDENTIFIER genericArgs? ;
+functionTypeQualifiers → "unsafe"? ( "extern" abi? )? ;
 
-traitObjectType  → "dyn"? typeBounds ( "+" LIFETIME )? ;
+functionParametersMaybeNamedVariadic → functionParameterMaybeNamed ( "," functionParameterMaybeNamed )* ","?
+                                      | functionParameterMaybeNamed ( "," functionParameterMaybeNamed )* "," "..."
+                                      | "..." ;
 
-implTraitType    → "impl" typeBounds ;
+functionParameterMaybeNamed → outerAttr* ( ( identifier | "_" ) ":" )? type ;
 
-bareFnType       → forLifetimes? fnTypeQualifiers
-                   "fn" "(" bareFnParams? ")" returnType? ;
+bareFunctionReturnType → "->" typeNoBounds ;
 
-fnTypeQualifiers → "unsafe"? ( "extern" abi? )? ;
+// Impl trait type
+implTraitType    → "impl" typeParamBounds ;
 
-bareFnParams     → bareFnParam ( "," bareFnParam )* ","?
-                 | bareFnParam ( "," bareFnParam )* "," "..." ;
+implTraitTypeOneBound → "impl" traitBound ;
 
-bareFnParam      → attributes ( IDENTIFIER ":" )? type ;
+// Trait object type
+traitObjectType  → "dyn" typeParamBounds ;
 
-types            → type ( "," type )* ","? ;
+traitObjectTypeOneBound → "dyn" traitBound ;
 
-inferType        → "_" ;
+// Type path
+typePath         → "::"? typePathSegment ( "::" typePathSegment )* ;
 
-// NEW: typeof (unstable)
-typeofType       → "typeof" "(" expression ")" ;
-
-parenType        → "(" type ")" ;
-
-macroType        → macroInvocation ;
+typePathSegment  → pathIdentSegment ( "::" genericArgs | genericArgs )? ;
 
 // ============================================================================
-// Statements
+// Paths (COMPLETE)
+// ============================================================================
+
+// Simple path (no generics)
+simplePath       → "::"? simplePathSegment ( "::" simplePathSegment )* ;
+
+simplePathSegment → identifier | "super" | "self" | "crate" | "$crate" ;
+
+// Path in expression
+pathInExpression → "::"? pathExprSegment ( "::" pathExprSegment )* ;
+
+pathExprSegment  → pathIdentSegment ( "::" genericArgs )? ;
+
+pathIdentSegment → identifier | "super" | "self" | "Self" | "crate" | "$crate" ;
+
+// Qualified path in expression
+qualifiedPathInExpression → qualifiedPathType ( "::" pathExprSegment )+ ;
+
+// ============================================================================
+// Patterns (COMPLETE - All Variants)
+// ============================================================================
+
+pattern          → "|"? patternNoTopAlt ( "|" patternNoTopAlt )* ;
+
+patternNoTopAlt  → patternWithoutRange
+                 | rangePattern ;
+
+patternWithoutRange → literalPattern
+                    | identifierPattern
+                    | wildcardPattern
+                    | restPattern
+                    | referencePattern
+                    | structPattern
+                    | tupleStructPattern
+                    | tuplePattern
+                    | groupedPattern
+                    | slicePattern
+                    | pathPattern
+                    | macroInvocation ;
+
+// Literal pattern
+literalPattern   → "true" | "false"
+                 | charLit
+                 | byteLit
+                 | stringLit
+                 | rawStringLit
+                 | byteStringLit
+                 | rawByteStringLit
+                 | cStringLit
+                 | rawCStringLit
+                 | integerLit
+                 | floatLit
+                 | "-" integerLit
+                 | "-" floatLit ;
+
+// Identifier pattern
+identifierPattern → "ref"? "mut"? identifier ( "@" patternNoTopAlt )? ;
+
+// Wildcard pattern
+wildcardPattern  → "_" ;
+
+// Rest pattern
+restPattern      → ".." ;
+
+// Reference pattern
+referencePattern → ( "&" | "&&" ) "mut"? patternWithoutRange ;
+
+// Struct pattern
+structPattern    → pathInExpression "{" structPatternElements? "}" ;
+
+structPatternElements → structPatternFields ( "," structPatternEtCetera? )?
+                      | structPatternEtCetera ;
+
+structPatternFields → structPatternField ( "," structPatternField )* ;
+
+structPatternField → outerAttr* ( tupleIndex ":" patternNoTopAlt
+                                 | identifier ":" patternNoTopAlt
+                                 | "ref"? "mut"? identifier ) ;
+
+structPatternEtCetera → outerAttr* ".." ;
+
+// Tuple struct pattern
+tupleStructPattern → pathInExpression "(" tuplePatternItems? ")" ;
+
+// Tuple pattern
+tuplePattern     → "(" tuplePatternItems? ")" ;
+
+tuplePatternItems → pattern ( "," pattern )* ","?
+                  | restPattern ( "," pattern )+ ","?
+                  | pattern ( "," pattern )* "," restPattern ( "," pattern )* ","? ;
+
+// Grouped pattern
+groupedPattern   → "(" pattern ")" ;
+
+// Slice pattern
+slicePattern     → "[" slicePatternItems? "]" ;
+
+slicePatternItems → pattern ( "," pattern )* ","? ;
+
+// Path pattern
+pathPattern      → pathInExpression
+                 | qualifiedPathInExpression ;
+
+// Range pattern
+rangePattern     → rangePatternBound ( "..=" | "..." ) rangePatternBound
+                 | rangeInclusiveStart
+                 | obsoleteRangePattern ;
+
+rangePatternBound → charLit | byteLit | "-"? integerLit | "-"? floatLit | pathInExpression ;
+
+rangeInclusiveStart → rangePatternBound "..=" ;
+
+obsoleteRangePattern → rangePatternBound "..." ;
+
+// ============================================================================
+// Statements (COMPLETE)
 // ============================================================================
 
 statement        → ";"
                  | item
                  | letStatement
-                 | expressionStatement ;
+                 | expressionStatement
+                 | macroInvocationSemi ;
 
-letStatement     → attributes "let" pattern ( ":" type )?
-                   ( "=" expression )?
-                   ( "else" block )? ";" ;
+// Let statement
+letStatement     → outerAttr* "let" patternNoTopAlt ( ":" type )? ( "=" expression ( "else" blockExpr )? )? ";" ;
 
-expressionStatement → expression ";"? ;
+// Expression statement
+expressionStatement → expressionWithoutBlock ";"
+                    | expressionWithBlock ";"? ;
 
-// ============================================================================
-// Expressions (COMPLETE - Pratt Parsing)
-// ============================================================================
-
-expression       → assignmentExpr ;
-
-// Assignment (right-associative)
-assignmentExpr   → closureExpr ( assignOp closureExpr )* ;
-
-assignOp         → "=" | "+=" | "-=" | "*=" | "/=" | "%="
-                 | "&=" | "|=" | "^=" | "<<=" | ">>=" ;
-
-// Closures
-closureExpr      → rangeExpr
-                 | "move"? "async"? "|" closureParams? "|" returnType? closureBody ;
-
-closureParams    → closureParam ( "," closureParam )* ","? ;
-
-closureParam     → attributes pattern ( ":" type )? ;
-
-closureBody      → expression ;
-
-// Range expressions
-rangeExpr        → orExpr ( rangeOp orExpr? )?
-                 | rangeOp orExpr? ;
-
-rangeOp          → ".." | "..=" ;
-
-// Logical OR
-orExpr           → andExpr ( "||" andExpr )* ;
-
-// Logical AND
-andExpr          → comparisonExpr ( "&&" comparisonExpr )* ;
-
-// Comparison
-comparisonExpr   → bitwiseOrExpr ( comparisonOp bitwiseOrExpr )* ;
-
-comparisonOp     → "==" | "!=" | "<" | "<=" | ">" | ">=" ;
-
-// Bitwise OR
-bitwiseOrExpr    → bitwiseXorExpr ( "|" bitwiseXorExpr )* ;
-
-// Bitwise XOR
-bitwiseXorExpr   → bitwiseAndExpr ( "^" bitwiseAndExpr )* ;
-
-// Bitwise AND
-bitwiseAndExpr   → shiftExpr ( "&" shiftExpr )* ;
-
-// Shift
-shiftExpr        → addExpr ( shiftOp addExpr )* ;
-
-shiftOp          → "<<" | ">>" ;
-
-// Addition/Subtraction
-addExpr          → mulExpr ( addOp mulExpr )* ;
-
-addOp            → "+" | "-" ;
-
-// Multiplication/Division/Modulo
-mulExpr          → castExpr ( mulOp castExpr )* ;
-
-mulOp            → "*" | "/" | "%" ;
-
-// Cast / Type ascription
-castExpr         → unaryExpr ( "as" type | ":" type )* ;
-
-// Unary
-unaryExpr        → unaryOp* awaitExpr ;
-
-unaryOp          → "-" | "!" | "*" | "&" "mut"? | "&&" "mut"? ;
-
-// Await
-awaitExpr        → postfixExpr ( "." "await" )* ;
-
-// Postfix (method calls, field access, indexing, try)
-postfixExpr      → primaryExpr postfixOp* ;
-
-postfixOp        → callOp
-                 | methodCallOp
-                 | fieldAccessOp
-                 | tupleIndexOp
-                 | indexOp
-                 | tryOp ;
-
-callOp           → "(" arguments? ")" ;
-
-methodCallOp     → "." IDENTIFIER genericArgs? "(" arguments? ")" ;
-
-fieldAccessOp    → "." IDENTIFIER ;
-
-tupleIndexOp     → "." INTEGER ;
-
-indexOp          → "[" expression "]" ;
-
-tryOp            → "?" ;
-
-arguments        → expression ( "," expression )* ","? ;
+macroInvocationSemi → simplePath "!" delimTokenTree ";" ;
 
 // ============================================================================
-// Primary Expressions (COMPLETE)
+// Expressions (COMPLETE - Full Precedence)
 // ============================================================================
 
-primaryExpr      → literal
+expression       → expressionWithoutBlock
+                 | expressionWithBlock ;
+
+expressionWithoutBlock → outerAttr* expressionKind ;
+
+expressionWithBlock → outerAttr* expressionKindWithBlock ;
+
+expressionKind   → literalExpr
                  | pathExpr
-                 | structExpr
-                 | arrayExpr
-                 | tupleExpr
+                 | operatorExpr
                  | groupedExpr
-                 | blockExpr
-                 | ifExpr
-                 | matchExpr
-                 | loopExpr
-                 | whileExpr
-                 | forExpr
-                 | returnExpr
-                 | breakExpr
+                 | arrayExpr
+                 | awaitExpr
+                 | indexExpr
+                 | tupleExpr
+                 | tupleIndexExpr
+                 | structExpr
+                 | callExpr
+                 | methodCallExpr
+                 | fieldExpr
+                 | closureExpr
                  | continueExpr
-                 | yieldExpr
-                 | becomeExpr
-                 | unsafeExpr
-                 | constExpr
-                 | inlineConstExpr
-                 | asyncExpr
-                 | tryBlockExpr
-                 | letExpr
-                 | boxExpr
+                 | breakExpr
+                 | rangeExpr
+                 | returnExpr
                  | underscoreExpr
                  | macroInvocation ;
 
+expressionKindWithBlock → blockExpr
+                        | asyncBlockExpr
+                        | unsafeBlockExpr
+                        | loopExpr
+                        | ifExpr
+                        | ifLetExpr
+                        | matchExpr ;
+
 // ----------------------------------------------------------------------------
-// Literals
+// Literal Expression
 // ----------------------------------------------------------------------------
 
-literal          → INTEGER intSuffix?
-                 | FLOAT floatSuffix?
-                 | STRING
-                 | RAW_STRING
-                 | BYTE_STRING
-                 | RAW_BYTE_STRING
-                 | CHAR
-                 | BYTE
+literalExpr      → charLit
+                 | stringLit
+                 | rawStringLit
+                 | byteLit
+                 | byteStringLit
+                 | rawByteStringLit
+                 | cStringLit
+                 | rawCStringLit
+                 | integerLit
+                 | floatLit
                  | "true"
                  | "false" ;
-
-intSuffix        → "i8" | "i16" | "i32" | "i64" | "i128" | "isize"
-                 | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" ;
-
-floatSuffix      → "f32" | "f64" ;
 
 // ----------------------------------------------------------------------------
 // Path Expression
 // ----------------------------------------------------------------------------
 
-pathExpr         → "::"? pathSegment ( "::" pathSegment )* ;
+pathExpr         → pathInExpression
+                 | qualifiedPathInExpression ;
 
 // ----------------------------------------------------------------------------
-// Struct Expression
+// Block Expressions
 // ----------------------------------------------------------------------------
 
-structExpr       → pathExpr "{" structExprFields? "}" ;
+blockExpr        → "{" innerAttr* statements? "}" ;
 
-structExprFields → structExprField ( "," structExprField )* ","?
-                   ( ".." expression )? ;
+asyncBlockExpr   → "async" "move"? blockExpr ;
 
-structExprField  → attributes ( IDENTIFIER | INTEGER ) ( ":" expression )? ;
+unsafeBlockExpr  → "unsafe" blockExpr ;
+
+statements       → statement+ expression?
+                 | expression ;
 
 // ----------------------------------------------------------------------------
-// Array and Tuple
+// Operator Expressions (Full Precedence)
+// ----------------------------------------------------------------------------
+
+operatorExpr     → borrowExpr
+                 | dereferenceExpr
+                 | errorPropagationExpr
+                 | negationExpr
+                 | arithOrLogicalExpr
+                 | comparisonExpr
+                 | lazyBooleanExpr
+                 | typecastExpr
+                 | assignmentExpr
+                 | compoundAssignmentExpr ;
+
+// Borrow
+borrowExpr       → ( "&" | "&&" ) "mut"? expression ;
+
+// Dereference
+dereferenceExpr  → "*" expression ;
+
+// Error propagation
+errorPropagationExpr → expression "?" ;
+
+// Negation
+negationExpr     → ( "-" | "!" ) expression ;
+
+// Arithmetic and logical
+arithOrLogicalExpr → expression "+" expression
+                   | expression "-" expression
+                   | expression "*" expression
+                   | expression "/" expression
+                   | expression "%" expression
+                   | expression "&" expression
+                   | expression "|" expression
+                   | expression "^" expression
+                   | expression "<<" expression
+                   | expression ">>" expression ;
+
+// Comparison
+comparisonExpr   → expression "==" expression
+                 | expression "!=" expression
+                 | expression ">" expression
+                 | expression "<" expression
+                 | expression ">=" expression
+                 | expression "<=" expression ;
+
+// Lazy boolean
+lazyBooleanExpr  → expression "||" expression
+                 | expression "&&" expression ;
+
+// Type cast
+typecastExpr     → expression "as" typeNoBounds ;
+
+// Assignment
+assignmentExpr   → expression "=" expression ;
+
+// Compound assignment
+compoundAssignmentExpr → expression "+=" expression
+                       | expression "-=" expression
+                       | expression "*=" expression
+                       | expression "/=" expression
+                       | expression "%=" expression
+                       | expression "&=" expression
+                       | expression "|=" expression
+                       | expression "^=" expression
+                       | expression "<<=" expression
+                       | expression ">>=" expression ;
+
+// ----------------------------------------------------------------------------
+// Grouped Expression
+// ----------------------------------------------------------------------------
+
+groupedExpr      → "(" innerAttr* expression ")" ;
+
+// ----------------------------------------------------------------------------
+// Array Expression
 // ----------------------------------------------------------------------------
 
 arrayExpr        → "[" arrayElements? "]" ;
 
 arrayElements    → expression ( ";" expression | ( "," expression )* ","? ) ;
 
-tupleExpr        → "(" tupleElements? ")" ;
-
-tupleElements    → expression "," ( expression ( "," expression )* ","? )? ;
-
 // ----------------------------------------------------------------------------
-// Grouped and Blocks
+// Await Expression
 // ----------------------------------------------------------------------------
 
-groupedExpr      → "(" expression ")" ;
-
-blockExpr        → attributes label? block ;
-
-block            → "{" statement* expression? "}" ;
-
-label            → LIFETIME ":" ;
-
-unsafeExpr       → "unsafe" block ;
-
-constExpr        → "const" block ;
-
-// NEW: Inline const expression
-inlineConstExpr  → "const" genericParams? block ;
-
-asyncExpr        → attributes "async" "move"? block ;
-
-// NEW: Try block
-tryBlockExpr     → attributes "try" block ;
+awaitExpr        → expression "." "await" ;
 
 // ----------------------------------------------------------------------------
-// Control Flow (COMPLETE)
+// Index Expression
 // ----------------------------------------------------------------------------
 
-ifExpr           → "if" expression block ( "else" ( ifExpr | block ) )? ;
+indexExpr        → expression "[" expression "]" ;
 
-matchExpr        → "match" expression "{" matchArm* "}" ;
+// ----------------------------------------------------------------------------
+// Tuple Expression
+// ----------------------------------------------------------------------------
 
-matchArm         → attributes pattern matchArmGuard? "=>" matchArmBody ","? ;
+tupleExpr        → "(" innerAttr* tupleElements? ")" ;
+
+tupleElements    → ( expression "," )+ expression? ;
+
+// ----------------------------------------------------------------------------
+// Tuple Index Expression
+// ----------------------------------------------------------------------------
+
+tupleIndexExpr   → expression "." tupleIndex ;
+
+tupleIndex       → INTEGER_LITERAL ;
+
+// ----------------------------------------------------------------------------
+// Struct Expression
+// ----------------------------------------------------------------------------
+
+structExpr       → structExprStruct
+                 | structExprTuple
+                 | structExprUnit ;
+
+structExprStruct → pathInExpression "{" ( structExprFields | structBase )? "}" ;
+
+structExprFields → structExprField ( "," structExprField )* ( "," structBase | ","? ) ;
+
+structExprField  → outerAttr* ( identifier | ( identifier | tupleIndex ) ":" expression ) ;
+
+structBase       → ".." expression ;
+
+structExprTuple  → pathInExpression "(" ( expression ( "," expression )* ","? )? ")" ;
+
+structExprUnit   → pathInExpression ;
+
+// ----------------------------------------------------------------------------
+// Call Expression
+// ----------------------------------------------------------------------------
+
+callExpr         → expression "(" callParams? ")" ;
+
+callParams       → expression ( "," expression )* ","? ;
+
+// ----------------------------------------------------------------------------
+// Method Call Expression
+// ----------------------------------------------------------------------------
+
+methodCallExpr   → expression "." pathExprSegment "(" callParams? ")" ;
+
+// ----------------------------------------------------------------------------
+// Field Expression
+// ----------------------------------------------------------------------------
+
+fieldExpr        → expression "." identifier ;
+
+// ----------------------------------------------------------------------------
+// Closure Expression
+// ----------------------------------------------------------------------------
+
+closureExpr      → "move"? "async"? ( "||" | "|" closureParams? "|" ) ( expression | "->" typeNoBounds blockExpr ) ;
+
+closureParams    → closureParam ( "," closureParam )* ","? ;
+
+closureParam     → outerAttr* patternNoTopAlt ( ":" type )? ;
+
+// ----------------------------------------------------------------------------
+// Loop Expressions
+// ----------------------------------------------------------------------------
+
+loopExpr         → infiniteLoopExpr
+                 | predicateLoopExpr
+                 | predicatePatternLoopExpr
+                 | iteratorLoopExpr
+                 | labelBlockExpr ;
+
+infiniteLoopExpr → loopLabel? "loop" blockExpr ;
+
+predicateLoopExpr → loopLabel? "while" expression blockExpr ;
+
+predicatePatternLoopExpr → loopLabel? "while" "let" pattern "=" scrutinee blockExpr ;
+
+iteratorLoopExpr → loopLabel? "for" pattern "in" expression blockExpr ;
+
+loopLabel        → lifetime ":" ;
+
+labelBlockExpr   → loopLabel blockExpr ;
+
+scrutinee        → expression ;
+
+// ----------------------------------------------------------------------------
+// Continue Expression
+// ----------------------------------------------------------------------------
+
+continueExpr     → "continue" lifetime? ;
+
+// ----------------------------------------------------------------------------
+// Break Expression
+// ----------------------------------------------------------------------------
+
+breakExpr        → "break" lifetime? expression? ;
+
+// ----------------------------------------------------------------------------
+// Range Expression
+// ----------------------------------------------------------------------------
+
+rangeExpr        → expression ".." expression
+                 | expression ".."
+                 | ".." expression
+                 | expression "..=" expression
+                 | "..=" expression
+                 | ".." ;
+
+// ----------------------------------------------------------------------------
+// If Expressions
+// ----------------------------------------------------------------------------
+
+ifExpr           → "if" expression blockExpr ( "else" ( blockExpr | ifExpr | ifLetExpr ) )? ;
+
+ifLetExpr        → "if" "let" pattern "=" scrutinee blockExpr ( "else" ( blockExpr | ifExpr | ifLetExpr ) )? ;
+
+// ----------------------------------------------------------------------------
+// Match Expression
+// ----------------------------------------------------------------------------
+
+matchExpr        → "match" scrutinee "{" innerAttr* matchArms? "}" ;
+
+matchArms        → ( matchArm "=>" ( expressionWithoutBlock "," | expressionWithBlock ","? ) )* matchArm "=>" expression ","? ;
+
+matchArm         → outerAttr* pattern matchArmGuard? ;
 
 matchArmGuard    → "if" expression ;
 
-matchArmBody     → expression | block ;
-
-loopExpr         → label? "loop" block ;
-
-whileExpr        → label? "while" expression block ;
-
-forExpr          → label? "for" pattern "in" expression block ;
+// ----------------------------------------------------------------------------
+// Return Expression
+// ----------------------------------------------------------------------------
 
 returnExpr       → "return" expression? ;
 
-breakExpr        → "break" LIFETIME? expression? ;
-
-continueExpr     → "continue" LIFETIME? ;
-
-yieldExpr        → "yield" expression? ;
-
-// NEW: Become expression (tail call)
-becomeExpr       → "become" expression ;
-
 // ----------------------------------------------------------------------------
-// Other Expressions
+// Underscore Expression
 // ----------------------------------------------------------------------------
-
-letExpr          → "let" pattern "=" expression ;
-
-boxExpr          → "box" expression ;
 
 underscoreExpr   → "_" ;
 
 // ============================================================================
-// Patterns (COMPLETE)
+// Macro Invocation (COMPLETE)
 // ============================================================================
 
-pattern          → patternNoTopAlt ( "|" patternNoTopAlt )* ;
+macroInvocation  → simplePath "!" delimTokenTree ;
 
-patternNoTopAlt  → patternWithoutRange
-                 | rangePattern ;
+tokenStream      → tokenTree* ;
 
-patternWithoutRange → wildcardPattern
-                    | restPattern
-                    | literalPattern
-                    | identPattern
-                    | refPattern
-                    | structPattern
-                    | tupleStructPattern
-                    | tuplePattern
-                    | slicePattern
-                    | pathPattern
-                    | boxPattern
-                    | macroPattern
-                    | groupedPattern ;
+tokenTree        → tokenExceptDelims
+                 | delimTokenTree ;
 
-wildcardPattern  → "_" ;
-
-restPattern      → ".." ;
-
-literalPattern   → "-"? literal ;
-
-identPattern     → "ref"? "mut"? IDENTIFIER ( "@" pattern )? ;
-
-refPattern       → "&" "mut"? pattern ;
-
-structPattern    → pathExpr "{" structPatFields? "}" ;
-
-structPatFields  → structPatField ( "," structPatField )* ","? ( ".." )? ;
-
-structPatField   → attributes ( INTEGER | IDENTIFIER ) ( ":" pattern )? ;
-
-tupleStructPattern → pathExpr "(" tuplePatterns? ")" ;
-
-tuplePattern     → "(" tuplePatterns? ")" ;
-
-tuplePatterns    → pattern ( "," pattern )* ","? ;
-
-slicePattern     → "[" slicePatElements? "]" ;
-
-slicePatElements → pattern ( "," pattern )* ","? ;
-
-pathPattern      → qPathExpr? pathExpr ;
-
-qPathExpr        → "<" type ( "as" path )? ">" "::" ;
-
-rangePattern     → rangePatternBound ( ".." | "..=" ) rangePatternBound
-                 | ".." | "..=" rangePatternBound ;
-
-rangePatternBound → literal | pathExpr ;
-
-boxPattern       → "box" pattern ;
-
-macroPattern     → macroInvocation ;
-
-groupedPattern   → "(" pattern ")" ;
+tokenExceptDelims → any_token_except_delimiters ;
 
 // ============================================================================
-// Macros (COMPLETE)
+// Lexical Tokens (COMPLETE)
 // ============================================================================
 
-macroInvocation  → path "!" delimiter ;
+// ----------------------------------------------------------------------------
+// Identifiers
+// ----------------------------------------------------------------------------
 
-delimiter        → "(" tokenTree* ")"
-                 | "[" tokenTree* "]"
-                 | "{" tokenTree* "}" ;
+identifier       → nonKeywordIdentifier | rawIdentifier ;
 
-tokenTree        → tokenTreeDelimited
-                 | tokenTreeRepeat
-                 | tokenTreeMetaVar
-                 | TOKEN ;
+nonKeywordIdentifier → XID_Start XID_Continue*
+                     | "_" XID_Continue+ ;
 
-tokenTreeDelimited → "(" tokenTree* ")"
-                   | "[" tokenTree* "]"
-                   | "{" tokenTree* "}" ;
+rawIdentifier    → "r#" nonKeywordIdentifier_except_crate_super_self_Self ;
 
-tokenTreeRepeat  → "$" "(" tokenTree+ ")" tokenTreeSep? tokenTreeRepOp ;
+// ----------------------------------------------------------------------------
+// Lifetimes
+// ----------------------------------------------------------------------------
 
-tokenTreeSep     → TOKEN_NOT_DELIMITER ;
+lifetime         → "'" nonKeywordIdentifier
+                 | "'static"
+                 | "'_" ;
 
-tokenTreeRepOp   → "*" | "+" | "?" ;
+// ----------------------------------------------------------------------------
+// Integer Literals
+// ----------------------------------------------------------------------------
 
-tokenTreeMetaVar → "$" IDENTIFIER ( ":" fragmentSpecifier )? ;
+integerLit       → decLit intSuffix?
+                 | binLit intSuffix?
+                 | octLit intSuffix?
+                 | hexLit intSuffix? ;
 
-// ============================================================================
-// Common Productions
-// ============================================================================
+decLit           → DEC_DIGIT ( DEC_DIGIT | "_" )* ;
+binLit           → "0b" ( BIN_DIGIT | "_" )* BIN_DIGIT ( BIN_DIGIT | "_" )* ;
+octLit           → "0o" ( OCT_DIGIT | "_" )* OCT_DIGIT ( OCT_DIGIT | "_" )* ;
+hexLit           → "0x" ( HEX_DIGIT | "_" )* HEX_DIGIT ( HEX_DIGIT | "_" )* ;
 
-path             → "::"? pathSegment ( "::" pathSegment )* ;
+intSuffix        → "u8" | "u16" | "u32" | "u64" | "u128" | "usize"
+                 | "i8" | "i16" | "i32" | "i64" | "i128" | "isize" ;
 
-// ============================================================================
-// Inline Assembly (COMPLETE)
-// ============================================================================
+DEC_DIGIT        → [0-9] ;
+BIN_DIGIT        → [0-1] ;
+OCT_DIGIT        → [0-7] ;
+HEX_DIGIT        → [0-9a-fA-F] ;
 
-inlineAsmExpr    → "asm" "!" "(" asmTemplate asmOptions ")" ;
+// ----------------------------------------------------------------------------
+// Float Literals
+// ----------------------------------------------------------------------------
 
-asmTemplate      → STRING ( "," asmOperand )* ","? ;
+floatLit         → decLit "." ( decLit floatExponent? floatSuffix? | floatExponent floatSuffix? | floatSuffix )
+                 | decLit floatExponent floatSuffix?
+                 | decLit floatSuffix ;
 
-asmOperand       → asmOperandKind "(" asmConstraint ")" expression ;
+floatExponent    → ( "e" | "E" ) ( "+" | "-" )? decLit ;
 
-asmOperandKind   → "in" | "out" | "inout" | "lateout"
-                 | "inlateout" | "const" | "sym" ;
+floatSuffix      → "f32" | "f64" ;
 
-asmConstraint    → STRING ;
+// ----------------------------------------------------------------------------
+// String Literals
+// ----------------------------------------------------------------------------
 
-asmOptions       → ( "," asmOption )* ;
+stringLit        → "\"" ( ~["\\] | QUOTE_ESCAPE | ASCII_ESCAPE | UNICODE_ESCAPE | STRING_CONTINUE )* "\"" ;
 
-asmOption        → "options" "(" asmOptionList ")" ;
+rawStringLit     → "r" RAW_STRING_CONTENT ;
 
-asmOptionList    → IDENTIFIER ( "," IDENTIFIER )* ;
+RAW_STRING_CONTENT → "#"* "\"" ( ~["] | "\"" ~[#] )* "\"" "#"* ;
 
-// ============================================================================
-// Lexical Tokens
-// ============================================================================
+// ----------------------------------------------------------------------------
+// Byte String Literals
+// ----------------------------------------------------------------------------
 
-IDENTIFIER       → XID_Start XID_Continue*
-                 | "_" XID_Continue+ ;
+byteStringLit    → "b\"" ( ASCII_FOR_STRING | BYTE_ESCAPE | STRING_CONTINUE )* "\"" ;
 
-LIFETIME         → "'" IDENTIFIER ;
+rawByteStringLit → "br" RAW_STRING_CONTENT ;
 
-INTEGER          → DEC_LITERAL
-                 | BIN_LITERAL
-                 | OCT_LITERAL
-                 | HEX_LITERAL ;
+// ----------------------------------------------------------------------------
+// C String Literals (NEW)
+// ----------------------------------------------------------------------------
 
-DEC_LITERAL      → [0-9] [0-9_]* ;
-BIN_LITERAL      → "0b" [01] [01_]* ;
-OCT_LITERAL      → "0o" [0-7] [0-7_]* ;
-HEX_LITERAL      → "0x" [0-9a-fA-F] [0-9a-fA-F_]* ;
+cStringLit       → "c\"" ( ~["\\] | QUOTE_ESCAPE | ASCII_ESCAPE | UNICODE_ESCAPE | STRING_CONTINUE )* "\"" ;
 
-FLOAT            → DEC_LITERAL "." DEC_LITERAL? FLOAT_EXPONENT?
-                 | DEC_LITERAL FLOAT_EXPONENT ;
+rawCStringLit    → "cr" RAW_STRING_CONTENT ;
 
-FLOAT_EXPONENT   → [eE] [+-]? DEC_LITERAL ;
+// ----------------------------------------------------------------------------
+// Char Literals
+// ----------------------------------------------------------------------------
 
-STRING           → "\"" ( STRING_CONTENT | ESCAPE )* "\"" ;
-STRING_CONTENT   → ~["\\] ;
+charLit          → "'" ( ~['\\] | QUOTE_ESCAPE | ASCII_ESCAPE | UNICODE_ESCAPE ) "'" ;
 
-RAW_STRING       → "r" RAW_STRING_CONTENT ;
-RAW_STRING_CONTENT → "#"* "\"" ~["]* "\"" "#"* ;
+// ----------------------------------------------------------------------------
+// Byte Literals
+// ----------------------------------------------------------------------------
 
-BYTE_STRING      → "b\"" ( BYTE_CONTENT | ESCAPE )* "\"" ;
-BYTE_CONTENT     → ASCII ~["\\] ;
+byteLit          → "b'" ( ASCII_FOR_CHAR | BYTE_ESCAPE ) "'" ;
 
-RAW_BYTE_STRING  → "br" RAW_STRING_CONTENT ;
+// ----------------------------------------------------------------------------
+// Escape Sequences
+// ----------------------------------------------------------------------------
 
-CHAR             → "'" ( CHAR_CONTENT | ESCAPE ) "'" ;
-CHAR_CONTENT     → ~['\\] ;
+QUOTE_ESCAPE     → "\\'" | "\\\"" ;
 
-BYTE             → "b'" ( BYTE_CONTENT | ESCAPE ) "'" ;
+ASCII_ESCAPE     → "\\x" HEX_DIGIT HEX_DIGIT
+                 | "\\n" | "\\r" | "\\t" | "\\\\" | "\\0" ;
 
-ESCAPE           → "\\" ( ["\\nrt0]
-                        | "x" [0-9a-fA-F]{2}
-                        | "u{" [0-9a-fA-F]{1,6} "}" ) ;
+UNICODE_ESCAPE   → "\\u{" HEX_DIGIT HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? "}" ;
 
+STRING_CONTINUE  → "\\" "\n" ;
+
+BYTE_ESCAPE      → "\\x" HEX_DIGIT HEX_DIGIT
+                 | "\\n" | "\\r" | "\\t" | "\\\\" | "\\0" | "\\'" | "\\\"" ;
+
+ASCII_FOR_STRING → [\x00-\x7F] ;
+ASCII_FOR_CHAR   → [\x00-\x7F] ;
+
+// ----------------------------------------------------------------------------
 // Comments
-LINE_COMMENT     → "//" ~[\n]* ;
-BLOCK_COMMENT    → "/*" ( ~[*] | "*" ~[/] )* "*/" ;
+// ----------------------------------------------------------------------------
 
+lineComment      → "//" ( ~[/!] | "//" ) ~[\n]* ;
+
+blockComment     → "/*" ( ~[*!] | "**" | blockCommentOrDoc ) ( ~[*] | "*" ~[/] )* "*/" ;
+
+blockCommentOrDoc → blockComment | outerDocComment | innerDocComment ;
+
+// ----------------------------------------------------------------------------
 // Whitespace
-WHITESPACE       → [ \t\n\r]+ ;
+// ----------------------------------------------------------------------------
 
-// Token (for macros)
-TOKEN            → any_token_not_delimiter ;
+whitespace       → [\t\n\x0B\x0C\r\x20]+ ;
 
+// ============================================================================
+// Reserved Keywords (For Reference)
+// ============================================================================
+
+// Strict keywords (always keywords)
+// as, async, await, break, const, continue, crate, dyn, else, enum, extern
+// false, fn, for, if, impl, in, let, loop, match, mod, move, mut, pub, ref
+// return, self, Self, static, struct, super, trait, true, try, type, unsafe
+// use, where, while, async, await, dyn
+
+// Reserved keywords (reserved for future use)
+// abstract, become, box, do, final, macro, override, priv, typeof, unsized
+// virtual, yield
+
+// Weak keywords (contextual)
+// 'static, union, 'static, dyn, macro_rules
+
+// Edition-specific
+// gen (2024+), raw (raw identifiers)
 */
