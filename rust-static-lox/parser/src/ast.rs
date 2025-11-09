@@ -1263,3 +1263,246 @@ pub enum UnaryOp {
   Not,
   Deref,
 }
+
+// ----------------------------------------------------------------------------
+
+impl Expr {
+  pub fn span(&self) -> Span {
+    match self {
+      Expr::Integer { span, .. }
+      | Expr::Float { span, .. }
+      | Expr::String { span, .. }
+      | Expr::Char { span, .. }
+      | Expr::ByteString { span, .. }
+      | Expr::Byte { span, .. }
+      | Expr::Bool { span, .. }
+      | Expr::Binary { span, .. }
+      | Expr::Unary { span, .. }
+      | Expr::Assign { span, .. }
+      | Expr::AssignOp { span, .. }
+      | Expr::Field { span, .. }
+      | Expr::MethodCall { span, .. }
+      | Expr::Call { span, .. }
+      | Expr::Index { span, .. }
+      | Expr::Range { span, .. }
+      | Expr::Array { span, .. }
+      | Expr::ArrayRepeat { span, .. }
+      | Expr::Tuple { span, .. }
+      | Expr::Struct { span, .. }
+      | Expr::If { span, .. }
+      | Expr::Match { span, .. }
+      | Expr::Loop { span, .. }
+      | Expr::While { span, .. }
+      | Expr::For { span, .. }
+      | Expr::Return { span, .. }
+      | Expr::Break { span, .. }
+      | Expr::Continue { span, .. }
+      | Expr::Yield { span, .. }
+      | Expr::Become { span, .. }
+      | Expr::Closure { span, .. }
+      | Expr::Block { span, .. }
+      | Expr::LabeledBlock { span, .. }
+      | Expr::Async { span, .. }
+      | Expr::Await { span, .. }
+      | Expr::Try { span, .. }
+      | Expr::TryBlock { span, .. }
+      | Expr::Cast { span, .. }
+      | Expr::Type { span, .. }
+      | Expr::Let { span, .. }
+      | Expr::Unsafe { span, .. }
+      | Expr::Const { span, .. }
+      | Expr::InlineConst { span, .. }
+      | Expr::Box { span, .. }
+      | Expr::Underscore { span, .. }
+      | Expr::Paren { span, .. }
+      | Expr::InlineAsm { span, .. }
+      | Expr::FormatString { span, .. } => *span,
+      Expr::Path(_) => Span::default(),
+      Expr::Macro { mac } => mac.span,
+    }
+  }
+
+  pub fn print_tree(&self, prefix: &str, is_last: bool) {
+    let connector = if is_last { "└─>" } else { "├─>" };
+
+    match self {
+      Expr::Integer { value, suffix, .. } => {
+        let suffix = suffix.as_ref().map(|s| s.as_str()).unwrap_or("");
+
+        let suffix = if suffix.is_empty() {
+          "".to_string()
+        } else {
+          format!(" suffix={}", suffix)
+        };
+
+        println!("{}{} Integer: {}{}", prefix, connector, value, suffix);
+      },
+      Expr::Float { value, suffix, .. } => {
+        println!(
+          "{}{} Float: {}{}",
+          prefix,
+          connector,
+          value,
+          suffix.as_ref().map(|s| s.as_str()).unwrap_or("")
+        );
+      },
+      Expr::String { value, kind, .. } => {
+        println!("{}{} String({:?}): \"{}\"", prefix, connector, kind, value);
+      },
+      Expr::Char { value, .. } => {
+        println!("{}{} Char: '{}'", prefix, connector, value);
+      },
+      Expr::Bool { value, .. } => {
+        println!("{}{} Bool: {}", prefix, connector, value);
+      },
+      Expr::Binary {
+        left, op, right, ..
+      } => {
+        println!("{}{} Binary {:?}", prefix, connector, op);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        left.print_tree(&new_prefix, false);
+        right.print_tree(&new_prefix, true);
+      },
+      Expr::Unary { op, expr, .. } => {
+        println!("{}{} Unary {:?}", prefix, connector, op);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        expr.print_tree(&new_prefix, true);
+      },
+      Expr::Assign { target, value, .. } => {
+        println!("{}{} Assign", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        target.print_tree(&new_prefix, false);
+        value.print_tree(&new_prefix, true);
+      },
+      Expr::Call { callee, args, .. } => {
+        println!("{}{} Call", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        callee.print_tree(&new_prefix, args.is_empty());
+        for (i, arg) in args.iter().enumerate() {
+          arg.print_tree(&new_prefix, i == args.len() - 1);
+        }
+      },
+      Expr::Path(path) => {
+        println!(
+          "{}{} Path: {}{}",
+          prefix,
+          connector,
+          if path.leading_colon { "::" } else { "" },
+          path.segments.join("::")
+        );
+      },
+      Expr::Block { stmts, .. } => {
+        println!("{}{} Block", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        for (i, stmt) in stmts.iter().enumerate() {
+          stmt.print_tree(&new_prefix, i == stmts.len() - 1);
+        }
+      },
+      _ => {
+        println!("{}{} [Other Expr]", prefix, connector);
+      },
+    }
+  }
+}
+
+impl Stmt {
+  pub fn print_tree(&self, prefix: &str, is_last: bool) {
+    let connector = if is_last { "└─>" } else { "├─>" };
+
+    match self {
+      Stmt::Expr(expr) => {
+        println!(
+          "{}{} parse_expr()  (for expression statements)",
+          prefix, connector
+        );
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        expr.print_tree(&new_prefix, true);
+      },
+      Stmt::Semi(expr) => {
+        println!("{}{} Stmt::Semi", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        expr.print_tree(&new_prefix, true);
+      },
+      Stmt::Let {
+        pattern, ty, init, ..
+      } => {
+        println!(
+          "{}{} parse_let_statement()  (for let statements)",
+          prefix, connector
+        );
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        println!("{}└─> pattern: {:?}", new_prefix, pattern);
+        if let Some(ty) = ty {
+          println!("{}└─> type: {:?}", new_prefix, ty);
+        }
+        if let Some(init) = init {
+          init.print_tree(&new_prefix, true);
+        }
+      },
+      Stmt::Item(item) => {
+        println!("{}{} Stmt::Item", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        item.print_tree(&new_prefix, true);
+      },
+      Stmt::Empty => {
+        println!("{}{} Stmt::Empty", prefix, connector);
+      },
+    }
+  }
+}
+
+impl Item {
+  pub fn print_tree(&self, prefix: &str, is_last: bool) {
+    let connector = if is_last { "└─>" } else { "├─>" };
+
+    match self {
+      Item::Function(fn_decl) => {
+        println!("{}{} parse_fn_decl()  (for functions)", prefix, connector);
+        if let Some(body) = &fn_decl.body {
+          let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+          println!(
+            "{}└─> parse_block_contents()  ← USES parse_stmt HERE",
+            new_prefix
+          );
+          let stmt_prefix = format!("{}    ", new_prefix);
+          for (i, stmt) in body.iter().enumerate() {
+            stmt.print_tree(&stmt_prefix, i == body.len() - 1);
+          }
+        }
+      },
+      Item::Const(const_decl) => {
+        println!("{}{} Item::Const '{}'", prefix, connector, const_decl.name);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        const_decl.value.print_tree(&new_prefix, true);
+      },
+      Item::Static(static_decl) => {
+        println!(
+          "{}{} Item::Static '{}'",
+          prefix, connector, static_decl.name
+        );
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        static_decl.value.print_tree(&new_prefix, true);
+      },
+      Item::Struct(struct_decl) => {
+        println!(
+          "{}{} Item::Struct '{}'",
+          prefix, connector, struct_decl.name
+        );
+      },
+      Item::Enum(enum_decl) => {
+        println!("{}{} Item::Enum '{}'", prefix, connector, enum_decl.name);
+      },
+      _ => {
+        println!("{}{} [Other Item]", prefix, connector);
+      },
+    }
+  }
+}
+
+// Helper function to start printing from the root
+pub fn print_ast_tree(items: &[Item]) {
+  println!("parse_program()");
+  for (i, item) in items.iter().enumerate() {
+    item.print_tree("  ", i == items.len() - 1);
+  }
+}

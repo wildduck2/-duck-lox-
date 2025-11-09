@@ -35,7 +35,7 @@ impl Runner {
         return Err(std::io::Error::other("lexing error"));
       }
 
-      // println!("{:?}", lexer.tokens);
+      println!("{:?}", lexer.tokens);
       println!("TooLongVecOfTokens[{}]", lexer.tokens.len());
 
       println!("\n============= PARSED ===============\n");

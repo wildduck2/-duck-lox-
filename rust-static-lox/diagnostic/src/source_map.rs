@@ -42,6 +42,12 @@ impl Span {
   }
 }
 
+impl Default for Span {
+  fn default() -> Self {
+    Self { start: 0, end: 0 }
+  }
+}
+
 #[derive(Debug, Clone)]
 pub struct SourceFile {
   pub path: String,

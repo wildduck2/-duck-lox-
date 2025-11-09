@@ -11,6 +11,7 @@ use crate::ast::Item;
 mod ast;
 mod grammar;
 mod parser_utils;
+mod parsers;
 
 /// Recursive-descent parser that transforms tokens into an AST while reporting diagnostics.
 pub struct Parser {

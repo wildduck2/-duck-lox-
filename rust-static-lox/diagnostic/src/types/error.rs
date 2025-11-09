@@ -20,6 +20,7 @@ pub enum DiagnosticError {
 
   // parser
   UnexpectedToken,
+  InvalidLiteral,
 }
 
 impl DiagnosticError {
@@ -37,6 +38,7 @@ impl DiagnosticError {
       Self::ReservedPrefix => "E0010",
       Self::InvalidLifetime => "E0011",
       Self::UnexpectedToken => "E0012",
+      Self::InvalidLiteral => "E0013",
     }
   }
 
