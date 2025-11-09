@@ -47,5 +47,43 @@
 //true
 //false
 
+foo.bar
+person.name
+config.value
+
+tuple.0
+point.1
+pair.2
+
+arr[0]
+//arr[i + 1]
+matrix[1][2]
+foo[bar.baz]
 
 
+foo(1)
+foo(1, 2, 3)
+bar("hi", true)
+nested(outer(1), 2)
+//add(1 + 2)
+
+foo.bar()
+foo.bar(1, 2)
+obj.method("hi", true)
+obj.method().other()
+self.compute().finish()
+
+future.await
+foo.bar().await
+read_file().await
+x[0].await
+
+foo()?
+read_line()?.trim()
+get_value()?.to_string()?
+arr[0]?
+
+foo.bar().baz[0].qux().await?
+tuple.0.call_method(42)[i].await
+get_data()[index].field.call()?.another_call(1)
+user.info().friends[0].send_message("hi")?

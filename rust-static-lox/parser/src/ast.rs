@@ -1,5 +1,5 @@
 // ============================================================================
-// Complete Rust AST with All Features - FIXED
+// Complete Rust AST - CORRECTED to match actual Rust syntax
 // ============================================================================
 
 use diagnostic::Span;
@@ -44,32 +44,37 @@ pub struct ExternTypeDecl {
 // Additional Item Declarations
 // ----------------------------------------------------------------------------
 
+// FIXED: value is now optional to match "const FOO: i32;" (no initializer)
 #[derive(Debug, Clone)]
 pub struct ConstDecl {
   pub visibility: Visibility,
-  pub name: String,
+  pub name: String, // Can be "_" for unnamed constants
   pub ty: Type,
-  pub value: Expr,
+  pub value: Option<Expr>, // CHANGED: Was Expr, now Option<Expr>
   pub span: Span,
 }
 
+// FIXED: value is now optional to match "static FOO: i32;" (no initializer)
 #[derive(Debug, Clone)]
 pub struct StaticDecl {
   pub visibility: Visibility,
   pub name: String,
   pub ty: Type,
   pub mutability: Mutability,
-  pub value: Expr,
+  pub value: Option<Expr>, // CHANGED: Was Expr, now Option<Expr>
   pub span: Span,
 }
 
+// FIXED: ty is now optional to match "type Foo<T>;" (no definition)
+// FIXED: Added bounds field for "type Foo: Trait;"
 #[derive(Debug, Clone)]
 pub struct TypeAliasDecl {
   pub visibility: Visibility,
   pub name: String,
   pub generics: Option<GenericParams>,
+  pub bounds: Option<Vec<TypeBound>>, // ADDED: For "type Foo: Trait"
   pub where_clause: Option<WhereClause>,
-  pub ty: Type,
+  pub ty: Option<Type>, // CHANGED: Was Type, now Option<Type>
   pub span: Span,
 }
 
@@ -77,7 +82,7 @@ pub struct TypeAliasDecl {
 pub struct ModuleDecl {
   pub visibility: Visibility,
   pub name: String,
-  pub items: Option<Vec<Item>>,
+  pub items: Option<Vec<Item>>, // None for "mod foo;", Some for "mod foo { ... }"
   pub is_unsafe: bool,
   pub span: Span,
 }
@@ -98,7 +103,7 @@ pub enum UseTree {
   Name(String),
   Rename {
     name: String,
-    alias: String,
+    alias: String, // Can be "_" for unused imports
   },
   Glob,
   List(Vec<UseTree>),
@@ -107,8 +112,8 @@ pub enum UseTree {
 #[derive(Debug, Clone)]
 pub struct ExternCrateDecl {
   pub visibility: Visibility,
-  pub name: String,
-  pub alias: Option<String>,
+  pub name: String,          // Can be "self"
+  pub alias: Option<String>, // Can be "_" for unused
   pub span: Span,
 }
 
@@ -140,18 +145,19 @@ pub struct MacroParam {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MacroParamKind {
-  Ident,
-  Expr,
-  Ty,
-  Pat,
-  Stmt,
   Block,
+  Expr,
+  Ident,
   Item,
-  Meta,
-  Tt,
-  Path,
-  Literal,
   Lifetime,
+  Literal,
+  Meta,
+  Pat,
+  PatParam, // ADDED: for pat_param fragment specifier
+  Path,
+  Stmt,
+  Tt,
+  Ty,
   Vis,
 }
 
@@ -188,9 +194,9 @@ pub enum Delimiter {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RepeatKind {
-  ZeroOrMore,
-  OneOrMore,
-  ZeroOrOne,
+  ZeroOrMore, // *
+  OneOrMore,  // +
+  ZeroOrOne,  // ?
 }
 
 // ----------------------------------------------------------------------------
@@ -199,7 +205,8 @@ pub enum RepeatKind {
 
 #[derive(Debug, Clone)]
 pub struct ForeignModDecl {
-  pub abi: String,
+  pub is_unsafe: bool,     // ADDED: for "unsafe extern"
+  pub abi: Option<String>, // CHANGED: Now optional for default ABI
   pub items: Vec<ForeignItem>,
   pub span: Span,
 }
@@ -211,7 +218,7 @@ pub enum ForeignItem {
     name: String,
     generics: Option<GenericParams>,
     params: Vec<Param>,
-    return_type: Type,
+    return_type: Option<Type>, // CHANGED: Was Type, now Option<Type>
     is_variadic: bool,
     span: Span,
   },
@@ -250,9 +257,9 @@ pub struct FnDecl {
   pub name: String,
   pub generics: Option<GenericParams>,
   pub params: Vec<Param>,
-  pub return_type: Type,
+  pub return_type: Option<Type>, // CHANGED: Was Type, now Option<Type> for no return type
   pub where_clause: Option<WhereClause>,
-  pub body: Option<Vec<Stmt>>,
+  pub body: Option<Vec<Stmt>>, // None for trait methods, Some for implementations
   pub is_async: bool,
   pub is_const: bool,
   pub is_unsafe: bool,
@@ -265,8 +272,9 @@ pub struct FnDecl {
 pub struct Param {
   pub attributes: Vec<Attribute>,
   pub pattern: Pattern,
-  pub type_annotation: Type,
-  pub default_value: Option<Expr>,
+  pub type_annotation: Option<Type>, // CHANGED: Was Type, now Option<Type> for "..."
+  pub is_self: bool,                 // ADDED: to distinguish self parameters
+  pub is_variadic: bool,             // ADDED: for "..." parameters
 }
 
 // ----------------------------------------------------------------------------
@@ -282,14 +290,14 @@ pub struct Attribute {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AttrStyle {
-  Outer,
-  Inner,
+  Outer, // #[...]
+  Inner, // #![...]
 }
 
 #[derive(Debug, Clone)]
 pub enum AttrKind {
   Normal {
-    path: ExprPath,
+    path: SimplePath, // CHANGED: Was ExprPath, should be SimplePath
     tokens: Vec<TokenTree>,
   },
   DocComment {
@@ -301,6 +309,13 @@ pub enum AttrKind {
     condition: MetaItem,
     attrs: Vec<Attribute>,
   },
+}
+
+// ADDED: SimplePath for attributes
+#[derive(Debug, Clone)]
+pub struct SimplePath {
+  pub leading_colon: bool,
+  pub segments: Vec<String>, // Can include "super", "self", "crate", "$crate"
 }
 
 #[derive(Debug, Clone)]
@@ -374,6 +389,7 @@ pub struct EnumDecl {
 #[derive(Debug, Clone)]
 pub struct EnumVariant {
   pub attributes: Vec<Attribute>,
+  pub visibility: Visibility, // ADDED: variants can have visibility
   pub name: String,
   pub kind: EnumVariantKind,
   pub discriminant: Option<Expr>,
@@ -399,7 +415,7 @@ pub struct TraitDecl {
   pub is_auto: bool,
   pub is_unsafe: bool,
   pub generics: Option<GenericParams>,
-  pub supertraits: Vec<TypeBound>,
+  pub supertraits: Option<Vec<TypeBound>>, // CHANGED: Now Option to match optional syntax
   pub items: Vec<TraitItem>,
   pub where_clause: Option<WhereClause>,
   pub span: Span,
@@ -412,7 +428,7 @@ pub enum TraitItem {
     attributes: Vec<Attribute>,
     name: String,
     generics: Option<GenericParams>,
-    bounds: Vec<TypeBound>,
+    bounds: Option<Vec<TypeBound>>, // CHANGED: Now Option
     default: Option<Type>,
   },
   Const {
@@ -428,7 +444,7 @@ pub enum TraitItem {
 
 #[derive(Debug, Clone)]
 pub struct MacroInvocation {
-  pub path: ExprPath,
+  pub path: SimplePath, // CHANGED: Was ExprPath, should be SimplePath
   pub delimiter: Delimiter,
   pub tokens: Vec<TokenTree>,
   pub span: Span,
@@ -442,7 +458,7 @@ pub struct MacroInvocation {
 pub struct ImplBlock {
   pub attributes: Vec<Attribute>,
   pub is_unsafe: bool,
-  pub is_default: bool,
+  pub is_const: bool, // ADDED: for "const impl"
   pub generics: Option<GenericParams>,
   pub polarity: ImplPolarity,
   pub trait_ref: Option<TypePath>,
@@ -454,8 +470,8 @@ pub struct ImplBlock {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ImplPolarity {
-  Positive,
-  Negative,
+  Positive, // impl Trait
+  Negative, // impl !Trait
 }
 
 #[derive(Debug, Clone)]
@@ -495,19 +511,19 @@ pub enum GenericParam {
   Type {
     attributes: Vec<Attribute>,
     name: String,
-    bounds: Vec<TypeBound>,
+    bounds: Option<Vec<TypeBound>>, // CHANGED: Now Option for "T" vs "T: Bound"
     default: Option<Type>,
   },
   Lifetime {
     attributes: Vec<Attribute>,
     name: String,
-    bounds: Vec<String>,
+    bounds: Option<Vec<String>>, // CHANGED: Now Option
   },
   Const {
     attributes: Vec<Attribute>,
     name: String,
     ty: Type,
-    default: Box<Option<Expr>>,
+    default: Option<Expr>, // CHANGED: Was Box<Option<Expr>>, now Option<Expr>
   },
 }
 
@@ -521,9 +537,10 @@ pub struct TypeBound {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TraitBoundModifier {
-  None,
-  Maybe,
-  MaybeConst,
+  None,       // Trait
+  Maybe,      // ?Trait
+  MaybeConst, // ?const Trait
+  Const,      // const Trait (ADDED)
 }
 
 #[derive(Debug, Clone)]
@@ -536,7 +553,7 @@ pub enum WherePredicate {
   Type {
     for_lifetimes: Option<Vec<String>>,
     ty: Type,
-    bounds: Vec<TypeBound>,
+    bounds: Option<Vec<TypeBound>>, // CHANGED: Now Option for optional bounds
   },
   Lifetime {
     lifetime: String,
@@ -558,7 +575,7 @@ pub enum Visibility {
   PublicCrate,
   PublicSuper,
   PublicSelf,
-  PublicIn(ExprPath),
+  PublicIn(SimplePath), // CHANGED: Was ExprPath, should be SimplePath
   Private,
 }
 
@@ -610,7 +627,7 @@ pub enum Type {
     safety: Safety,
     abi: Option<String>,
     params: Vec<BareFnParam>,
-    return_type: Box<Type>,
+    return_type: Option<Box<Type>>, // CHANGED: Now Option
     is_variadic: bool,
   },
 
@@ -642,7 +659,8 @@ pub enum Type {
 
 #[derive(Debug, Clone)]
 pub struct BareFnParam {
-  pub name: Option<String>,
+  pub attributes: Vec<Attribute>, // ADDED: bare fn params can have attributes
+  pub name: Option<String>,       // Can be "_" for unnamed
   pub ty: Type,
 }
 
@@ -710,8 +728,8 @@ pub enum Stmt {
     attributes: Vec<Attribute>,
     pattern: Pattern,
     ty: Option<Type>,
-    init: Box<Option<Expr>>,
-    else_block: Option<Vec<Stmt>>,
+    init: Option<Box<Expr>>, // CHANGED: Was Box<Option<Expr>>, now Option<Box<Expr>>
+    else_block: Option<Box<Expr>>, // CHANGED: Was Option<Vec<Stmt>>, should be Box<Expr>
     span: Span,
   },
   Item(Box<Item>),
@@ -813,7 +831,7 @@ pub enum Pattern {
 #[derive(Debug, Clone)]
 pub struct FieldPattern {
   pub attributes: Vec<Attribute>,
-  pub name: String,
+  pub name: String, // Can be tuple index as string
   pub pattern: Option<Pattern>,
   pub is_shorthand: bool,
 }
@@ -859,6 +877,7 @@ pub enum Expr {
   },
   ByteString {
     value: Vec<u8>,
+    kind: ByteStrKind, // ADDED: to distinguish raw byte strings
     span: Span,
   },
   Byte {
@@ -962,6 +981,14 @@ pub enum Expr {
     span: Span,
   },
 
+  IfLet {
+    pattern: Pattern,
+    scrutinee: Box<Expr>,
+    then_branch: Box<Expr>,
+    else_branch: Option<Box<Expr>>,
+    span: Span,
+  },
+
   Match {
     expr: Box<Expr>,
     arms: Vec<MatchArm>,
@@ -975,6 +1002,13 @@ pub enum Expr {
   },
   While {
     condition: Box<Expr>,
+    body: Vec<Stmt>,
+    label: Option<String>,
+    span: Span,
+  },
+  WhileLet {
+    pattern: Pattern,
+    scrutinee: Box<Expr>,
     body: Vec<Stmt>,
     label: Option<String>,
     span: Span,
@@ -1168,10 +1202,17 @@ pub enum FormatCount {
 pub enum StrKind {
   Normal,
   Raw(usize),
-  Byte,
-  RawByte(usize),
+  Byte,           // REMOVED: Byte strings now in ByteString variant
+  RawByte(usize), // REMOVED: moved to ByteStrKind
   C,
   RawC(usize),
+}
+
+// ADDED: Separate kind for byte strings
+#[derive(Debug, Clone, PartialEq)]
+pub enum ByteStrKind {
+  Normal,
+  Raw(usize),
 }
 
 #[derive(Debug, Clone)]
@@ -1272,6 +1313,8 @@ pub enum UnaryOp {
 }
 
 // ----------------------------------------------------------------------------
+// Print Tree Methods
+// ----------------------------------------------------------------------------
 
 impl Expr {
   pub fn span(&self) -> Span {
@@ -1297,9 +1340,11 @@ impl Expr {
       | Expr::Tuple { span, .. }
       | Expr::Struct { span, .. }
       | Expr::If { span, .. }
+      | Expr::IfLet { span, .. }
       | Expr::Match { span, .. }
       | Expr::Loop { span, .. }
       | Expr::While { span, .. }
+      | Expr::WhileLet { span, .. }
       | Expr::For { span, .. }
       | Expr::Return { span, .. }
       | Expr::Break { span, .. }
@@ -1410,6 +1455,38 @@ impl Expr {
       Expr::Ident { name, .. } => {
         println!("{}{} Ident: '{}'", prefix, connector, name);
       },
+      Expr::Field { object, field, .. } => {
+        println!("{}{} Field", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+
+        object.print_tree(&new_prefix, false);
+
+        match field {
+          FieldAccess::Named(name) => {
+            println!("{}└── Named field: {}", new_prefix, name);
+          },
+          FieldAccess::Unnamed(index) => {
+            println!("{}└── Unnamed field: .{}", new_prefix, index);
+          },
+        }
+      },
+      Expr::Index { object, index, .. } => {
+        println!("{}{} Index", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        object.print_tree(&new_prefix, false);
+        index.print_tree(&new_prefix, true);
+      },
+      Expr::Try { expr, .. } => {
+        println!("{}{} Try", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        expr.print_tree(&new_prefix, true);
+      },
+      Expr::Await { expr, .. } => {
+        println!("{}{} Await", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        expr.print_tree(&new_prefix, true);
+      },
+
       _ => {
         println!("{}{} [Other Expr]", prefix, connector);
       },
@@ -1447,7 +1524,7 @@ impl Stmt {
         if let Some(ty) = ty {
           println!("{}└─> type: {:?}", new_prefix, ty);
         }
-        if let Some(init) = *init.clone() {
+        if let Some(init) = init {
           init.print_tree(&new_prefix, true);
         }
       },
@@ -1484,16 +1561,20 @@ impl Item {
       },
       Item::Const(const_decl) => {
         println!("{}{} Item::Const '{}'", prefix, connector, const_decl.name);
-        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
-        const_decl.value.print_tree(&new_prefix, true);
+        if let Some(value) = &const_decl.value {
+          let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+          value.print_tree(&new_prefix, true);
+        }
       },
       Item::Static(static_decl) => {
         println!(
           "{}{} Item::Static '{}'",
           prefix, connector, static_decl.name
         );
-        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
-        static_decl.value.print_tree(&new_prefix, true);
+        if let Some(value) = &static_decl.value {
+          let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+          value.print_tree(&new_prefix, true);
+        }
       },
       Item::Struct(struct_decl) => {
         println!(

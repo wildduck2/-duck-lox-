@@ -120,7 +120,7 @@ impl Lexer {
         return true;
       }
     }
-    return false;
+    false
   }
 
   /// Emits a token with a span covering the text from `start` to `current`.
@@ -177,10 +177,7 @@ impl Lexer {
       return None;
     }
 
-    let char = self.source.src[(self.current as usize)..]
-      .chars()
-      .next()
-      .unwrap();
+    let char = self.source.src[self.current..].chars().next().unwrap();
 
     Some(char)
   }
@@ -211,9 +208,7 @@ impl Lexer {
       return None;
     }
 
-    self.source.src[((self.current + offset) as usize)..]
-      .chars()
-      .next()
+    self.source.src[(self.current + offset)..].chars().next()
   }
 
   /// Advances the cursor by one character and returns it.

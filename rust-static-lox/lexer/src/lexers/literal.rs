@@ -51,12 +51,12 @@ impl Lexer {
   /// digits follow `0b`. Also probes for an optional integer suffix
   /// (e.g. `u8`, `i32`) starting at `suffix_start`.
   fn lex_binary(&mut self, engine: &mut DiagnosticEngine) -> LiteralKind {
-    let mut has_digits = false;
+    let mut empty_int = false;
     let mut suffix_start = 0;
     while let Some(c) = self.peek() {
       if c == '0' || c == '1' {
         self.advance();
-        has_digits = true;
+        empty_int = true;
       } else if c == '_' && self.peek_next(1) != Some('_') {
         self.advance();
         continue;
@@ -72,7 +72,7 @@ impl Lexer {
 
     LiteralKind::Integer {
       base: Base::Binary,
-      empty_int: !has_digits,
+      empty_int: !empty_int,
       suffix_start,
     }
   }
@@ -83,12 +83,12 @@ impl Lexer {
   /// digits follow `0o`. Also probes for an optional integer suffix
   /// (e.g. `u16`, `usize`) starting at `suffix_start`.
   fn lex_octal(&mut self, engine: &mut DiagnosticEngine) -> LiteralKind {
-    let mut has_digits = false;
+    let mut empty_int = false;
     let mut suffix_start = 0;
     while let Some(c) = self.peek() {
       if ('0'..='7').contains(&c) {
         self.advance();
-        has_digits = true;
+        empty_int = true;
       } else {
         self.check_suffix_type(c, &mut suffix_start, false, engine);
         break;
@@ -101,7 +101,7 @@ impl Lexer {
 
     LiteralKind::Integer {
       base: Base::Octal,
-      empty_int: !has_digits,
+      empty_int: !empty_int,
       suffix_start,
     }
   }
@@ -118,7 +118,6 @@ impl Lexer {
   /// - integer: `u8|u16|u32|u64|u128|usize|i8|i16|i32|i64|i128|isize`
   /// - float: `f32|f64`
   fn lex_decimal(&mut self, engine: &mut DiagnosticEngine) -> LiteralKind {
-    let mut has_digits = false;
     let mut has_dot = false;
     let mut has_exponent = false;
     let mut suffix_start = 0;
@@ -126,13 +125,23 @@ impl Lexer {
     while let Some(c) = self.peek() {
       if c.is_ascii_digit() {
         self.advance();
-        has_digits = true;
       } else if c == '_' && self.peek_next(1) != Some('_') {
         self.advance();
         continue;
       } else if c == '.' && !has_dot && !has_exponent {
-        has_dot = true;
-        self.advance();
+        // NOTE: only treat '.' as float part if it's NOT immediately followed by an identifier or '('
+        // and if the next char is a digit (i.e., part of a fractional number).
+        let next = self.peek_next(1);
+        if let Some(next_ch) = next {
+          if next_ch.is_ascii_digit() {
+            has_dot = true;
+            self.advance(); // consume '.'
+          } else {
+            break; // e.g., tuple.0 → stop number lexing, '.' belongs to field access
+          }
+        } else {
+          break;
+        }
       } else if (c == 'e' || c == 'E') && !has_exponent {
         has_exponent = true;
         self.advance();
@@ -173,7 +182,8 @@ impl Lexer {
     } else {
       LiteralKind::Integer {
         base: Base::Decimal,
-        empty_int: !has_digits,
+        // NOTE:  all the decimal number are not empty
+        empty_int: false,
         suffix_start,
       }
     }
@@ -321,7 +331,7 @@ impl Lexer {
   /// Accepts `_` separators (not doubled). Probes for valid suffixes
   /// after the numeric part. Emits diagnostics for malformed exponents.
   fn lex_hexadecimal(&mut self, engine: &mut DiagnosticEngine) -> LiteralKind {
-    let mut has_digits = false;
+    let mut empty_int = false;
     let mut has_dot = false;
     let mut has_exponent = false;
     let mut has_exp_digits = false;
@@ -331,7 +341,7 @@ impl Lexer {
     while let Some(c) = self.peek() {
       if c.is_ascii_hexdigit() {
         self.advance();
-        has_digits = true;
+        empty_int = true;
       } else if c == '_' && self.peek_next(1) != Some('_') {
         self.advance();
       } else if c == '.' && !has_dot {
@@ -397,7 +407,7 @@ impl Lexer {
     } else {
       LiteralKind::Integer {
         base: Base::Hexadecimal,
-        empty_int: !has_digits,
+        empty_int: !empty_int,
         suffix_start,
       }
     }
