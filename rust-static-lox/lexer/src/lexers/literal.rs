@@ -10,8 +10,8 @@
 use diagnostic::{
   code::DiagnosticCode,
   diagnostic::{Diagnostic, LabelStyle},
-  types::error::DiagnosticError,
-  DiagnosticEngine,
+  types::{error::DiagnosticError, warning::DiagnosticWarning},
+  DiagnosticEngine, Span,
 };
 
 use crate::{
@@ -1162,6 +1162,25 @@ impl Lexer {
           self.advance(); // normal ASCII char
         },
       }
+    }
+
+    if self.get_current_lexeme() == "''" {
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::Warning(DiagnosticWarning::EmptyChar),
+        "Empty character literal".to_string(),
+        self.source.path.to_string(),
+      )
+      .with_label(
+        Span::new(self.current - 2, self.current),
+        Some("This is an empty character literal".to_string()),
+        LabelStyle::Primary,
+      )
+      .with_help("Character literals must be a single ASCII character.".to_string());
+      engine.add(diagnostic);
+
+      return Some(TokenKind::Literal {
+        kind: LiteralKind::Char,
+      });
     }
 
     if !terminated {

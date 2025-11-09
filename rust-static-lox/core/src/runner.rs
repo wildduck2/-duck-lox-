@@ -43,8 +43,8 @@ impl Runner {
       let mut parser = Parser::new(lexer.tokens, source_file.clone());
       parser.parse(engine);
 
-      if engine.has_errors() || engine.has_warnings() {
-        engine.print_diagnostics();
+      engine.print_diagnostics();
+      if engine.has_errors() {
         return Err(std::io::Error::other("parsing error"));
       }
     }

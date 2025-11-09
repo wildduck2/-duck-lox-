@@ -140,6 +140,7 @@ impl Parser {
             self.parser_raw_byte_string(engine, &token, n_hashes)
           },
           LiteralKind::RawCStr { n_hashes } => self.parser_raw_c_string(engine, &token, n_hashes),
+          LiteralKind::Char => self.parser_char(engine, &token),
           _ => Err(()),
         }
       },
