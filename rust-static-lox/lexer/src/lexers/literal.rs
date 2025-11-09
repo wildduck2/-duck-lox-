@@ -10,7 +10,7 @@
 use diagnostic::{
   code::DiagnosticCode,
   diagnostic::{Diagnostic, LabelStyle},
-  types::{error::DiagnosticError, warning::DiagnosticWarning},
+  types::error::DiagnosticError,
   DiagnosticEngine, Span,
 };
 
@@ -121,7 +121,6 @@ impl Lexer {
     let mut has_digits = false;
     let mut has_dot = false;
     let mut has_exponent = false;
-    let mut has_exp_digits = false;
     let mut suffix_start = 0;
 
     while let Some(c) = self.peek() {
@@ -149,7 +148,6 @@ impl Lexer {
         while let Some(ec) = self.peek() {
           if ec.is_ascii_digit() {
             self.advance();
-            has_exp_digits = true;
           } else if ec == '_' && self.peek_next(1) != Some('_') {
             self.advance();
             continue;
@@ -170,7 +168,6 @@ impl Lexer {
     if has_dot || has_exponent {
       LiteralKind::Float {
         base: Base::Decimal,
-        empty_exponent: has_exponent && !has_exp_digits,
         suffix_start,
       }
     } else {
@@ -395,7 +392,6 @@ impl Lexer {
     if has_dot || has_exponent {
       LiteralKind::Float {
         base: Base::Hexadecimal,
-        empty_exponent: has_exponent && !has_exp_digits,
         suffix_start,
       }
     } else {
@@ -482,7 +478,7 @@ impl Lexer {
       ("r", Some('"')) | ("r", Some('#')) => self.lex_raw_str(engine),
       ("\"", _) => self.lex_str(engine),
       ("b", Some('\'')) => self.lex_bchar(engine),
-      _ => None,
+      _ => Some(TokenKind::Unknown),
     }
   }
 
@@ -902,9 +898,7 @@ impl Lexer {
       )
       .with_help("Byte strings must start with b\"...\" or br\"...\".".to_string());
       engine.add(diag);
-      return Some(TokenKind::Literal {
-        kind: LiteralKind::ByteStr,
-      });
+      return Some(TokenKind::Unknown);
     }
 
     self.advance(); // consume opening quote
@@ -985,6 +979,7 @@ impl Lexer {
       )
       .with_help("Byte strings must end with a closing '\"'.".to_string());
       engine.add(diag);
+      return Some(TokenKind::Unknown);
     }
 
     Some(TokenKind::Literal {
@@ -1166,7 +1161,7 @@ impl Lexer {
 
     if self.get_current_lexeme() == "''" {
       let diagnostic = Diagnostic::new(
-        DiagnosticCode::Warning(DiagnosticWarning::EmptyChar),
+        DiagnosticCode::Error(DiagnosticError::EmptyChar),
         "Empty character literal".to_string(),
         self.source.path.to_string(),
       )

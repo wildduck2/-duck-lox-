@@ -114,8 +114,6 @@ pub enum LiteralKind {
   Float {
     /// The numeric base (usually Decimal, but hex floats exist in some contexts)
     base: Base,
-    /// True if exponent marker (`e` or `E`) exists but no digits follow
-    empty_exponent: bool,
     /// The start of the suffix (e.g., `f32`, `f64`)
     suffix_start: usize,
   },

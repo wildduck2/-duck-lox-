@@ -1352,6 +1352,9 @@ impl Expr {
       Expr::Char { value, .. } => {
         println!("{}{} Char: '{}'", prefix, connector, value);
       },
+      Expr::Byte { value, .. } => {
+        println!("{}{} Byte: '{}'", prefix, connector, value);
+      },
       Expr::Bool { value, .. } => {
         println!("{}{} Bool: {}", prefix, connector, value);
       },

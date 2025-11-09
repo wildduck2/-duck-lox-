@@ -5,9 +5,7 @@ use crate::types::Severity;
 pub enum DiagnosticWarning {
   UnusedVariable,
   InvalidConstDeclaration,
-
   // parser
-  EmptyChar,
 }
 
 impl DiagnosticWarning {
@@ -15,7 +13,6 @@ impl DiagnosticWarning {
     match self {
       Self::UnusedVariable => "W0001",
       Self::InvalidConstDeclaration => "W0002",
-      Self::EmptyChar => "W0003",
     }
   }
   pub fn severity(&self) -> Severity {
