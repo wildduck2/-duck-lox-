@@ -507,7 +507,7 @@ pub enum GenericParam {
     attributes: Vec<Attribute>,
     name: String,
     ty: Type,
-    default: Option<Expr>,
+    default: Box<Option<Expr>>,
   },
 }
 
@@ -710,7 +710,7 @@ pub enum Stmt {
     attributes: Vec<Attribute>,
     pattern: Pattern,
     ty: Option<Type>,
-    init: Option<Expr>,
+    init: Box<Option<Expr>>,
     else_block: Option<Vec<Stmt>>,
     span: Span,
   },
@@ -867,6 +867,11 @@ pub enum Expr {
   },
   Bool {
     value: bool,
+    span: Span,
+  },
+
+  Ident {
+    name: String,
     span: Span,
   },
 
@@ -1318,6 +1323,7 @@ impl Expr {
       | Expr::Underscore { span, .. }
       | Expr::Paren { span, .. }
       | Expr::InlineAsm { span, .. }
+      | Expr::Ident { span, .. }
       | Expr::FormatString { span, .. } => *span,
       Expr::Path(_) => Span::default(),
       Expr::Macro { mac } => mac.span,
@@ -1401,6 +1407,9 @@ impl Expr {
           stmt.print_tree(&new_prefix, i == stmts.len() - 1);
         }
       },
+      Expr::Ident { name, .. } => {
+        println!("{}{} Ident: '{}'", prefix, connector, name);
+      },
       _ => {
         println!("{}{} [Other Expr]", prefix, connector);
       },
@@ -1438,7 +1447,7 @@ impl Stmt {
         if let Some(ty) = ty {
           println!("{}└─> type: {:?}", new_prefix, ty);
         }
-        if let Some(init) = init {
+        if let Some(init) = *init.clone() {
           init.print_tree(&new_prefix, true);
         }
       },

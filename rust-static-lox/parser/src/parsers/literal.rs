@@ -12,6 +12,8 @@ use crate::{
 };
 
 impl Parser {
+  /// Parses a literal token and dispatches to the appropriate literal parser.
+  /// Returns an error if the literal is malformed.
   pub(crate) fn parser_literal(
     &mut self,
     engine: &mut DiagnosticEngine,
@@ -44,7 +46,7 @@ impl Parser {
   /*                                         Number Literal Parsing                                 */
   /* -------------------------------------------------------------------------------------------- */
 
-  pub(crate) fn parser_integer(
+  fn parser_integer(
     &mut self,
     engine: &mut DiagnosticEngine,
     token: &Token,
@@ -128,7 +130,7 @@ impl Parser {
     })
   }
 
-  pub(crate) fn parser_float(
+  fn parser_float(
     &mut self,
     engine: &mut DiagnosticEngine,
     token: &Token,
@@ -186,11 +188,7 @@ impl Parser {
   /* -------------------------------------------------------------------------------------------- */
   /*                                         String Literal Parsing                                 */
   /* -------------------------------------------------------------------------------------------- */
-  pub(crate) fn parser_string(
-    &mut self,
-    _engine: &mut DiagnosticEngine,
-    token: &Token,
-  ) -> Result<Expr, ()> {
+  fn parser_string(&mut self, _engine: &mut DiagnosticEngine, token: &Token) -> Result<Expr, ()> {
     let value = self
       .source_file
       .src
@@ -204,7 +202,7 @@ impl Parser {
     })
   }
 
-  pub(crate) fn parser_byte_string(
+  fn parser_byte_string(
     &mut self,
     _engine: &mut DiagnosticEngine,
     token: &Token,
@@ -222,11 +220,7 @@ impl Parser {
     })
   }
 
-  pub(crate) fn parser_c_string(
-    &mut self,
-    _engine: &mut DiagnosticEngine,
-    token: &Token,
-  ) -> Result<Expr, ()> {
+  fn parser_c_string(&mut self, _engine: &mut DiagnosticEngine, token: &Token) -> Result<Expr, ()> {
     let value = self
       .source_file
       .src
@@ -240,7 +234,7 @@ impl Parser {
     })
   }
 
-  pub(crate) fn parser_raw_string(
+  fn parser_raw_string(
     &mut self,
     _engine: &mut DiagnosticEngine,
     token: &Token,
@@ -259,7 +253,7 @@ impl Parser {
     })
   }
 
-  pub(crate) fn parser_raw_byte_string(
+  fn parser_raw_byte_string(
     &mut self,
     _engine: &mut DiagnosticEngine,
     token: &Token,
@@ -278,7 +272,7 @@ impl Parser {
     })
   }
 
-  pub(crate) fn parser_raw_c_string(
+  fn parser_raw_c_string(
     &mut self,
     _engine: &mut DiagnosticEngine,
     token: &Token,
@@ -297,11 +291,7 @@ impl Parser {
     })
   }
 
-  pub(crate) fn parser_char(
-    &mut self,
-    _engine: &mut DiagnosticEngine,
-    token: &Token,
-  ) -> Result<Expr, ()> {
+  fn parser_char(&mut self, _engine: &mut DiagnosticEngine, token: &Token) -> Result<Expr, ()> {
     let value = self
       .source_file
       .src
@@ -317,11 +307,7 @@ impl Parser {
     })
   }
 
-  pub(crate) fn parser_byte(
-    &mut self,
-    engine: &mut DiagnosticEngine,
-    token: &Token,
-  ) -> Result<Expr, ()> {
+  fn parser_byte(&mut self, engine: &mut DiagnosticEngine, token: &Token) -> Result<Expr, ()> {
     if token.span.start == token.span.end - 1 {
       let diagnostic = Diagnostic::new(
         DiagnosticCode::Error(DiagnosticError::EmptyChar),

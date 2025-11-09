@@ -24,7 +24,7 @@ impl Parser {
   /// Parses the top-level production, collecting statements until EOF.
   pub fn parse_program(&mut self, engine: &mut DiagnosticEngine) {
     while !self.is_eof() {
-      match self.parse_expr(ExprContext::Default, engine) {
+      match self.parse_primary(engine) {
         // Returns Item, not Stmt
         Ok(item) => {
           item.print_tree("", true);
@@ -119,7 +119,7 @@ impl Parser {
 
     match token.kind {
       TokenKind::Literal { kind } => self.parser_literal(engine, &token, kind),
-
+      TokenKind::Ident => self.parser_ident(engine, &token),
       _ => {
         let lexeme = self
           .source_file

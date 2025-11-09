@@ -37,4 +37,8 @@
 //cr#"raw C-string"#
 //cr###"multi-hash raw C-string"###
 
-b'a'
+//b'A'
+//b'a'
+
+name
+
