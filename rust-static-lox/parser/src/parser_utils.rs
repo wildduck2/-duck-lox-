@@ -120,6 +120,7 @@ impl Parser {
     match token.kind {
       TokenKind::Literal { kind } => self.parser_literal(engine, &token, kind),
       TokenKind::Ident => self.parser_ident(engine, &token),
+      TokenKind::KwFalse | TokenKind::KwTrue => self.parser_bool(engine, &token),
       _ => {
         let lexeme = self
           .source_file
