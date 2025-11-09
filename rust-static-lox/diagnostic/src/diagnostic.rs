@@ -248,16 +248,23 @@ impl Diagnostic {
                   }
                 };
 
+                let message_color = |msg: &str| match self.severity {
+                  Severity::Error => msg.bright_red(),
+                  Severity::Warning => msg.bright_yellow(),
+                  Severity::Note => msg.bright_cyan(),
+                  Severity::Help => msg.bright_blue(),
+                };
+
                 // Color the markers
                 let colored_markers = match label.style {
-                  LabelStyle::Primary => markers.bright_red().bold(),
+                  LabelStyle::Primary => message_color(&markers).bold(),
                   LabelStyle::Secondary => markers.bright_blue().bold(),
                 };
 
                 // Print marker line with optional message
                 if let Some(msg) = &label.message {
                   let colored_msg = match label.style {
-                    LabelStyle::Primary => msg.bright_red().bold(),
+                    LabelStyle::Primary => message_color(msg).bold(),
                     LabelStyle::Secondary => msg.bright_blue().bold(),
                   };
 
