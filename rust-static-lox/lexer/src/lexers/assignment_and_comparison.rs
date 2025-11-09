@@ -15,7 +15,7 @@ impl Lexer {
   /// # Returns
   ///
   /// `Some(TokenKind::Eq)`, `Some(TokenKind::EqEq)`, or `Some(TokenKind::FatArrow)`
-  pub fn lex_equal(&mut self) -> Option<TokenKind> {
+  pub(crate) fn lex_equal(&mut self) -> Option<TokenKind> {
     if self.match_char('=') {
       self.advance(); // consume the '='
       return Some(TokenKind::EqEq);
@@ -24,7 +24,7 @@ impl Lexer {
       return Some(TokenKind::FatArrow);
     }
 
-    return Some(TokenKind::Eq);
+    Some(TokenKind::Eq)
   }
 
   /// Lexes an exclamation mark (`!`) or inequality (`!=`).
@@ -36,13 +36,13 @@ impl Lexer {
   /// # Returns
   ///
   /// `Some(TokenKind::Bang)` or `Some(TokenKind::Ne)`
-  pub fn lex_bang(&mut self) -> Option<TokenKind> {
+  pub(crate) fn lex_bang(&mut self) -> Option<TokenKind> {
     if self.match_char('=') {
       self.advance(); // consume the '='
       return Some(TokenKind::Ne);
     }
 
-    return Some(TokenKind::Bang);
+    Some(TokenKind::Bang)
   }
 
   /// Lexes a less-than sign (`<`), less-or-equal (`<=`), or left shift (`<<`, `<<=`).
@@ -56,7 +56,7 @@ impl Lexer {
   /// # Returns
   ///
   /// `Some(TokenKind::Lt)`, `Some(TokenKind::Le)`, `Some(TokenKind::ShiftLeft)`, or `Some(TokenKind::ShiftLeftEq)`
-  pub fn lex_less(&mut self) -> Option<TokenKind> {
+  pub(crate) fn lex_less(&mut self) -> Option<TokenKind> {
     if self.match_char('=') {
       self.advance(); // consume the '='
       return Some(TokenKind::Le);
@@ -71,7 +71,7 @@ impl Lexer {
       return Some(TokenKind::ShiftLeft);
     }
 
-    return Some(TokenKind::Lt);
+    Some(TokenKind::Lt)
   }
 
   /// Lexes a greater-than sign (`>`), greater-or-equal (`>=`), or right shift (`>>`, `>>=`).
@@ -85,7 +85,7 @@ impl Lexer {
   /// # Returns
   ///
   /// `Some(TokenKind::Gt)`, `Some(TokenKind::Ge)`, `Some(TokenKind::ShiftRight)`, or `Some(TokenKind::ShiftRightEq)`
-  pub fn lex_greater(&mut self) -> Option<TokenKind> {
+  pub(crate) fn lex_greater(&mut self) -> Option<TokenKind> {
     if self.match_char('=') {
       self.advance(); // consume the '='
       return Some(TokenKind::Ge);
@@ -100,6 +100,6 @@ impl Lexer {
       return Some(TokenKind::ShiftRight);
     }
 
-    return Some(TokenKind::Gt);
+    Some(TokenKind::Gt)
   }
 }

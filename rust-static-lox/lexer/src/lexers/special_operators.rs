@@ -12,35 +12,12 @@ impl Lexer {
   /// # Returns
   ///
   /// `Some(TokenKind::ColonColon)` if `::` is found, otherwise `Some(TokenKind::Colon)`
-  pub fn lex_colon_colon(&mut self) -> Option<TokenKind> {
+  pub(crate) fn lex_colon_colon(&mut self) -> Option<TokenKind> {
     if self.match_char(':') {
       self.advance(); // consume the ':'
       return Some(TokenKind::ColonColon);
     }
 
-    return Some(TokenKind::Colon);
-  }
-
-  /// Lexes a range operator (`..` or `..=`).
-  ///
-  /// Handles:
-  /// - `..` - Exclusive range
-  /// - `..=` - Inclusive range
-  ///
-  /// # Returns
-  ///
-  /// `Some(TokenKind::DotDot)` or `Some(TokenKind::DotDotEq)`, or `None` if not a range
-  pub fn lex_dot_dot_eq(&mut self) -> Option<TokenKind> {
-    if self.match_char('.') {
-      self.advance(); // consume the '.'
-      if self.match_char('=') {
-        self.advance(); // consume the '='
-        return Some(TokenKind::DotDotEq);
-      }
-
-      return Some(TokenKind::DotDot);
-    }
-
-    None
+    Some(TokenKind::Colon)
   }
 }

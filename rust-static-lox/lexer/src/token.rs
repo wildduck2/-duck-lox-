@@ -90,7 +90,7 @@ pub enum LiteralKind {
   /// 100_u32         // with type suffix
   /// 0x_             // empty_int = true (malformed)
   /// ```
-  Int {
+  Integer {
     /// The numeric base of the literal
     base: Base,
     /// True if no digits follow the base prefix (e.g., `0x` with nothing after)
@@ -351,9 +351,6 @@ pub enum TokenKind {
   Literal {
     /// The specific kind of literal
     kind: LiteralKind,
-    /// Byte offset where the suffix starts (for type suffixes like `_u32`)
-    /// Equal to the literal length if no suffix exists
-    suffix_start: u32,
   },
 
   // =========================================================================
@@ -730,7 +727,10 @@ impl LiteralKind {
   /// assert!(!LiteralKind::Char { terminated: true }.is_numeric());
   /// ```
   pub fn is_numeric(&self) -> bool {
-    matches!(self, LiteralKind::Int { .. } | LiteralKind::Float { .. })
+    matches!(
+      self,
+      LiteralKind::Integer { .. } | LiteralKind::Float { .. }
+    )
   }
 
   /// Returns true if this literal is a character-like type

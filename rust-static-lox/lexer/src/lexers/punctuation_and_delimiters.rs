@@ -15,7 +15,7 @@ impl Lexer {
   ///
   /// `Some(TokenKind::Semi)`
   pub fn lex_semicolon(&mut self) -> Option<TokenKind> {
-    return Some(TokenKind::Semi);
+    Some(TokenKind::Semi)
   }
 
   /// Lexes a comma (`,`).
@@ -26,7 +26,7 @@ impl Lexer {
   ///
   /// `Some(TokenKind::Comma)`
   pub fn lex_comma(&mut self) -> Option<TokenKind> {
-    return Some(TokenKind::Comma);
+    Some(TokenKind::Comma)
   }
 
   /// Lexes a dot (`.`) or dot sequences (`..`, `..=`).
@@ -48,7 +48,7 @@ impl Lexer {
       return Some(TokenKind::DotDotEq);
     }
 
-    return Some(TokenKind::Dot);
+    Some(TokenKind::Dot)
   }
 
   /// Lexes an open parenthesis (`(`).
@@ -59,7 +59,7 @@ impl Lexer {
   ///
   /// `Some(TokenKind::OpenParen)`
   pub fn lex_open_paren(&mut self) -> Option<TokenKind> {
-    return Some(TokenKind::OpenParen);
+    Some(TokenKind::OpenParen)
   }
 
   /// Lexes a close parenthesis (`)`).
@@ -70,7 +70,7 @@ impl Lexer {
   ///
   /// `Some(TokenKind::CloseParen)`
   pub fn lex_close_paren(&mut self) -> Option<TokenKind> {
-    return Some(TokenKind::CloseParen);
+    Some(TokenKind::CloseParen)
   }
 
   /// Lexes an open brace (`{`).
@@ -81,7 +81,7 @@ impl Lexer {
   ///
   /// `Some(TokenKind::OpenBrace)`
   pub fn lex_open_brace(&mut self) -> Option<TokenKind> {
-    return Some(TokenKind::OpenBrace);
+    Some(TokenKind::OpenBrace)
   }
 
   /// Lexes a close brace (`}`).
@@ -92,7 +92,7 @@ impl Lexer {
   ///
   /// `Some(TokenKind::CloseBrace)`
   pub fn lex_close_brace(&mut self) -> Option<TokenKind> {
-    return Some(TokenKind::CloseBrace);
+    Some(TokenKind::CloseBrace)
   }
 
   /// Lexes an open bracket (`[`).
@@ -103,7 +103,7 @@ impl Lexer {
   ///
   /// `Some(TokenKind::OpenBracket)`
   pub fn lex_open_bracket(&mut self) -> Option<TokenKind> {
-    return Some(TokenKind::OpenBracket);
+    Some(TokenKind::OpenBracket)
   }
 
   /// Lexes a close bracket (`]`).
@@ -114,7 +114,7 @@ impl Lexer {
   ///
   /// `Some(TokenKind::CloseBracket)`
   pub fn lex_close_bracket(&mut self) -> Option<TokenKind> {
-    return Some(TokenKind::CloseBracket);
+    Some(TokenKind::CloseBracket)
   }
 
   /// Lexes an at symbol (`@`).
@@ -125,7 +125,7 @@ impl Lexer {
   ///
   /// `Some(TokenKind::At)`
   pub fn lex_at(&mut self) -> Option<TokenKind> {
-    return Some(TokenKind::At);
+    Some(TokenKind::At)
   }
 
   /// Lexes a pound symbol (`#`) or shebang (`#!`).
@@ -157,7 +157,7 @@ impl Lexer {
   ///
   /// `Some(TokenKind::Tilde)`
   pub fn lex_tilde(&mut self) -> Option<TokenKind> {
-    return Some(TokenKind::Tilde);
+    Some(TokenKind::Tilde)
   }
 
   /// Lexes a question mark (`?`).
@@ -168,7 +168,7 @@ impl Lexer {
   ///
   /// `Some(TokenKind::Question)`
   pub fn lex_question(&mut self) -> Option<TokenKind> {
-    return Some(TokenKind::Question);
+    Some(TokenKind::Question)
   }
 
   /// Lexes a colon (`:`) or path separator (`::`).
@@ -186,7 +186,7 @@ impl Lexer {
       return Some(TokenKind::ColonColon);
     }
 
-    return Some(TokenKind::Colon);
+    Some(TokenKind::Colon)
   }
 
   /// Lexes a dollar symbol (`$`).
@@ -197,6 +197,6 @@ impl Lexer {
   ///
   /// `Some(TokenKind::Dollar)`
   pub fn lex_dollar(&mut self) -> Option<TokenKind> {
-    return Some(TokenKind::Dollar);
+    Some(TokenKind::Dollar)
   }
 }

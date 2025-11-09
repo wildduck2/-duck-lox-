@@ -42,8 +42,7 @@ impl Lexer {
       self.lex_decimal(engine)
     };
 
-    let suffix_start = self.current as u32;
-    Some(TokenKind::Literal { kind, suffix_start })
+    Some(TokenKind::Literal { kind })
   }
 
   /// Lex a binary integer: `0b[01_]+`.
@@ -53,7 +52,7 @@ impl Lexer {
   /// (e.g. `u8`, `i32`) starting at `suffix_start`.
   fn lex_binary(&mut self, engine: &mut DiagnosticEngine) -> LiteralKind {
     let mut has_digits = false;
-    let suffix_start = self.current;
+    let mut suffix_start = 0;
     while let Some(c) = self.peek() {
       if c == '0' || c == '1' {
         self.advance();
@@ -62,11 +61,16 @@ impl Lexer {
         self.advance();
         continue;
       } else {
-        self.check_suffix_type(c, suffix_start, false, engine);
+        self.check_suffix_type(c, &mut suffix_start, false, engine);
         break;
       }
     }
-    LiteralKind::Int {
+
+    if suffix_start == 0 {
+      suffix_start = self.current;
+    }
+
+    LiteralKind::Integer {
       base: Base::Binary,
       empty_int: !has_digits,
       suffix_start,
@@ -80,17 +84,22 @@ impl Lexer {
   /// (e.g. `u16`, `usize`) starting at `suffix_start`.
   fn lex_octal(&mut self, engine: &mut DiagnosticEngine) -> LiteralKind {
     let mut has_digits = false;
-    let suffix_start = self.current;
+    let mut suffix_start = 0;
     while let Some(c) = self.peek() {
       if ('0'..='7').contains(&c) {
         self.advance();
         has_digits = true;
       } else {
-        self.check_suffix_type(c, suffix_start, false, engine);
+        self.check_suffix_type(c, &mut suffix_start, false, engine);
         break;
       }
     }
-    LiteralKind::Int {
+
+    if suffix_start == 0 {
+      suffix_start = self.current;
+    }
+
+    LiteralKind::Integer {
       base: Base::Octal,
       empty_int: !has_digits,
       suffix_start,
@@ -113,7 +122,7 @@ impl Lexer {
     let mut has_dot = false;
     let mut has_exponent = false;
     let mut has_exp_digits = false;
-    let suffix_start = self.current;
+    let mut suffix_start = 0;
 
     while let Some(c) = self.peek() {
       if c.is_ascii_digit() {
@@ -150,9 +159,13 @@ impl Lexer {
         }
         break;
       } else {
-        self.check_suffix_type(c, suffix_start, has_dot || has_exponent, engine);
+        self.check_suffix_type(c, &mut suffix_start, has_dot || has_exponent, engine);
         break;
       }
+    }
+
+    if suffix_start == 0 {
+      suffix_start = self.current;
     }
 
     if has_dot || has_exponent {
@@ -161,7 +174,7 @@ impl Lexer {
         empty_exponent: has_exponent && !has_exp_digits,
       }
     } else {
-      LiteralKind::Int {
+      LiteralKind::Integer {
         base: Base::Decimal,
         empty_int: !has_digits,
         suffix_start,
@@ -180,7 +193,7 @@ impl Lexer {
   fn check_suffix_type(
     &mut self,
     c: char,
-    mut suffix_start: usize,
+    suffix_start: &mut usize,
     is_float: bool,
     engine: &mut DiagnosticEngine,
   ) -> bool {
@@ -204,8 +217,9 @@ impl Lexer {
     }
 
     if c == 'u' || c == 'i' {
-      suffix_start = self.current;
-      return self.inner_check_suffix_type(c, suffix_start, engine);
+      *suffix_start = self.current;
+      let value = self.inner_check_suffix_type(c, suffix_start, engine);
+      return value;
     }
 
     false
@@ -218,7 +232,7 @@ impl Lexer {
   fn inner_check_suffix_type(
     &mut self,
     c: char,
-    suffix_start: usize,
+    suffix_start: &mut usize,
     engine: &mut DiagnosticEngine,
   ) -> bool {
     self.advance();
@@ -288,7 +302,7 @@ impl Lexer {
           self.source.path.to_string(),
         )
         .with_label(
-          diagnostic::Span::new(suffix_start, self.current),
+          diagnostic::Span::new(*suffix_start, self.current),
           Some("Invalid character here".to_string()),
           LabelStyle::Primary,
         )
@@ -314,7 +328,7 @@ impl Lexer {
     let mut has_dot = false;
     let mut has_exponent = false;
     let mut has_exp_digits = false;
-    let suffix_start = self.current;
+    let mut suffix_start = 0;
 
     // consume hex digits and optional dot
     while let Some(c) = self.peek() {
@@ -333,7 +347,7 @@ impl Lexer {
 
     // check for exponent part (p or P)
     if let Some(c) = self.peek() {
-      if (c == 'p' || c == 'P') {
+      if c == 'p' || c == 'P' {
         has_exponent = true;
         self.advance();
 
@@ -369,7 +383,13 @@ impl Lexer {
 
     // suffix check (like u8 or f64)
     if let Some(c) = self.peek() {
-      self.check_suffix_type(c, suffix_start, has_dot || has_exponent, engine);
+      self.check_suffix_type(c, &mut suffix_start, has_dot || has_exponent, engine);
+    }
+
+    // if the suffix start is 0 we set to to the current position, hence this is the end of the
+    // actual value and if there's a suffix it will be parsed as a suffix
+    if suffix_start == 0 {
+      suffix_start = self.current;
     }
 
     if has_dot || has_exponent {
@@ -378,7 +398,7 @@ impl Lexer {
         empty_exponent: has_exponent && !has_exp_digits,
       }
     } else {
-      LiteralKind::Int {
+      LiteralKind::Integer {
         base: Base::Hexadecimal,
         empty_int: !has_digits,
         suffix_start,
@@ -524,7 +544,6 @@ impl Lexer {
 
       return Some(TokenKind::Literal {
         kind: LiteralKind::RawCStr { n_hashes },
-        suffix_start: self.current as u32,
       });
     }
 
@@ -579,7 +598,6 @@ impl Lexer {
 
     Some(TokenKind::Literal {
       kind: LiteralKind::RawCStr { n_hashes },
-      suffix_start: self.current as u32,
     })
   }
 
@@ -639,7 +657,6 @@ impl Lexer {
 
       return Some(TokenKind::Literal {
         kind: LiteralKind::RawStr { n_hashes },
-        suffix_start: self.current as u32,
       });
     }
 
@@ -752,7 +769,6 @@ impl Lexer {
     Some(TokenKind::Literal {
       kind: LiteralKind::RawStr { n_hashes },
       // Right after the closing delimiter, or after recovery on error.
-      suffix_start: self.current as u32,
     })
   }
 
@@ -781,7 +797,6 @@ impl Lexer {
 
     Some(TokenKind::Literal {
       kind: LiteralKind::CStr,
-      suffix_start: self.current as u32,
     })
   }
 
@@ -820,7 +835,6 @@ impl Lexer {
         engine.add(diag);
         return Some(TokenKind::Literal {
           kind: LiteralKind::RawByteStr { n_hashes },
-          suffix_start: self.current as u32,
         });
       }
 
@@ -870,7 +884,6 @@ impl Lexer {
 
       return Some(TokenKind::Literal {
         kind: LiteralKind::RawByteStr { n_hashes },
-        suffix_start: self.current as u32,
       });
     }
 
@@ -890,7 +903,6 @@ impl Lexer {
       engine.add(diag);
       return Some(TokenKind::Literal {
         kind: LiteralKind::ByteStr,
-        suffix_start: self.current as u32,
       });
     }
 
@@ -976,7 +988,6 @@ impl Lexer {
 
     Some(TokenKind::Literal {
       kind: LiteralKind::ByteStr,
-      suffix_start: self.current as u32,
     })
   }
 
@@ -1051,7 +1062,6 @@ impl Lexer {
 
     Some(TokenKind::Literal {
       kind: LiteralKind::Byte,
-      suffix_start: self.current as u32,
     })
   }
 
@@ -1159,7 +1169,6 @@ impl Lexer {
 
     Some(TokenKind::Literal {
       kind: LiteralKind::Char,
-      suffix_start: self.current as u32,
     })
   }
 
@@ -1186,13 +1195,11 @@ impl Lexer {
       // Return the unterminated string token so parser can continue
       return Some(TokenKind::Literal {
         kind: LiteralKind::Str,
-        suffix_start: self.current as u32,
       });
     }
 
     Some(TokenKind::Literal {
       kind: LiteralKind::Str,
-      suffix_start: self.current as u32,
     })
   }
 

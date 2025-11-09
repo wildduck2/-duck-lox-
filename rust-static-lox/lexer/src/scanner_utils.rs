@@ -63,6 +63,7 @@ impl Lexer {
       '-' => self.lex_minus(),
       '*' => self.lex_star(),
       '/' => self.lex_slash(),
+      '%' => self.lex_percent(),
 
       // Bitwise & Logical
       '&' => self.lex_and(),

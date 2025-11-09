@@ -76,7 +76,7 @@ mod lexer_tests {
       tokens.iter().any(|t| matches!(
         t.kind,
         TokenKind::Literal {
-          kind: LiteralKind::Int {
+          kind: LiteralKind::Integer {
             base: Base::Binary,
             ..
           },
@@ -90,7 +90,7 @@ mod lexer_tests {
       tokens.iter().any(|t| matches!(
         t.kind,
         TokenKind::Literal {
-          kind: LiteralKind::Int {
+          kind: LiteralKind::Integer {
             base: Base::Octal,
             ..
           },
@@ -104,7 +104,7 @@ mod lexer_tests {
       tokens.iter().any(|t| matches!(
         t.kind,
         TokenKind::Literal {
-          kind: LiteralKind::Int {
+          kind: LiteralKind::Integer {
             base: Base::Hexadecimal,
             ..
           },
@@ -133,7 +133,7 @@ mod lexer_tests {
       tokens.iter().any(|t| matches!(
         t.kind,
         TokenKind::Literal {
-          kind: LiteralKind::Int {
+          kind: LiteralKind::Integer {
             base: Base::Hexadecimal,
             empty_int: true,
             ..
@@ -173,17 +173,17 @@ mod lexer_tests {
     let forbidden_suffix_idents = ["f32", "f64", "u8", "usize"];
     for ident in forbidden_suffix_idents {
       assert!(
-        tokens.iter().all(|tok| {
-          !matches!(tok.kind, TokenKind::Ident) || token_text(&lexer, tok) != ident
-        }),
+        tokens
+          .iter()
+          .all(|tok| { !matches!(tok.kind, TokenKind::Ident) || token_text(&lexer, tok) != ident }),
         "suffix `{ident}` should not be emitted as a standalone identifier"
       );
     }
 
     assert!(
-      tokens.iter().any(|tok| {
-        matches!(tok.kind, TokenKind::Ident) && token_text(&lexer, tok) == "flags"
-      }),
+      tokens
+        .iter()
+        .any(|tok| { matches!(tok.kind, TokenKind::Ident) && token_text(&lexer, tok) == "flags" }),
       "`0b1010flags` should still leave the trailing identifier `flags`"
     );
   }
@@ -192,8 +192,14 @@ mod lexer_tests {
   fn test_string_literal_variants() {
     let (lexer, engine) = lex_test_file("tests/files/strings_valid.lox");
 
-    assert!(!engine.has_errors(), "valid string literals should parse cleanly");
-    assert!(!engine.has_warnings(), "valid string literals should not warn");
+    assert!(
+      !engine.has_errors(),
+      "valid string literals should parse cleanly"
+    );
+    assert!(
+      !engine.has_warnings(),
+      "valid string literals should not warn"
+    );
 
     let mut saw_str = false;
     let mut saw_raw_str = false;
@@ -239,7 +245,10 @@ mod lexer_tests {
     }
     assert!(!engine.has_errors(), "valid shebang should not error");
     assert!(
-      lexer.tokens.iter().any(|tok| matches!(tok.kind, TokenKind::Shebang)),
+      lexer
+        .tokens
+        .iter()
+        .any(|tok| matches!(tok.kind, TokenKind::Shebang)),
       "shebang token was not emitted"
     );
   }
@@ -250,7 +259,10 @@ mod lexer_tests {
 
     assert!(engine.has_errors(), "invalid shebang should emit an error");
     assert!(
-      lexer.tokens.iter().all(|tok| !matches!(tok.kind, TokenKind::Shebang)),
+      lexer
+        .tokens
+        .iter()
+        .all(|tok| !matches!(tok.kind, TokenKind::Shebang)),
       "invalid shebang should not produce a shebang token"
     );
   }
@@ -500,7 +512,10 @@ mod lexer_tests {
   #[test]
   fn test_unknown_tokens() {
     let (_lexer, engine) = lex_test_file("tests/files/unknown_tokens.lox");
-    assert!(engine.has_errors(), "unknown tokens should emit diagnostics");
+    assert!(
+      engine.has_errors(),
+      "unknown tokens should emit diagnostics"
+    );
   }
 
   #[test]
@@ -522,10 +537,7 @@ mod lexer_tests {
       "expected regular identifiers"
     );
     assert!(
-      lexer
-        .tokens
-        .iter()
-        .any(|tok| tok.kind == TokenKind::KwLet),
+      lexer.tokens.iter().any(|tok| tok.kind == TokenKind::KwLet),
       "expected keyword token"
     );
   }
@@ -556,10 +568,13 @@ mod lexer_tests {
   fn test_char_and_byte_literals() {
     let (lexer, _engine) = lex_test_file("tests/files/chars_bytes.lox");
     assert!(
-      lexer
-        .tokens
-        .iter()
-        .any(|tok| matches!(tok.kind, TokenKind::Literal { kind: LiteralKind::Char, .. })),
+      lexer.tokens.iter().any(|tok| matches!(
+        tok.kind,
+        TokenKind::Literal {
+          kind: LiteralKind::Char,
+          ..
+        }
+      )),
       "expected character literal tokens"
     );
     assert!(
@@ -647,21 +662,8 @@ mod lexer_tests {
   fn fuzz_semi_valid_smoke() {
     let mut rng = StdRng::seed_from_u64(0xFEEDFACE);
     let pieces = [
-      "let ",
-      "fn ",
-      "mut ",
-      "x",
-      "y",
-      " = ",
-      "42",
-      "0xFF",
-      ";\n",
-      "if ",
-      "{",
-      "}",
-      "while ",
-      "true",
-      "false",
+      "let ", "fn ", "mut ", "x", "y", " = ", "42", "0xFF", ";\n", "if ", "{", "}", "while ",
+      "true", "false",
     ];
 
     for i in 0..5 {
