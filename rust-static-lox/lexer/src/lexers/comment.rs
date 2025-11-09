@@ -33,10 +33,10 @@ impl Lexer {
     };
 
     while !self.is_eof() {
-      self.advance(); // consume the current char
       if self.match_char('\n') {
         break;
       }
+      self.advance(); // consume the current char
     }
     Some(TokenKind::LineComment { doc_style })
   }
