@@ -119,13 +119,27 @@ impl Parser {
 
     match token.kind {
       TokenKind::Literal { kind } => {
-        self.advance(engine);
+        self.advance(engine); // consume the literal token
+
         match kind {
           LiteralKind::Integer {
             suffix_start,
             base,
             empty_int,
           } => self.parser_integer(engine, &token, empty_int, suffix_start, base),
+          LiteralKind::Float {
+            suffix_start,
+            base,
+            empty_exponent,
+          } => self.parser_float(engine, &token, empty_exponent, suffix_start, base),
+          LiteralKind::Str => self.parser_string(engine, &token),
+          LiteralKind::ByteStr => self.parser_byte_string(engine, &token),
+          LiteralKind::CStr => self.parser_c_string(engine, &token),
+          LiteralKind::RawStr { n_hashes } => self.parser_raw_string(engine, &token, n_hashes),
+          LiteralKind::RawByteStr { n_hashes } => {
+            self.parser_raw_byte_string(engine, &token, n_hashes)
+          },
+          LiteralKind::RawCStr { n_hashes } => self.parser_raw_c_string(engine, &token, n_hashes),
           _ => Err(()),
         }
       },

@@ -157,7 +157,6 @@ impl Lexer {
             break;
           }
         }
-        break;
       } else {
         self.check_suffix_type(c, &mut suffix_start, has_dot || has_exponent, engine);
         break;
@@ -172,6 +171,7 @@ impl Lexer {
       LiteralKind::Float {
         base: Base::Decimal,
         empty_exponent: has_exponent && !has_exp_digits,
+        suffix_start,
       }
     } else {
       LiteralKind::Integer {
@@ -197,6 +197,7 @@ impl Lexer {
     is_float: bool,
     engine: &mut DiagnosticEngine,
   ) -> bool {
+    *suffix_start = self.current;
     if c == 'f' && is_float {
       self.advance(); // consume f
 
@@ -217,7 +218,6 @@ impl Lexer {
     }
 
     if c == 'u' || c == 'i' {
-      *suffix_start = self.current;
       let value = self.inner_check_suffix_type(c, suffix_start, engine);
       return value;
     }
@@ -396,6 +396,7 @@ impl Lexer {
       LiteralKind::Float {
         base: Base::Hexadecimal,
         empty_exponent: has_exponent && !has_exp_digits,
+        suffix_start,
       }
     } else {
       LiteralKind::Integer {

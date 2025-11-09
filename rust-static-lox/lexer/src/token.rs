@@ -116,6 +116,8 @@ pub enum LiteralKind {
     base: Base,
     /// True if exponent marker (`e` or `E`) exists but no digits follow
     empty_exponent: bool,
+    /// The start of the suffix (e.g., `f32`, `f64`)
+    suffix_start: usize,
   },
 
   /// Character literal (single Unicode scalar)

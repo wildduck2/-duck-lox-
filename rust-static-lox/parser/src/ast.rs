@@ -1165,6 +1165,8 @@ pub enum StrKind {
   Raw(usize),
   Byte,
   RawByte(usize),
+  C,
+  RawC(usize),
 }
 
 #[derive(Debug, Clone)]
@@ -1327,15 +1329,13 @@ impl Expr {
 
     match self {
       Expr::Integer { value, suffix, .. } => {
-        let suffix = suffix.as_ref().map(|s| s.as_str()).unwrap_or("");
-
-        let suffix = if suffix.is_empty() {
-          "".to_string()
-        } else {
-          format!(" suffix={}", suffix)
-        };
-
-        println!("{}{} Integer: {}{}", prefix, connector, value, suffix);
+        println!(
+          "{}{} Integer: {}{}",
+          prefix,
+          connector,
+          value,
+          suffix.as_ref().map(|s| s.as_str()).unwrap_or("")
+        );
       },
       Expr::Float { value, suffix, .. } => {
         println!(

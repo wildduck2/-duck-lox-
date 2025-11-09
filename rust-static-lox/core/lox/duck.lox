@@ -1,5 +1,39 @@
-111111u8
-0xFF
-0o777
-0b1010
+//3.14
+//3.14f32
+//1e6
+//1.0e-5
+//1.4E2f32
+
+//111111u8
+//0xFF
+//0o777
+//0b1010
+
+
+//"escape\nsequence\tand quotes\"ok\""
+//
+//r"no escapes here: \n stays \n"
+//r#"contains "quotes" safely"# 
+//r##"even # symbols are fine"##
+//
+//b"abc"
+//b"with\x20spaces"
+//
+//br"raw bytes"
+//br#"with "quotes" inside"#
+//
+//c"hello from C"
+//cr#"raw C string"# 
+//cr##"raw C string with # inside"##
+//
 //"Hello, World!"
+//r"raw string"
+//r#"raw with "quotes""#
+//r##"multi#hash raw"##
+//b"Hello\x20World"
+//br"raw bytes"
+//br##"raw bytes with # inside"##
+//c"Hello, C-string!"
+//cr#"raw C-string"#
+//cr###"multi-hash raw C-string"###
+

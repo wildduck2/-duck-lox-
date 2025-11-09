@@ -64,8 +64,30 @@ impl Parser {
       },
     };
 
+    // check if the parsing was successful and return the value
+    let value = match value {
+      Ok(v) => v,
+      Err(_) => {
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::InvalidLiteral),
+          "Invalid integer literal".to_string(),
+          self.source_file.path.clone(),
+        )
+        .with_label(
+          token.span,
+          Some("Integer literal is too large or malformed".to_string()),
+          LabelStyle::Primary,
+        )
+        .with_help(
+          "Integer literals must be in decimal, binary, octal, or hexadecimal format.".to_string(),
+        );
+        engine.add(diagnostic);
+        return Err(());
+      },
+    };
+
     Ok(Expr::Integer {
-      value: value.unwrap(),
+      value,
       suffix,
       span: token.span,
     })
