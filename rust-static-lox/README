@@ -5,6 +5,15 @@ This is not yet implemented.
 
 Change Log
 ----------
+2025-11-10
+- Extended the expression parser through unary, factor, cast, shift, and bitwise layers, keeping the AST updates and grouped-expression handling in sync.
+- Fixed the lexer `match` helper so it no longer skips characters when matching punctuation-heavy tokens.
+
+2025-11-09
+- Completed primary expression coverage by wiring identifiers, booleans, postfix operators, and string/float literals between the lexer and parser.
+- Refined literal scanning (float/integer unification, suffix guards, empty-line comment recovery) to harden the lexer’s edge cases.
+- Polished developer feedback with severity color fixes plus refreshed BNF grammar notes and the AST print tree output.
+
 2025-11-08
 - Added unified numeric literal suffix scanning (integers `u8`/`i32` etc. and floats `f32`/`f64`) across every base, plus diagnostics for malformed suffixes and reserved prefixes.
 - Introduced lifetime lexing (`'a`, `'static`, `'_`) with invalid-number detection, integrating it with the character literal fallback path.
