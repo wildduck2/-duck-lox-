@@ -7,7 +7,7 @@ use diagnostic::{
 use lexer::token::{LiteralKind, Token, TokenKind};
 
 use crate::{
-  ast::{BinaryOp, Expr, ExprPath, FieldAccess, Item, Stmt, UnaryOp},
+  ast::{BinaryOp, Expr, ExprPath, FieldAccess, Item, Stmt, Type, UnaryOp},
   Parser,
 };
 
@@ -129,7 +129,7 @@ impl Parser {
   // *   cast             → unary ("as" typeNoBounds)* ;
 
   pub(crate) fn parse_factor(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let mut lhs = self.parse_unary(engine)?;
+    let mut lhs = self.parse_cast(engine)?;
 
     'factor_find: while !self.is_eof() {
       let token = self.current_token();
@@ -153,6 +153,33 @@ impl Parser {
           };
         },
         _ => break 'factor_find,
+      }
+    }
+
+    Ok(lhs)
+  }
+
+  pub(crate) fn parse_cast(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let mut lhs = self.parse_unary(engine)?;
+
+    'cast_find: while !self.is_eof() {
+      let mut token = self.current_token();
+      match token.kind {
+        TokenKind::KwAs => {
+          self.advance(engine); // consume the cast operator
+
+          // let type_no_bounds = self.parse_type_no_bounds(engine)?;
+          // NOTE: later one you will parse the type bounds
+          self.advance(engine); // consume the type
+          token.span.merge(self.current_token().span);
+
+          lhs = Expr::Cast {
+            expr: Box::new(lhs),
+            ty: Type::U32,
+            span: token.span,
+          };
+        },
+        _ => break 'cast_find,
       }
     }
 

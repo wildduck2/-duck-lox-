@@ -1503,8 +1503,32 @@ impl Expr {
         expr.print_tree(&new_prefix, true);
       },
 
+      Expr::Cast { expr, ty, .. } => {
+        println!("{}{} Cast", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        println!("{}├─> Expr:", new_prefix);
+        expr.print_tree(&format!("{}│  ", new_prefix), true);
+        println!("{}└─> Type:", new_prefix);
+        ty.print_tree(&format!("{}   ", new_prefix), true);
+      },
+
       _ => {
         println!("{}{} [Other Expr]", prefix, connector);
+      },
+    }
+  }
+}
+
+impl Type {
+  pub fn print_tree(&self, prefix: &str, is_last: bool) {
+    let connector = if is_last { "└─> " } else { "├─> " };
+
+    match self {
+      Type::U32 => {
+        println!("{}{} u32", prefix, connector);
+      },
+      _ => {
+        println!("{}{} [Other Type]", prefix, connector);
       },
     }
   }
