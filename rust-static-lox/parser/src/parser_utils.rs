@@ -115,18 +115,82 @@ impl Parser {
     context: ExprContext,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
-    self.parse_factor(engine)
+    self.parse_shift(engine)
+  }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                     Shift Parsing                                            */
+  /* -------------------------------------------------------------------------------------------- */
+
+  pub(crate) fn parse_shift(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let mut lhs = self.parse_term(engine)?;
+
+    'shift_find: while !self.is_eof() {
+      let token = self.current_token();
+      match token.kind {
+        TokenKind::ShiftLeft | TokenKind::ShiftRight => {
+          self.advance(engine); // consume the shift operator
+
+          let op = match token.kind {
+            TokenKind::ShiftLeft => BinaryOp::Shl,
+            TokenKind::ShiftRight => BinaryOp::Shr,
+            _ => unreachable!(),
+          };
+
+          let rhs = self.parse_term(engine)?;
+
+          lhs = Expr::Binary {
+            op,
+            left: Box::new(lhs),
+            right: Box::new(rhs),
+            span: token.span,
+          };
+        },
+        _ => break 'shift_find,
+      }
+    }
+
+    Ok(lhs)
+  }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                     Term Parsing                                             */
+  /* -------------------------------------------------------------------------------------------- */
+
+  pub(crate) fn parse_term(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let mut lhs = self.parse_factor(engine)?;
+
+    'term_find: while !self.is_eof() {
+      let token = self.current_token();
+      match token.kind {
+        TokenKind::Plus | TokenKind::Minus => {
+          self.advance(engine); // consume the term operator
+
+          let op = match token.kind {
+            TokenKind::Plus => BinaryOp::Add,
+            TokenKind::Minus => BinaryOp::Sub,
+            _ => unreachable!(),
+          };
+
+          let rhs = self.parse_factor(engine)?;
+
+          lhs = Expr::Binary {
+            op,
+            left: Box::new(lhs),
+            right: Box::new(rhs),
+            span: token.span,
+          };
+        },
+        _ => break 'term_find,
+      }
+    }
+
+    Ok(lhs)
   }
 
   /* -------------------------------------------------------------------------------------------- */
   /*                                     Factor Parsing                                           */
   /* -------------------------------------------------------------------------------------------- */
-
-  // *   factor           → cast (factorOp cast)* ;
-  // *
-  // *   factorOp         → "*" | "/" | "%" ;
-  // *
-  // *   cast             → unary ("as" typeNoBounds)* ;
 
   pub(crate) fn parse_factor(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_cast(engine)?;
@@ -136,6 +200,7 @@ impl Parser {
       match token.kind {
         TokenKind::Star | TokenKind::Slash | TokenKind::Percent => {
           self.advance(engine); // consume the factor operator
+
           let op = match token.kind {
             TokenKind::Star => BinaryOp::Mul,
             TokenKind::Slash => BinaryOp::Div,
@@ -158,6 +223,10 @@ impl Parser {
 
     Ok(lhs)
   }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                     Cast Parsing                                           */
+  /* -------------------------------------------------------------------------------------------- */
 
   pub(crate) fn parse_cast(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_unary(engine)?;

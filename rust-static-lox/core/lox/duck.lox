@@ -143,6 +143,71 @@
 //(a * b) as f32      // cast applies to result
 //1 / 2 as f64        // should parse as 1 / (2 as f64)
 //(1 / 2) as f64      // should cast entire division
+//
+//1 + 2
+//a - b
+//
+//x + y - z
+//1 + 2 * 3
+//4 - 5 / 6
+//7 % 8 + 9
+//a * b + c / d
+//x + y * z - w
+//
+//(1 + 2) * 3
+//4 * (5 - 6)
+//(7 + 8) / (9 - 10)
+//a + b as f32
+//(a + b) as f32
+//
+//x as f32 - y
+//(x - y) as f64
+//(1 + 2 as f32) * 3
+//1 + (2 as f32 * 3)
+//1 + 2 * 3 - 4 / 5 % 6
+//
+//(a as f32 + b * c as f64) / (d - e as i32)
+//x - y + z * (w as f32 / 2)
+//(1 + 2) as f32 + 3
+//((a - b) * (c + d as i32)) as f64
+//a + (b as f32 + (c * (d as f64)))
+//
+//a << b
+//x >> y
+//val << 2
+//num >> 3
+//
+//a << b << c
+//x >> y >> z
+//a << b >> c
+//a + b << c
+//
+//x >> y - z
+//1 + 2 << 3 - 4
+//(a + b) << (c - d)
+//
+//a * b << c / d
+//x >> y * z
+//(1 * 2) << (3 / 4)
+//
+//a << b as u32
+//(x as u64) >> y
+//(a << b) as u8
+//x >> (y as usize)
+//
+//(1 as i32) << (2 as i8)
+//((a + b) << (c - d)) >> (e * f)
+//(((x as i32) << 1) + (y as i32)) >> 2
+//
+//*&x << *&y
+//-&a >> &mut b
+//!flag << 1
+//
+//((a * b + c as i32) << (d - e)) >> (f / g as u8)
+//((x as i64) >> (y + z * w)) + (q << (r as i32))
+//
+
+
 
 
 
