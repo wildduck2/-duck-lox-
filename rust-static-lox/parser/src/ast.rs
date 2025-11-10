@@ -1307,9 +1307,13 @@ pub enum BinaryOp {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum UnaryOp {
-  Neg,
-  Not,
-  Deref,
+  Neg,   // -
+  Not,   // !
+  Deref, // *
+  Ref {
+    mutable: bool, // &mut or &
+    depth: usize,  // 1 for &, 2 for &&
+  },
 }
 
 // ----------------------------------------------------------------------------
