@@ -118,7 +118,7 @@ impl Parser {
       self.advance(engine);
 
       // If next is '(', it's a method call
-      if !self.is_eof() && self.peek(1).kind == TokenKind::OpenParen {
+      if !self.is_eof() && self.current_token().kind == TokenKind::OpenParen {
         self.expect(TokenKind::OpenParen, engine)?;
         let args = self.parse_call_params(engine)?;
         let close_paren = self.current_token();
