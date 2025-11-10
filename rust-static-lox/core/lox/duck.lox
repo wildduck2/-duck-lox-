@@ -1,117 +1,133 @@
-//3.14
-//3.14f32
-//1e6
-//1.0e-5
-//1.4E2f32
+3.14;
+3.14f32;
+1e6;
+1.0e-5;
+1.4E2f32;
 
-//111111u8
-//0xFF
-//0o777
-//0b1010
+111111u8;
+0xFF;
+0o777;
+0b1010;
 
 
-//"escape\nsequence\tand quotes\"ok\""
-//
-//r"no escapes here: \n stays \n"
-//r#"contains "quotes" safely"# 
-//r##"even # symbols are fine"##
-//
-//b"abc"
-//b"with\x20spaces"
-//
-//br"raw bytes"
-//br#"with "quotes" inside"#
-//
-//c"hello from C"
-//cr#"raw C string"# 
-//cr##"raw C string with # inside"##
-//
-//"Hello, World!"
-//r"raw string"
-//r#"raw with "quotes""#
-//r##"multi#hash raw"##
-//b"Hello\x20World"
-//br"raw bytes"
-//br##"raw bytes with # inside"##
-//c"Hello, C-string!"
-//cr#"raw C-string"#
-//cr###"multi-hash raw C-string"###
+"escape\nsequence\tand quotes\"ok\"";
 
-//b'A'
-//b'a'
+r"no escapes here; \n stays \n";
+r#"contains "quotes" safely"#;
+r##"even # symbols are fine"##;
 
-//name
-//welcome
-//identifier
+b"abc";
+b"with\x20spaces";
 
-//true
-//false
+br"raw bytes";
+br#"with "quotes" inside"#;
 
-//foo.bar
-//person.name
-//config.value
+c"hello from C";
+cr#"raw C string"# ;
+cr##"raw C string with # inside"##;
 
-//tuple.0
-//point.1
-//pair.2
+"Hello, World!";
+r"raw string";
+r#"raw with "quotes""#;
+r##"multi#hash raw"##;
+b"Hello\x20World";
+br"raw bytes";
+br##"raw bytes with # inside"##;
+c"Hello, C-string!";
+cr#"raw C-string"#;
+cr###"multi-hash raw C-string"###;
 
-//arr[0]
-//arr[i + 1]
-//matrix[1][2]
-//foo[bar.baz]
+b'A';
+b'a';
 
-//foo(1)
-//foo(1, 2, 3)
-//bar("hi", true)
-//nested(outer(1), 2)
-//add(1 + 2)
+name;
+welcome;
+identifier;
 
-//foo.bar()
-//foo.bar(1, 2)
-//obj.method("hi", true)
-//obj.method().other()
-//self.compute().finish()
+true;
+false;
 
-//future.await
-//foo.bar().await
-//read_file().await
-//x[0].await
+foo.bar;
+person.name;
+config.value;
 
-//foo()?
-//read_line()?.trim()
-//get_value()?.to_string()?
-//arr[0]?
+tuple.0;
+point.1;
+pair.2;
 
-//foo.bar().baz[0].qux().await?
-//tuple.0.call_method(42)[i].await
-//get_data()[index].field.call()?.another_call(1)
-//user.info().friends[0].send_message("hi")?
+arr[0];
+arr[i * 1];
+matrix[1][2];
+foo[bar.baz];
 
--x
-!flag
-*ptr
-&x
-&mut y
-&&ptr
-&&mut ref_to_value
+foo(1);
+foo(1, 2, 3);
+bar("hi", true);
+nested(outer(1), 2);
 
---x           // double negation
-!!enabled     // double logical not
-*&x           // deref a reference
-*&mut y       // deref a mutable reference
-&&*&mut z     // layered: ref->ref->deref->mut
--&*ptr        // negation applied to deref’d pointer
-!*ptr         // not of deref’d boolean
-&&mut *&x     // ref→mut→deref→ref→ident
+add(1 * 2);
 
--&foo.bar     // negation + ref + field access
-!*data[0]     // logical not + deref + index
-&mut arr[1].value
-&&mut *obj.method()
--*&mut config.option()?.await
+foo.bar();
+foo.bar(1, 2);
+obj.method("hi", true);
+obj.method().other();
+self.compute().finish();
 
---value.call()?
-!array[0].field.await
-*&mut obj.method(1, 2)
-&&mut *&nested.field[2].call()?.await
+future.await;
+foo.bar().await;
+read_file().await;
+x[0].await;
+
+foo()?;
+read_line()?.trim();
+get_value()?.to_string()?;
+arr[0]?;
+
+foo.bar().baz[0].qux().await?;
+tuple.0.call_method(42)[i].await;
+get_data()[index].field.call()?.another_call(1);
+user.info().friends[0].send_message("hi")?;
+
+-x;
+!flag;
+*ptr;
+&x;
+&mut y;
+&&ptr;
+&&mut ref_to_value;
+
+--x      ;     // double negation
+!!enabled;     // double logical not
+*&x      ;     // deref a reference
+*&mut y  ;     // deref a mutable reference
+&&*&mut z;     // layered: ref->ref->deref->mut
+-&*ptr   ;     // negation applied to deref’d pointer
+!*ptr    ;     // not of deref’d boolean
+&&mut *&x;     // ref→mut→deref→ref→ident
+
+-&foo.bar;     // negation + ref + field access
+!*data[0];     // logical not + deref + index
+&mut arr[1].value;
+&&mut *obj.method();
+-*&mut config.option()?.await;
+
+--value.call()?;
+!array[0].field.await;
+*&mut obj.method(1, 2);
+&&mut *&nested.field[2].call()?.await;
+
+
+a * b;
+x / y;
+n % 2;
+a * b / c % d;
+x * y / (z % w);
+
+1 * 2;
+(a / b);
+(1 / 2) * 3;
+x * (y / z);
+(x * (y / (z * w)));
+(*ptr).method();
+(&mut (arr[i / 1])).await;
 

@@ -160,7 +160,7 @@ impl Parser {
     while !self.is_eof() && self.current_token().kind != TokenKind::CloseParen {
       // NOTE: move the higher precednce when you make more productions ready to aboid bugs like
       // `foo(foo(1, 2), 3)` thus it will be unable to parse the nested call
-      let expr = self.parse_postfix(engine)?;
+      let expr = self.parse_expression(ExprContext::Default, engine)?;
       exprs.push(expr);
 
       if matches!(self.current_token().kind, TokenKind::Comma) {

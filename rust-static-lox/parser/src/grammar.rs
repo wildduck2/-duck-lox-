@@ -1,7 +1,6 @@
 /*
  *
  *   Complete Rust Grammar - Recursive Descent Parsing Style
- *   CORRECTED to match actual Rust syntax
  *
  *   program          → shebang? innerAttr* item* EOF ;
  *
@@ -111,7 +110,7 @@
  *                      ("=" expression)? ";" ;
  *
  *   typeAliasItem    → "type" IDENTIFIER genericParams?
- *                      (":" typeParamBounds)?
+ *                      (":" typeBounds)?
  *                      whereClause? ("=" type)? ";" ;
  *
  *   traitItem        → "unsafe"? "auto"? "trait" IDENTIFIER
@@ -119,10 +118,12 @@
  *                      whereClause? "{" innerAttr* associatedItem* "}" ;
  *
  *   implItem         → "unsafe"? "impl" genericParams?
- *                      "const"? "!"? typePath "for" type
+ *                      "const"? "!"? traitPath "for" type
  *                      whereClause? "{" innerAttr* associatedItem* "}"
  *                    | "unsafe"? "impl" genericParams? type
  *                      whereClause? "{" innerAttr* inherentImplItem* "}" ;
+ *
+ *   traitPath        → typePath ;
  *
  *   associatedItem   → outerAttr* (macroInvocationSemi | associatedItemKind) ;
  *
@@ -194,9 +195,9 @@
  *
  *   lifetimeParam    → LIFETIME (":" lifetimeBounds)? ;
  *
- *   typeParam        → IDENTIFIER (":" typeParamBounds)? ("=" type)? ;
+ *   typeParam        → IDENTIFIER (":" typeParamBounds?)? ("=" type)? ;
  *
- *   constParam       → "const" IDENTIFIER ":" type ("=" (block | IDENTIFIER | literalExpr))? ;
+ *   constParam       → "const" IDENTIFIER ":" type ("=" block | "=" IDENTIFIER | "=" literalExpr)? ;
  *
  *   whereClause      → "where" (whereClauseItem ("," whereClauseItem)* ","?)? ;
  *
@@ -207,7 +208,7 @@
  *
  *   typeBoundWhereClauseItem → forLifetimes? type ":" typeParamBounds? ;
  *
- *   lifetimeBounds   → LIFETIME ("+" LIFETIME)* "+"? ;
+ *   lifetimeBounds   → (LIFETIME ("+" LIFETIME)*)? "+"? ;
  *
  *   typeParamBounds  → typeParamBound ("+" typeParamBound)* "+"? ;
  *
@@ -273,7 +274,7 @@
  *
  *   inferredType     → "_" ;
  *
- *   qualifiedPathInType → qualifiedPathType ("::" typePathSegment)* ;
+ *   qualifiedPathInType → qualifiedPathType ("::" typePath)? ;
  *
  *   qualifiedPathType → "<" type ("as" typePath)? ">" ;
  *

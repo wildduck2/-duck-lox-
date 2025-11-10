@@ -7,7 +7,7 @@ use diagnostic::{
 use lexer::token::{LiteralKind, Token, TokenKind};
 
 use crate::{
-  ast::{Expr, ExprPath, FieldAccess, Item, Stmt, UnaryOp},
+  ast::{BinaryOp, Expr, ExprPath, FieldAccess, Item, Stmt, UnaryOp},
   Parser,
 };
 
@@ -24,7 +24,7 @@ impl Parser {
   /// Parses the top-level production, collecting statements until EOF.
   pub fn parse_program(&mut self, engine: &mut DiagnosticEngine) {
     while !self.is_eof() {
-      match self.parse_unary(engine) {
+      match self.parse_stmt(engine) {
         // Returns Item, not Stmt
         Ok(item) => {
           item.print_tree("", true);
@@ -94,8 +94,12 @@ impl Parser {
         // Expression statement
         let expr = self.parse_expression(ExprContext::Default, engine)?;
 
-        // TODO: Check if followed by semicolon
-        Ok(Stmt::Expr(expr))
+        if self.current_token().kind == TokenKind::Semi {
+          self.expect(TokenKind::Semi, engine)?; // check if followed by semicolon
+          Ok(Stmt::Expr(expr))
+        } else {
+          Ok(Stmt::TailExpr(expr))
+        }
       },
     }
   }
@@ -111,15 +115,53 @@ impl Parser {
     context: ExprContext,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
-    self.parse_unary(engine)
+    self.parse_factor(engine)
+  }
+
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                     Factor Parsing                                           */
+  /* -------------------------------------------------------------------------------------------- */
+
+  // *   factor           → cast (factorOp cast)* ;
+  // *
+  // *   factorOp         → "*" | "/" | "%" ;
+  // *
+  // *   cast             → unary ("as" typeNoBounds)* ;
+
+  pub(crate) fn parse_factor(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let mut lhs = self.parse_unary(engine)?;
+
+    'factor_find: while !self.is_eof() {
+      let token = self.current_token();
+      match token.kind {
+        TokenKind::Star | TokenKind::Slash | TokenKind::Percent => {
+          self.advance(engine); // consume the factor operator
+          let op = match token.kind {
+            TokenKind::Star => BinaryOp::Mul,
+            TokenKind::Slash => BinaryOp::Div,
+            TokenKind::Percent => BinaryOp::Mod,
+            _ => unreachable!(),
+          };
+
+          let rhs = self.parse_factor(engine)?;
+
+          lhs = Expr::Binary {
+            op,
+            left: Box::new(lhs),
+            right: Box::new(rhs),
+            span: token.span,
+          };
+        },
+        _ => break 'factor_find,
+      }
+    }
+
+    Ok(lhs)
   }
 
   /* -------------------------------------------------------------------------------------------- */
   /*                                     Unary Parsing                                            */
   /* -------------------------------------------------------------------------------------------- */
-  // *   unary            → unaryOp* postfix ;
-  // *
-  // *   unaryOp          → "-" | "!" | "*" | "&" "mut"? | "&&" "mut"? ;
 
   pub(crate) fn parse_unary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut token = self.current_token();
@@ -168,7 +210,7 @@ impl Parser {
     let mut expr = self.parse_primary(engine)?;
 
     // Then, repeatedly apply postfix operators
-    'l: loop {
+    'postfix_find: loop {
       match self.current_token().kind {
         TokenKind::OpenParen => {
           expr = self.parse_method_call(expr, engine)?; // normal call
@@ -187,7 +229,7 @@ impl Parser {
         TokenKind::Question => {
           expr = self.parse_try(expr, engine)?;
         },
-        _ => break 'l,
+        _ => break 'postfix_find,
       }
     }
 
@@ -198,8 +240,9 @@ impl Parser {
   /*                                     Primary Parsing                                          */
   /* -------------------------------------------------------------------------------------------- */
 
+  //FIX: when there is token before the "(" it glitches
   pub(crate) fn parse_primary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let token = self.current_token();
+    let mut token = self.current_token();
 
     match token.kind {
       TokenKind::Literal { kind } => self.parser_literal(engine, &token, kind),
@@ -208,6 +251,7 @@ impl Parser {
       TokenKind::KwSelfValue | TokenKind::KwSuper | TokenKind::KwCrate | TokenKind::KwSelfType => {
         self.parse_keyword_ident(engine, &token)
       },
+      TokenKind::OpenParen => self.parse_grouped_expr(&mut token, engine),
       _ => {
         let lexeme = self
           .source_file

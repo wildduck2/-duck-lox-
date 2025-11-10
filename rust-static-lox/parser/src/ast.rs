@@ -724,6 +724,7 @@ pub enum Mutability {
 pub enum Stmt {
   Expr(Expr),
   Semi(Expr),
+  TailExpr(Expr),
   Let {
     attributes: Vec<Attribute>,
     pattern: Pattern,
@@ -904,6 +905,11 @@ pub enum Expr {
   },
   Unary {
     op: UnaryOp,
+    expr: Box<Expr>,
+    span: Span,
+  },
+
+  Group {
     expr: Box<Expr>,
     span: Span,
   },
@@ -1373,6 +1379,7 @@ impl Expr {
       | Expr::Paren { span, .. }
       | Expr::InlineAsm { span, .. }
       | Expr::Ident { span, .. }
+      | Expr::Group { span, .. }
       | Expr::FormatString { span, .. } => *span,
       Expr::Path(_) => Span::default(),
       Expr::Macro { mac } => mac.span,
@@ -1490,6 +1497,11 @@ impl Expr {
         let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
         expr.print_tree(&new_prefix, true);
       },
+      Expr::Group { expr, .. } => {
+        println!("{}{} Group", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        expr.print_tree(&new_prefix, true);
+      },
 
       _ => {
         println!("{}{} [Other Expr]", prefix, connector);
@@ -1513,6 +1525,11 @@ impl Stmt {
       },
       Stmt::Semi(expr) => {
         println!("{}{} Stmt::Semi", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        expr.print_tree(&new_prefix, true);
+      },
+      Stmt::TailExpr(expr) => {
+        println!("{}{} Stmt::TailExpr", prefix, connector);
         let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
         expr.print_tree(&new_prefix, true);
       },
