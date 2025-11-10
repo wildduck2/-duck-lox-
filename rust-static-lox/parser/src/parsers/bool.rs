@@ -1,6 +1,7 @@
-use crate::{ast::Expr, Parser};
 use diagnostic::DiagnosticEngine;
 use lexer::token::Token;
+
+use crate::{ast::Expr, Parser};
 
 impl Parser {
   pub(crate) fn parser_bool(

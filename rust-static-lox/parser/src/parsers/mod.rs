@@ -1,5 +1,13 @@
+mod bitwise;
 mod bool;
+mod cast;
+mod comparison;
+mod factor;
 mod grouped_expression;
 mod identifier;
 mod literal;
+mod logical;
 mod postfix;
+mod shift;
+mod term;
+mod unary;

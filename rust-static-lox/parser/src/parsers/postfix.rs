@@ -1,12 +1,48 @@
+use diagnostic::DiagnosticEngine;
+use lexer::token::{LiteralKind, TokenKind};
+
 use crate::{
   ast::{Expr, FieldAccess},
   parser_utils::ExprContext,
   Parser,
 };
-use diagnostic::DiagnosticEngine;
-use lexer::token::{LiteralKind, TokenKind};
 
 impl Parser {
+  /* -------------------------------------------------------------------------------------------- */
+  /*                                     Postfix Parsing                                          */
+  /* -------------------------------------------------------------------------------------------- */
+
+  pub(crate) fn parse_postfix(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    // First, parse the base expression (primary)
+    let mut expr = self.parse_primary(engine)?;
+
+    // Then, repeatedly apply postfix operators
+    'postfix_find: loop {
+      match self.current_token().kind {
+        TokenKind::OpenParen => {
+          expr = self.parse_method_call(expr, engine)?; // normal call
+        },
+        TokenKind::Dot => {
+          // look ahead for .await vs .foo vs .0
+          if self.peek(1).kind == TokenKind::KwAwait {
+            expr = self.parse_await(expr, engine)?;
+          } else {
+            expr = self.parse_field_or_method(expr, engine)?;
+          }
+        },
+        TokenKind::OpenBracket => {
+          expr = self.parse_index(expr, engine)?;
+        },
+        TokenKind::Question => {
+          expr = self.parse_try(expr, engine)?;
+        },
+        _ => break 'postfix_find,
+      }
+    }
+
+    Ok(expr)
+  }
+
   pub(crate) fn parse_await(
     &mut self,
     expr: Expr,

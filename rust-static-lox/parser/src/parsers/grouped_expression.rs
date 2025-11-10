@@ -1,7 +1,7 @@
-use crate::{ast::Expr, parser_utils::ExprContext, Parser};
-
 use diagnostic::DiagnosticEngine;
 use lexer::token::{Token, TokenKind};
+
+use crate::{ast::Expr, parser_utils::ExprContext, Parser};
 
 impl Parser {
   pub(crate) fn parse_grouped_expr(
