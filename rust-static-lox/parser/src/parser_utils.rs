@@ -90,24 +90,19 @@ impl Parser {
         Ok(Stmt::Empty)
       },
 
-      _ => {
-        // Expression statement
-        let expr = self.parse_expression(ExprContext::Default, engine)?;
-
-        if self.current_token().kind == TokenKind::Semi {
-          self.expect(TokenKind::Semi, engine)?; // check if followed by semicolon
-          Ok(Stmt::Expr(expr))
-        } else {
-          Ok(Stmt::TailExpr(expr))
-        }
-      },
+      _ => self.parse_expr_stmt(engine),
     }
   }
 
-  fn parse_expr_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    self.parse_expression(ExprContext::Default, engine);
+  fn parse_expr_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    let expr = self.parse_expression(ExprContext::Default, engine)?;
 
-    Err(())
+    if self.current_token().kind == TokenKind::Semi {
+      self.expect(TokenKind::Semi, engine)?; // check if followed by semicolon
+      Ok(Stmt::Expr(expr))
+    } else {
+      Ok(Stmt::TailExpr(expr))
+    }
   }
 
   pub(crate) fn parse_expression(
@@ -117,12 +112,6 @@ impl Parser {
   ) -> Result<Expr, ()> {
     self.parse_assignment_expr(engine)
   }
-
-  // *   expression       → assignment ;
-  // *
-  // *   assignment       → (rangeExpr assignOp)* rangeExpr ;
-  // *
-  // *   assignOp         → "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>=" ;
 
   pub(crate) fn parse_assignment_expr(
     &mut self,
@@ -165,6 +154,26 @@ impl Parser {
   /*                                     Primary Parsing                                          */
   /* -------------------------------------------------------------------------------------------- */
 
+  // *   primary          → literalExpr [x]
+  // *                    | pathExpr
+  // *                    | groupedExpr [x]
+  // *                    | arrayExpr
+  // *                    | tupleExpr
+  // *                    | structExpr
+  // *                    | closureExpr
+  // *                    | blockExpr
+  // *                    | asyncBlockExpr
+  // *                    | unsafeBlockExpr
+  // *                    | loopExpr
+  // *                    | ifExpr
+  // *                    | ifLetExpr
+  // *                    | matchExpr
+  // *                    | continueExpr
+  // *                    | breakExpr
+  // *                    | returnExpr
+  // *                    | underscoreExpr
+  // *                    | macroInvocation ;
+
   pub(crate) fn parse_primary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut token = self.current_token();
 
@@ -176,6 +185,7 @@ impl Parser {
         self.parse_keyword_ident(engine, &token)
       },
       TokenKind::OpenParen => self.parse_grouped_expr(&mut token, engine),
+      TokenKind::OpenBracket => self.parse_array_expr(&mut token, engine),
       _ => {
         let lexeme = self
           .source_file

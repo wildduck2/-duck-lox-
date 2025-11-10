@@ -356,59 +356,100 @@
 //(a || b)..c;
 //a && b..c;
 //(1 < 2)..(3 > 4) || (x && y);
+//
+//a = b;
+//x = 1;
+//flag = true;
+//message = "hello";
+//
+//a += b;
+//x -= y;
+//value *= 10;
+//count /= 2;
+//modd %= 3;
+//
+//mask &= flag;
+//mask |= 0xFF;
+//bits ^= other_bits;
+//shift <<= 2;
+//shift >>= 1;
+//
+//x = a + b * c;
+//y += (m - n) / 2;
+//z *= (a + b) as f32;
+//total /= x << 1;
+//flag |= (a & b) ^ (c | d);
+//
+//r1 = 1..5;
+//r2 = a..=b;
+//r3 = ..10;
+//r4 = (x + 1)..(y - 1);
+//
+//data = arr[1..=len];
+//slice = items[..];
+//
+//a = b = c;
+//x = y += z;
+//counter = total = value * 2;
+//
+//result = (a + b) * (c - d);
+//matrix[i][j] = a * b + c / d;
+//obj.value += (a..b).len();
+//foo.bar -= x >> 2;
+//bar.baz <<= (a + b) & (c - d);
+//
+//x = a < b;
+//y = x == y;
+//cond = (a && b) || (c && d);
+//flag = (a..b) == (c..d);
+//
+//(a += b);
+//(x -= y * z);
+//foo.bar().baz[1] <<= (x..y);
+//result >>= (input & mask);
+//((a..b) += (c..d)); // syntactically valid for parser test
+//
+//[1];
+//[1, 2, 3];
+//[a, b, c];
+//[true, false, flag];
+//["hello", "world", "duck"];
+//
+//[1, 2, 3,];
+//[a, b, c,];
+//[x + y, y - z, z * 2,];
+//
+//[[1, 2], [3, 4]];
+//[[a, b], [c, d], [e, f]];
+//
+//[1..5, a..=b];
+//[..10, (x + 1)..(y - 1)];
+//[(a..b), (c..=d)];
+//
+//[(a + b) * c, x << y, y >> z];
+//[(a & b) | c, a ^ b, (x > y) && (z < w)];
+//
+//[0; 5];              // 5 zeros
+//["hi"; 10];          // 10 "hi" strings
+//[flag; 2];           // repeat boolean flag twice
+//[(a + b); count];    // repeat expression
+//
+//[[1, 2]; 3];         // repeat [1, 2] three times
+//[[a, b, c]; n];      // repeat [a, b, c] n times
+//
+//[ [1, 2], [3; 2], [a + b, c * d] ];
+//[ (1 + 2), (3 * 4), [5, 6, 7], (8..10) ];
+//
+//[foo(), bar(1, 2), baz.value];
+//[obj.method(); count];
+//[user.info().friends; total];
+//
+//[ ];             // empty array
+//[ x ];           // single expression
+//[ (x + y), ];    // trailing comma with grouped expr
+//[ [ [ ] ] ];     // nested empty arrays
+//[ arr[i]; len ]; // repetition with indexed expr
+//
 
-a = b;
-x = 1;
-flag = true;
-message = "hello";
 
-a += b;
-x -= y;
-value *= 10;
-count /= 2;
-modd %= 3;
-
-mask &= flag;
-mask |= 0xFF;
-bits ^= other_bits;
-shift <<= 2;
-shift >>= 1;
-
-x = a + b * c;
-y += (m - n) / 2;
-z *= (a + b) as f32;
-total /= x << 1;
-flag |= (a & b) ^ (c | d);
-
-r1 = 1..5;
-r2 = a..=b;
-r3 = ..10;
-r4 = (x + 1)..(y - 1);
-
-data = arr[1..=len];
-slice = items[..];
-
-// Chained assignments (right-associative)
-a = b = c;
-x = y += z;
-counter = total = value * 2;
-
-result = (a + b) * (c - d);
-matrix[i][j] = a * b + c / d;
-obj.value += (a..b).len();
-foo.bar -= x >> 2;
-bar.baz <<= (a + b) & (c - d);
-
-// Assignment in logical or comparison context (to test precedence)
-x = a < b;
-y = x == y;
-cond = (a && b) || (c && d);
-flag = (a..b) == (c..d);
-
-// Mix everything with parentheses
-(a += b);
-(x -= y * z);
-foo.bar().baz[1] <<= (x..y);
-result >>= (input & mask);
-((a..b) += (c..d)); // syntactically valid for parser test
 

@@ -961,6 +961,7 @@ pub enum Expr {
 
   Array {
     elements: Vec<Expr>,
+    repeat: Option<Box<Expr>>,
     span: Span,
   },
   ArrayRepeat {
@@ -1541,6 +1542,44 @@ impl Expr {
         }
 
         println!("{}└─> RangeKind: {:?}", new_prefix, kind);
+      },
+
+      Expr::Array {
+        elements, repeat, ..
+      } => {
+        println!("{}{} Array", prefix, connector);
+        let base = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+
+        let has_elements = !elements.is_empty();
+        let has_repeat = repeat.is_some();
+
+        if !has_elements && !has_repeat {
+          println!("{}└─> <empty>", base);
+          return;
+        }
+
+        // ---- Elements block ---------------------------------------------------
+        if has_elements {
+          // If a Repeat follows, Elements is not last at the Array level.
+          let elem_hdr_conn = if has_repeat { "├─>" } else { "└─>" };
+          println!("{}{} Elements:", base, elem_hdr_conn);
+
+          // Inside Elements: keep the vertical bar if a sibling (Repeat) follows.
+          let elems_prefix = format!("{}{}  ", base, if has_repeat { "│" } else { " " });
+
+          for (i, expr) in elements.iter().enumerate() {
+            let is_last_elem = i + 1 == elements.len();
+            expr.print_tree(&elems_prefix, is_last_elem);
+          }
+        }
+
+        // ---- Repeat block -----------------------------------------------------
+        if let Some(repeat_expr) = repeat {
+          // Repeat is always the last child at the Array level.
+          println!("{}└─> Repeat:", base);
+          let repeat_prefix = format!("{}   ", base);
+          repeat_expr.print_tree(&repeat_prefix, true);
+        }
       },
 
       _ => {

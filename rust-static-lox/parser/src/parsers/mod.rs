@@ -1,3 +1,4 @@
+mod array;
 mod bitwise;
 mod bool;
 mod cast;
