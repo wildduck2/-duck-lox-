@@ -17,10 +17,8 @@ impl Lexer {
   /// `Some(TokenKind::Eq)`, `Some(TokenKind::EqEq)`, or `Some(TokenKind::FatArrow)`
   pub(crate) fn lex_equal(&mut self) -> Option<TokenKind> {
     if self.match_char('=') {
-      self.advance(); // consume the '='
       return Some(TokenKind::EqEq);
     } else if self.match_char('>') {
-      self.advance(); // consume the '='
       return Some(TokenKind::FatArrow);
     }
 
@@ -38,7 +36,6 @@ impl Lexer {
   /// `Some(TokenKind::Bang)` or `Some(TokenKind::Ne)`
   pub(crate) fn lex_bang(&mut self) -> Option<TokenKind> {
     if self.match_char('=') {
-      self.advance(); // consume the '='
       return Some(TokenKind::Ne);
     }
 
@@ -58,13 +55,9 @@ impl Lexer {
   /// `Some(TokenKind::Lt)`, `Some(TokenKind::Le)`, `Some(TokenKind::ShiftLeft)`, or `Some(TokenKind::ShiftLeftEq)`
   pub(crate) fn lex_less(&mut self) -> Option<TokenKind> {
     if self.match_char('=') {
-      self.advance(); // consume the '='
       return Some(TokenKind::Le);
     } else if self.match_char('<') {
-      self.advance(); // consume the '='
-
       if self.match_char('=') {
-        self.advance(); // consume the '='
         return Some(TokenKind::ShiftLeftEq);
       }
 
@@ -87,13 +80,9 @@ impl Lexer {
   /// `Some(TokenKind::Gt)`, `Some(TokenKind::Ge)`, `Some(TokenKind::ShiftRight)`, or `Some(TokenKind::ShiftRightEq)`
   pub(crate) fn lex_greater(&mut self) -> Option<TokenKind> {
     if self.match_char('=') {
-      self.advance(); // consume the '='
       return Some(TokenKind::Ge);
     } else if self.match_char('>') {
-      self.advance(); // consume the '>'
-
       if self.match_char('=') {
-        self.advance(); // consume the '='
         return Some(TokenKind::ShiftRightEq);
       }
 

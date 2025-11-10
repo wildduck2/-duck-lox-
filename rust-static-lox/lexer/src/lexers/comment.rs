@@ -23,17 +23,15 @@ impl Lexer {
     self.advance(); // consume the '/'
 
     let doc_style = if self.match_char('/') {
-      self.advance(); // consume the '/'
       Some(DocStyle::Inner)
     } else if self.match_char('!') {
-      self.advance(); // consume the '!'
       Some(DocStyle::Outer)
     } else {
       None
     };
 
     while !self.is_eof() {
-      if self.match_char('\n') {
+      if self.peek() == Some('\n') {
         break;
       }
       self.advance(); // consume the current char

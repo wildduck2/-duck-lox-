@@ -7,4 +7,3 @@ mod lifetimes;
 mod literal;
 mod punctuation_and_delimiters;
 mod shebang;
-mod special_operators;

@@ -41,10 +41,8 @@ impl Lexer {
   /// `Some(TokenKind::Dot)`, `Some(TokenKind::DotDot)`, or `Some(TokenKind::DotDotEq)`
   pub fn lex_dot(&mut self) -> Option<TokenKind> {
     if self.match_char('.') {
-      self.advance(); // consume the '.'
       return Some(TokenKind::DotDot);
     } else if self.match_char('=') {
-      self.advance(); // consume the '='
       return Some(TokenKind::DotDotEq);
     }
 
@@ -182,7 +180,6 @@ impl Lexer {
   /// `Some(TokenKind::Colon)` or `Some(TokenKind::ColonColon)`
   pub fn lex_colon(&mut self) -> Option<TokenKind> {
     if self.match_char(':') {
-      self.advance(); // consume the ':'
       return Some(TokenKind::ColonColon);
     }
 
