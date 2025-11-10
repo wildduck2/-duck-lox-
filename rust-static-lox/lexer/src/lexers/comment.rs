@@ -20,8 +20,6 @@ impl Lexer {
   ///
   /// `Some(TokenKind::LineComment { doc_style })`
   pub fn lex_line_comment(&mut self) -> Option<TokenKind> {
-    self.advance(); // consume the '/'
-
     let doc_style = if self.match_char('/') {
       Some(DocStyle::Inner)
     } else if self.match_char('!') {
@@ -53,9 +51,6 @@ impl Lexer {
   ///
   /// The `terminated` field is `false` if the closing `*/` is missing.
   pub fn lex_multi_line_comment(&mut self) -> Option<TokenKind> {
-    self.advance(); // consume '/'
-    self.advance(); // consume '*'
-
     // Detect Rust-style doc comments: /*! ... */ (Outer) or /** ... */ (Inner)
     let doc_style = match self.peek() {
       Some('!') => {

@@ -41,9 +41,11 @@ impl Lexer {
   /// `Some(TokenKind::Dot)`, `Some(TokenKind::DotDot)`, or `Some(TokenKind::DotDotEq)`
   pub fn lex_dot(&mut self) -> Option<TokenKind> {
     if self.match_char('.') {
+      if self.match_char('=') {
+        return Some(TokenKind::DotDotEq);
+      }
+
       return Some(TokenKind::DotDot);
-    } else if self.match_char('=') {
-      return Some(TokenKind::DotDotEq);
     }
 
     Some(TokenKind::Dot)

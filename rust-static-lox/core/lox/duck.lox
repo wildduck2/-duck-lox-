@@ -131,187 +131,229 @@
 //(*ptr).method();
 //(&mut (arr[i / 1])).await;
 //
-//a as f32 * b
-//x / (y as i64)
-//z % (w as u8)
+//a as f32 * b;
+//x / (y as i64);
+//z % (w as u8);
 //
-//(1 as f32) * (2 as f64)
-//a * (b as i32) / (c % d as u16)
-//(x as f32 * y as f64) / (z as f64)
+//(1 as f32) * (2 as f64);
+//a * (b as i32) / (c % d as u16);
+//(x as f32 * y as f64) / (z as f64);
 //
-//a * b as f32        // cast applies to b
-//(a * b) as f32      // cast applies to result
-//1 / 2 as f64        // should parse as 1 / (2 as f64)
-//(1 / 2) as f64      // should cast entire division
+//a * b as f32  ;      // cast applies to b
+//(a * b) as f32;      // cast applies to result
+//1 / 2 as f64  ;      // should parse as 1 / (2 as f64)
+//(1 / 2) as f64;      // should cast entire division
 //
-//1 + 2
-//a - b
+//1 + 2;
+//a - b;
 //
-//x + y - z
-//1 + 2 * 3
-//4 - 5 / 6
-//7 % 8 + 9
-//a * b + c / d
-//x + y * z - w
+//x + y - z;
+//1 + 2 * 3;
+//4 - 5 / 6;
+//7 % 8 + 9;
+//a * b + c / d;
+//x + y * z - w;
 //
-//(1 + 2) * 3
-//4 * (5 - 6)
-//(7 + 8) / (9 - 10)
-//a + b as f32
-//(a + b) as f32
+//(1 + 2) * 3;
+//4 * (5 - 6);
+//(7 + 8) / (9 - 10);
+//a + b as f32;
+//(a + b) as f32;
 //
-//x as f32 - y
-//(x - y) as f64
-//(1 + 2 as f32) * 3
-//1 + (2 as f32 * 3)
-//1 + 2 * 3 - 4 / 5 % 6
+//x as f32 - y;
+//(x - y) as f64;
+//(1 + 2 as f32) * 3;
+//1 + (2 as f32 * 3);
+//1 + 2 * 3 - 4 / 5 % 6;
 //
-//(a as f32 + b * c as f64) / (d - e as i32)
-//x - y + z * (w as f32 / 2)
-//(1 + 2) as f32 + 3
-//((a - b) * (c + d as i32)) as f64
-//a + (b as f32 + (c * (d as f64)))
+//(a as f32 + b * c as f64) / (d - e as i32);
+//x - y + z * (w as f32 / 2);
+//(1 + 2) as f32 + 3;
+//((a - b) * (c + d as i32)) as f64;
+//a + (b as f32 + (c * (d as f64)));
 //
-//a << b
-//x >> y
-//val << 2
-//num >> 3
+//a << b;
+//x >> y;
+//val << 2;
+//num >> 3;
 //
-//a << b << c
-//x >> y >> z
-//a << b >> c
-//a + b << c
+//a << b << c;
+//x >> y >> z;
+//a << b >> c;
+//a + b << c;
 //
-//x >> y - z
-//1 + 2 << 3 - 4
-//(a + b) << (c - d)
+//x >> y - z;
+//1 + 2 << 3 - 4;
+//(a + b) << (c - d);
 //
-//a * b << c / d
-//x >> y * z
-//(1 * 2) << (3 / 4)
+//a * b << c / d;
+//x >> y * z;
+//(1 * 2) << (3 / 4);
 //
-//a << b as u32
-//(x as u64) >> y
-//(a << b) as u8
-//x >> (y as usize)
+//a << b as u32;
+//(x as u64) >> y;
+//(a << b) as u8;
+//x >> (y as usize);
 //
-//(1 as i32) << (2 as i8)
-//((a + b) << (c - d)) >> (e * f)
-//(((x as i32) << 1) + (y as i32)) >> 2
+//(1 as i32) << (2 as i8);
+//((a + b) << (c - d)) >> (e * f);
+//(((x as i32) << 1) + (y as i32)) >> 2;
 //
-//*&x << *&y
-//-&a >> &mut b
-//!flag << 1
+//*&x << *&y;
+//-&a >> &mut b;
+//!flag << 1;
 //
-//((a * b + c as i32) << (d - e)) >> (f / g as u8)
-//((x as i64) >> (y + z * w)) + (q << (r as i32))
+//((a * b + c as i32) << (d - e)) >> (f / g as u8);
+//((x as i64) >> (y + z * w)) + (q << (r as i32));
 //
-//a & b
-//x ^ y
-//p | q
+//a & b;
+//x ^ y;
+//p | q;
 //
-//a & b & c
-//x ^ y ^ z
-//a | b | c
+//a & b & c;
+//x ^ y ^ z;
+//a | b | c;
 //
-//a & b ^ c | d
-//x | y & z ^ w
-//a ^ b | c & d
+//a & b ^ c | d;
+//x | y & z ^ w;
+//a ^ b | c & d;
 //
-//a & b ^ c | d  //→  ((a & b) ^ c) | d
-//a << b & c >> d
-//x ^ y << z
-//a | b >> c
+//a & b ^ c | d  //→  ((a & b) ^ c) | d;
+//a << b & c >> d;
+//x ^ y << z;
+//a | b >> c;
 //
-//a + b & c - d
-//x * y ^ z / w
-//p | q + r
-//(1 + 2) & (3 ^ 4 | 5)
+//a + b & c - d;
+//x * y ^ z / w;
+//p | q + r;
+//(1 + 2) & (3 ^ 4 | 5);
 //
-//a & (b as u32)
-//(x ^ y) as i64
-//a | b as u8
+//a & (b as u32);
+//(x ^ y) as i64;
+//a | b as u8;
 //
-//(a + b & c ^ (d | e << f)) >> g
-//(x ^ (y & (z | (w << 1)))) + q
-//((a | b) & (c ^ d)) << (e | f)
+//(a + b & c ^ (d | e << f)) >> g;
+//(x ^ (y & (z | (w << 1)))) + q;
+//((a | b) & (c ^ d)) << (e | f);
 //
-//a == b
-//x != y
-//p < q
-//r <= s
-//t > u
-//v >= w
+//a == b;
+//x != y;
+//p < q;
+//r <= s;
+//t > u;
+//v >= w;
 //
-//a == b == c
-//x != y != z
-//a < b <= c
-//p > q >= r
+//a == b == c;
+//x != y != z;
+//a < b <= c;
+//p > q >= r;
 //
-//1 + 2 == 3
-//a * b != c / d
-//x - y < z + w
-//p + q <= r - s
-//m * n > o / p
+//1 + 2 == 3;
+//a * b != c / d;
+//x - y < z + w;
+//p + q <= r - s;
+//m * n > o / p;
 //
-//a as f32 == b as f64
-//(x + y as i32) < (z as i64)
-//(1 as f32) >= (2 as f64)
-//a + b as u32 != c
+//a as f32 == b as f64;
+//(x + y as i32) < (z as i64);
+//(1 as f32) >= (2 as f64);
+//a + b as u32 != c;
 //
-//a << 1 == b >> 2
-//(x >> y) != (z << w)
-//(a << b) <= (c >> d)
+//a << 1 == b >> 2;
+//(x >> y) != (z << w);
+//(a << b) <= (c >> d);
 //
-//a & b == c | d
-//x ^ y != z & w
-//(a | b) < (c ^ d)
-//a & b <= c & d
+//a & b == c | d;
+//x ^ y != z & w;
+//(a | b) < (c ^ d);
+//a & b <= c & d;
 //
-//(a + b * c) == (d << e | f)
-//(x & y ^ z) != (a + b * c)
-//((a << 2) | (b & 3)) >= (x ^ y)
-//(1 + 2) * 3 < (4 >> 1)
+//(a + b * c) == (d << e | f);
+//(x & y ^ z) != (a + b * c);
+//((a << 2) | (b & 3)) >= (x ^ y);
+//(1 + 2) * 3 < (4 >> 1);
 //
-//(a + b as i32) < (c & d) >> 1
-//(x | y) == (z ^ w) + (q << 2)
-//(1 + 2 * 3) != ((4 << 1) | 5)
-//(a + b * c) <= (d - e as f64)
+//(a + b as i32) < (c & d) >> 1;
+//(x | y) == (z ^ w) + (q << 2);
+//(1 + 2 * 3) != ((4 << 1) | 5);
+//(a + b * c) <= (d - e as f64);
 //
 //true && false;
 //true || false;
 //a && b;
 //x || y;
 //
-//a && b && c
-//x || y || z
-//a && b || c
-//a || b && c
+//a && b && c;
+//x || y || z;
+//a && b || c;
+//a || b && c;
 //
-//a < b && b < c
-//x == y || y != z
-//p >= q && r <= s
-//m > n || n < o
+//a < b && b < c;
+//x == y || y != z;
+//p >= q && r <= s;
+//m > n || n < o;
 //
-//(1 + 2) < 3 && (4 * 5) > 6
-//a + b == c && d - e != f
-//x / y > z || a * b < c
+//(1 + 2) < 3 && (4 * 5) > 6;
+//a + b == c && d - e != f;
+//x / y > z || a * b < c;
 //
-//(a & b) == c && (x | y) != z
-//p << q > r || s >> t < u
-//(a ^ b) != (c & d) || (x >> y) == z
+//(a & b) == c && (x | y) != z;
+//p << q > r || s >> t < u;
+//(a ^ b) != (c & d) || (x >> y) == z;
 //
-//(a as i32) < (b as i64) && (x as f32) > (y as f64)
-//a + b as f32 == c && (d as i64) != e
+//(a as i32) < (b as i64) && (x as f32) > (y as f64);
+//a + b as f32 == c && (d as i64) != e;
 //
-//(a && (b || c)) && d
-//(a || (b && c)) || d
-//((a < b) && (b < c)) || (d == e)
+//(a && (b || c)) && d;
+//(a || (b && c)) || d;
+//((a < b) && (b < c)) || (d == e);
 //
-//(a + b * c < d) && ((x >> y) == z || w <= u)
-//(a & b | c ^ d) != e && (x + y) > (z as f32)
-//(1 + 2 == 3) || (4 * 5 < 6 && 7 > 8)
-
-
-
+//(a + b * c < d) && ((x >> y) == z || w <= u);
+//(a & b | c ^ d) != e && (x + y) > (z as f32);
+//(1 + 2 == 3) || (4 * 5 < 6 && 7 > 8);;
+//
+//1..5;
+//1..=5;
+//a..b;
+//a..=b;
+//x..;      // from only
+//..y;      // to only
+//..=z;     // to inclusive
+//..;       // full range
+//
+//(a + b)..(c + d);
+//(a * 2)..=b;
+//x..(y || z);
+//(x && y)..z;
+//1..(2 && 3);
+//(1 || 2)..3;
+//
+//
+//a..b || c..d;
+//a..=b && c..=d;
+//(a..b) || (c..d);
+//(a..=b) && (c..=d);
+//(a..b) || c;
+//a || (b..c);
+//(a && b)..(c || d);
+//
+//x + 1..y - 1;
+//(1 + 2)..=(3 * 4);
+//(a < b)..(c > d);
+//(a == b)..=(c != d);
+//
+//(1..);
+//(..2);
+//(..=3);
+//(..);
+//a..=b..c;     // chained — should stop at first range op
+//x..(y..z);    // nested ranges in parens
+//foo(1..10);
+//arr[1..=len];
+//
+//(a && b)..(c || d);
+//a..b && c..d;
+//(a || b)..c;
+//a && b..c;
+//(1 < 2)..(3 > 4) || (x && y);
 

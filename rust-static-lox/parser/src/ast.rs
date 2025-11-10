@@ -1260,11 +1260,17 @@ pub struct FieldInit {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RangeKind {
+  /// Exclusive range: `a..b`
   Exclusive,
+  /// Inclusive range: `a..=b`
   Inclusive,
+  /// Range starting from a value: `a..`
   From,
+  /// Range up to a value (exclusive): `..b`
   To,
+  /// Range up to a value (inclusive): `..=b`
   ToInclusive,
+  /// Full (unbounded) range: `..`
   Full,
 }
 
@@ -1510,6 +1516,31 @@ impl Expr {
         expr.print_tree(&format!("{}│  ", new_prefix), true);
         println!("{}└─> Type:", new_prefix);
         ty.print_tree(&format!("{}   ", new_prefix), true);
+      },
+
+      Expr::Range {
+        start, end, kind, ..
+      } => {
+        println!("{}{} Range", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+
+        match start {
+          Some(expr) => {
+            println!("{}├─> Start:", new_prefix);
+            expr.print_tree(&format!("{}│  ", new_prefix), end.is_none());
+          },
+          None => println!("{}├─> Start: <none>", new_prefix),
+        }
+
+        match end {
+          Some(expr) => {
+            println!("{}├─> End:", new_prefix);
+            expr.print_tree(&format!("{}│  ", new_prefix), true);
+          },
+          None => println!("{}├─> End: <none>", new_prefix),
+        }
+
+        println!("{}└─> RangeKind: {:?}", new_prefix, kind);
       },
 
       _ => {
