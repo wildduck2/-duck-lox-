@@ -32,47 +32,6 @@ impl Parser {
     }
   }
 
-  /* -------------------------------------------------------------------------------------------- */
-  /*                                     Item Parsing (Top Level)                                 */
-  /* -------------------------------------------------------------------------------------------- */
-
-  fn parse_item(&mut self, engine: &mut DiagnosticEngine) -> Result<Item, ()> {
-    match self.current_token().kind {
-      // TokenKind::Fn => self.parse_fn_decl(engine),        // Item::Function
-      // TokenKind::Struct => self.parse_struct(engine),     // Item::Struct
-      // TokenKind::Enum => self.parse_enum(engine),         // Item::Enum
-      // TokenKind::Const => self.parse_const(engine),       // Item::Const
-      // TokenKind::Static => self.parse_static(engine),     // Item::Static
-      // TokenKind::Type => self.parse_type_alias(engine),   // Item::TypeAlias
-      // TokenKind::Mod => self.parse_module(engine),        // Item::Module
-      // TokenKind::Use => self.parse_use(engine),           // Item::Use
-      // ... etc
-      _ => {
-        // Error: expected item at top level
-        Err(())
-
-        // self.parse_expr(ExprContext::Default, engine)
-      },
-    }
-  }
-
-  /* -------------------------------------------------------------------------------------------- */
-  /*                                    Block & Statement Parsing                                 */
-  /* -------------------------------------------------------------------------------------------- */
-
-  // Parse the contents of a block (between { and })
-  fn parse_block_contents(&mut self, engine: &mut DiagnosticEngine) -> Result<Vec<Stmt>, ()> {
-    let mut stmts = Vec::new();
-
-    // while !self.at(TokenKind::OpenBrace) && !self.is_eof() {
-    //   // THIS IS WHERE YOU CALL parse_stmt
-    //   let stmt = self.parse_stmt(engine)?;
-    //   stmts.push(stmt);
-    // }
-
-    Ok(stmts)
-  }
-
   /// Parses a single statement node (stubbed for future grammar branches).
   fn parse_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     match self.current_token().kind {
@@ -179,7 +138,7 @@ impl Parser {
       TokenKind::Ident => {
         if matches!(
           self.peek(1).kind,
-          TokenKind::OpenBrace | TokenKind::ColonColon
+          TokenKind::OpenBrace | TokenKind::OpenParen | TokenKind::ColonColon
         ) {
           return self.parse_struct_expr(&mut token, engine);
         }
