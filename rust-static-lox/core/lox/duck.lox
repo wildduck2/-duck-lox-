@@ -519,5 +519,13 @@
 //(#![feature(tuple_attrs)] (#[inline] (1, 2)));
 //(#![cfg_attr(feature = "debug", allow(dead_code))] (a + b));
 
+//User { 
+//  name: Name { 
+//    value: "wildduck" 
+//  } 
+//};
 
+User::<Name> {
+  name: "wildduck" 
+};
 

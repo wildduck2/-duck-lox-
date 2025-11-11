@@ -6,18 +6,12 @@ use crate::{ast::Expr, Parser};
 impl Parser {
   pub(crate) fn parser_bool(
     &mut self,
+    token: &mut Token,
     engine: &mut DiagnosticEngine,
-    token: &Token,
   ) -> Result<Expr, ()> {
-    let value = self
-      .source_file
-      .src
-      .get(token.span.start..token.span.end)
-      .unwrap()
-      .parse::<bool>()
-      .unwrap();
-
+    let value = self.get_token_lexeme(token).parse::<bool>().unwrap();
     self.advance(engine); // consume the identifier
+    token.span.merge(self.current_token().span);
 
     Ok(Expr::Bool {
       value,

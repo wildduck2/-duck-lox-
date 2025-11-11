@@ -6,8 +6,8 @@ use crate::{ast::Expr, Parser};
 impl Parser {
   pub(crate) fn parser_ident(
     &mut self,
+    token: &mut Token,
     engine: &mut DiagnosticEngine,
-    token: &Token,
   ) -> Result<Expr, ()> {
     let name = self
       .source_file
@@ -17,6 +17,7 @@ impl Parser {
       .to_string();
 
     self.advance(engine); // consume the identifier
+    token.span.merge(self.current_token().span);
 
     Ok(Expr::Ident {
       name,
@@ -26,17 +27,12 @@ impl Parser {
 
   pub(crate) fn parse_keyword_ident(
     &mut self,
-    _engine: &mut DiagnosticEngine,
-    token: &Token,
+    token: &mut Token,
+    engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
-    let name = self
-      .source_file
-      .src
-      .get(token.span.start..token.span.end)
-      .unwrap()
-      .to_string();
-
-    self.advance(_engine);
+    let name = self.get_token_lexeme(token);
+    self.advance(engine);
+    token.span.merge(self.current_token().span);
 
     Ok(Expr::Ident {
       name,

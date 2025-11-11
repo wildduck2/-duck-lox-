@@ -16,9 +16,9 @@ impl Parser {
   /// Returns an error if the literal is malformed.
   pub(crate) fn parser_literal(
     &mut self,
-    engine: &mut DiagnosticEngine,
     token: &Token,
     kind: LiteralKind,
+    engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
     self.advance(engine); // consume the literal token
 

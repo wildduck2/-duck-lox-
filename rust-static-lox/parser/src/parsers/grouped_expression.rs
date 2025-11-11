@@ -8,7 +8,7 @@ use lexer::token::{Token, TokenKind};
 
 use crate::{
   ast::{
-    AttrKind, AttrStyle, Attribute, Delimiter, Expr, SimplePath, SimplePathSegment, TokenTree,
+    AttrKind, AttrStyle, Attribute, Delimiter, Expr, Path, PathSegment, PathSegmentKind, TokenTree,
   },
   parser_utils::ExprContext,
   Parser,
@@ -66,7 +66,10 @@ impl Parser {
     }
   }
 
-  fn parse_attributes(&mut self, engine: &mut DiagnosticEngine) -> Result<Vec<Attribute>, ()> {
+  pub(crate) fn parse_attributes(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Vec<Attribute>, ()> {
     let mut attr = vec![];
     while self.current_token().kind == TokenKind::Pound {
       attr.push(self.parse_attribute(engine)?);
@@ -75,7 +78,7 @@ impl Parser {
     Ok(attr)
   }
 
-  fn parse_attribute(&mut self, engine: &mut DiagnosticEngine) -> Result<Attribute, ()> {
+  pub(crate) fn parse_attribute(&mut self, engine: &mut DiagnosticEngine) -> Result<Attribute, ()> {
     let mut token = self.current_token();
 
     let attr_style = match self.current_token().kind {
@@ -123,26 +126,29 @@ impl Parser {
     })
   }
 
-  fn parse_attribute_input(&mut self, engine: &mut DiagnosticEngine) -> Result<AttrKind, ()> {
-    let simple_path = self.parse_simple_path(engine)?;
+  pub(crate) fn parse_attribute_input(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<AttrKind, ()> {
+    let path = self.parse_simple_path(engine)?;
     let attr_input_tail = self.parse_attribute_input_tail(engine)?;
 
     Ok(AttrKind::Normal {
-      path: simple_path,
+      path,
       tokens: attr_input_tail,
     })
   }
 
-  fn parse_simple_path(&mut self, engine: &mut DiagnosticEngine) -> Result<SimplePath, ()> {
+  pub(crate) fn parse_simple_path(&mut self, engine: &mut DiagnosticEngine) -> Result<Path, ()> {
     let leading_colon = if matches!(self.current_token().kind, TokenKind::ColonColon) {
-      self.advance(engine); // consume the ::
+      self.advance(engine);
       true
     } else {
       false
     };
 
     let mut segments = vec![];
-    let (segment, is_dollar_crate) = self.parse_simple_path_segment(engine)?;
+    let (segment, is_dollar_crate) = self.parse_path_segment(engine)?;
     segments.push(segment);
 
     while !self.is_eof()
@@ -152,75 +158,53 @@ impl Parser {
       )
     {
       self.expect(TokenKind::ColonColon, engine)?;
-
-      let (segment, is_dollar_crate) = self.parse_simple_path_segment(engine)?;
-
-      // Handle the absolute path for $crate (e.g., $crate::foo::bar)
-      // thus it only appear once in the path and at the beginning
+      let (segment, is_dollar_crate) = self.parse_path_segment(engine)?;
       if is_dollar_crate {
         let diagnostic = Diagnostic::new(
           DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
-          "Unexpected token".to_string(),
+          "Unexpected $crate segment in path".to_string(),
           self.source_file.path.clone(),
         )
         .with_label(
           self.current_token().span,
-          Some("Expected a simple path segment, found $crate".to_string()),
+          Some("Expected an identifier, found $crate".to_string()),
           LabelStyle::Primary,
-        )
-        .with_help(Parser::get_token_help(
-          &self.current_token().kind,
-          &self.current_token(),
-        ));
-
+        );
         engine.add(diagnostic);
-
         return Err(());
       }
-
       segments.push(segment);
     }
 
-    Ok(SimplePath {
+    Ok(Path {
       leading_colon: leading_colon || is_dollar_crate,
       segments,
     })
   }
 
-  fn parse_simple_path_segment(
+  pub(crate) fn parse_path_segment(
     &mut self,
     engine: &mut DiagnosticEngine,
-  ) -> Result<(SimplePathSegment, bool), ()> {
+  ) -> Result<(PathSegment, bool), ()> {
     let token = self.current_token();
-    self.advance(engine); // consume the token ( Ident | "super" | "self" | "crate" | "$crate" )
+    self.advance(engine);
 
     match token.kind {
-      TokenKind::KwSelfValue => Ok((SimplePathSegment::Self_, false)),
-      TokenKind::KwSuper => Ok((SimplePathSegment::Super, false)),
-      TokenKind::KwCrate => Ok((SimplePathSegment::Crate, false)),
+      // TODO: eventually you will need it in some path contexts.
+      // so you will replace the PathSegment::new with the full path struct
+      TokenKind::KwSelfValue => Ok((PathSegment::new(PathSegmentKind::Self_), false)),
+      TokenKind::KwSuper => Ok((PathSegment::new(PathSegmentKind::Super), false)),
+      TokenKind::KwCrate => Ok((PathSegment::new(PathSegmentKind::Crate), false)),
       TokenKind::Ident => {
-        let lexeme = self
-          .source_file
-          .src
-          .get(token.span.start..token.span.end)
-          .unwrap()
-          .to_string();
-        Ok((SimplePathSegment::Ident(lexeme), false))
+        let lexeme = self.get_token_lexeme(&token);
+        Ok((PathSegment::new(PathSegmentKind::Ident(lexeme)), false))
       },
-      // TODO: get back here when you handle macros
-      // Inside macro expansions to reference the defining crate.
       TokenKind::Dollar if self.peek(0).kind == TokenKind::KwCrate => {
-        self.advance(engine); // consume the crate to complete the $crate
-        Ok((SimplePathSegment::DollarCrate, true))
+        self.advance(engine);
+        Ok((PathSegment::new(PathSegmentKind::DollarCrate), true))
       },
       _ => {
-        let token = self.current_token();
-        let lexeme = self
-          .source_file
-          .src
-          .get(token.span.start..token.span.end)
-          .unwrap()
-          .to_string();
+        let lexeme = self.get_token_lexeme(&token);
         let diagnostic = Diagnostic::new(
           DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
           "Unexpected token".to_string(),
@@ -228,22 +212,16 @@ impl Parser {
         )
         .with_label(
           token.span,
-          Some(format!("Expected a simple path segment, found {}", lexeme)),
+          Some(format!("Expected a path segment, found {}", lexeme)),
           LabelStyle::Primary,
-        )
-        .with_help(Parser::get_token_help(
-          &self.current_token().kind,
-          &self.current_token(),
-        ));
-
+        );
         engine.add(diagnostic);
-
         Err(())
       },
     }
   }
 
-  fn parse_attribute_input_tail(
+  pub(crate) fn parse_attribute_input_tail(
     &mut self,
     engine: &mut DiagnosticEngine,
   ) -> Result<Vec<TokenTree>, ()> {
@@ -259,13 +237,7 @@ impl Parser {
         self.current_token().kind,
         TokenKind::CloseBracket | TokenKind::Comma | TokenKind::Eof
       ) {
-        let token = self.current_token();
-        let lexeme = self
-          .source_file
-          .src
-          .get(token.span.start..token.span.end)
-          .unwrap()
-          .to_string();
+        let lexeme = self.get_token_lexeme(&self.current_token());
         tokens.push(TokenTree::Token(lexeme));
         self.advance(engine);
       }
@@ -286,7 +258,10 @@ impl Parser {
     Ok(tokens)
   }
 
-  fn parse_delim_token_tree(&mut self, engine: &mut DiagnosticEngine) -> Result<TokenTree, ()> {
+  pub(crate) fn parse_delim_token_tree(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<TokenTree, ()> {
     let open = self.current_token();
 
     // Handle the different delimiters kinds (parentheses, brackets, braces)
@@ -341,12 +316,7 @@ impl Parser {
       }
 
       // Otherwise, it’s a plain token (identifier, literal, operator, etc.)
-      let lexeme = self
-        .source_file
-        .src
-        .get(token.span.start..token.span.end)
-        .unwrap()
-        .to_string();
+      let lexeme = self.get_token_lexeme(&token);
       tokens.push(TokenTree::Token(lexeme));
 
       self.advance(engine);

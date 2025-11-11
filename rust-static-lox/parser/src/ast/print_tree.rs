@@ -351,21 +351,132 @@ fn format_path(p: &Path) -> String {
     s.push_str("::");
   }
 
-  let segs: Vec<String> = p
-    .segments
-    .iter()
-    .map(|seg| match &seg.kind {
-      PathSegmentKind::Ident(id) => id.clone(),
-      PathSegmentKind::Super => "super".to_string(),
-      PathSegmentKind::Self_ => "self".to_string(),
-      PathSegmentKind::Crate => "crate".to_string(),
-      PathSegmentKind::DollarCrate => "$crate".to_string(),
-      PathSegmentKind::SelfType => "Self".to_string(),
-    })
-    .collect();
+  for (i, seg) in p.segments.iter().enumerate() {
+    if i > 0 {
+      s.push_str("::");
+    }
 
-  s.push_str(&segs.join("::"));
+    // Print segment name
+    match &seg.kind {
+      PathSegmentKind::Ident(id) => s.push_str(id),
+      PathSegmentKind::Super => s.push_str("super"),
+      PathSegmentKind::Self_ => s.push_str("self"),
+      PathSegmentKind::Crate => s.push_str("crate"),
+      PathSegmentKind::DollarCrate => s.push_str("$crate"),
+      PathSegmentKind::SelfType => s.push_str("Self"),
+    }
+
+    // Print any generic arguments
+    if let Some(args) = &seg.args {
+      s.push_str(&format_generic_args(args));
+    }
+  }
+
   s
+}
+
+fn format_generic_args(args: &GenericArgs) -> String {
+  match args {
+    GenericArgs::AngleBracketed { args } => {
+      let inner = args
+        .iter()
+        .map(format_generic_arg)
+        .collect::<Vec<_>>()
+        .join(", ");
+      format!("<{}>", inner)
+    },
+    GenericArgs::Parenthesized { inputs, output } => {
+      let ins = inputs
+        .iter()
+        .map(format_type)
+        .collect::<Vec<_>>()
+        .join(", ");
+      match output {
+        Some(out) => format!("({}) -> {}", ins, format_type(out)),
+        None => format!("({})", ins),
+      }
+    },
+  }
+}
+
+fn format_generic_arg(arg: &GenericArg) -> String {
+  match arg {
+    GenericArg::Lifetime(name) => format!("'{}", name),
+    GenericArg::Type(ty) => format_type(ty),
+    GenericArg::Const(expr) => format_expr(expr),
+    GenericArg::Binding { name, ty, .. } => format!("{} = {}", name, format_type(ty)),
+    GenericArg::Constraint { name, bounds, .. } => {
+      let b = bounds
+        .iter()
+        .map(format_type_bound)
+        .collect::<Vec<_>>()
+        .join(" + ");
+      format!("{}: {}", name, b)
+    },
+  }
+}
+fn format_type(ty: &Type) -> String {
+  match ty {
+    Type::Path(p) => format_path(p),
+    Type::Tuple(types) => {
+      let t = types.iter().map(format_type).collect::<Vec<_>>().join(", ");
+      format!("({})", t)
+    },
+    Type::Reference {
+      inner, mutability, ..
+    } => {
+      let m = match mutability {
+        Mutability::Mutable => "mut ",
+        Mutability::Immutable => "",
+      };
+      format!("&{}{}", m, format_type(inner))
+    },
+    Type::Array { element, size } => format!("[{}; {}]", format_type(element), format_expr(size)),
+    Type::Slice(inner) => format!("[{}]", format_type(inner)),
+    Type::BareFn {
+      params,
+      return_type,
+      ..
+    } => {
+      let ps = params
+        .iter()
+        .map(|p| format_type(&p.ty))
+        .collect::<Vec<_>>()
+        .join(", ");
+      match return_type {
+        Some(ret) => format!("fn({}) -> {}", ps, format_type(ret)),
+        None => format!("fn({})", ps),
+      }
+    },
+    Type::Infer => "_".into(),
+    _ => format!("{:?}", ty),
+  }
+}
+
+fn format_type_bound(bound: &TypeBound) -> String {
+  let prefix = match bound.modifier {
+    TraitBoundModifier::Maybe => "?",
+    TraitBoundModifier::MaybeConst => "?const ",
+    TraitBoundModifier::Const => "const ",
+    TraitBoundModifier::None => "",
+  };
+  let path = format_path(&bound.path);
+  format!("{prefix}{path}")
+}
+
+fn format_expr(expr: &Expr) -> String {
+  match expr {
+    Expr::Ident { name, .. } => name.clone(),
+    Expr::Integer { value, suffix, .. } => {
+      if let Some(suf) = suffix {
+        format!("{}{}", value, suf)
+      } else {
+        value.to_string()
+      }
+    },
+    Expr::String { value, .. } => value.clone(),
+    _ => "[expr]".into(),
+  }
 }
 
 fn format_tt(tt: &TokenTree) -> String {
@@ -620,13 +731,5 @@ impl Item {
         println!("{}{} [Other Item]", prefix, connector);
       },
     }
-  }
-}
-
-// Helper function to start printing from the root
-pub fn print_ast_tree(items: &[Item]) {
-  println!("parse_program()");
-  for (i, item) in items.iter().enumerate() {
-    item.print_tree("  ", i == items.len() - 1);
   }
 }

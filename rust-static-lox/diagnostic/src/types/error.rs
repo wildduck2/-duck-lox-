@@ -21,8 +21,8 @@ pub enum DiagnosticError {
   // parser
   UnexpectedToken,
   InvalidLiteral,
-
   EmptyChar,
+  MissingClosingBracket,
 }
 
 impl DiagnosticError {
@@ -42,6 +42,7 @@ impl DiagnosticError {
       Self::UnexpectedToken => "E0012",
       Self::InvalidLiteral => "E0013",
       Self::EmptyChar => "E0014",
+      Self::MissingClosingBracket => "E0015",
     }
   }
 

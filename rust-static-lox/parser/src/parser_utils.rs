@@ -1,15 +1,12 @@
 use diagnostic::{
   code::DiagnosticCode,
   diagnostic::{Diagnostic, LabelStyle},
-  types::{error::DiagnosticError, warning::DiagnosticWarning},
-  DiagnosticEngine, Span,
+  types::error::DiagnosticError,
+  DiagnosticEngine,
 };
-use lexer::token::{LiteralKind, Token, TokenKind};
+use lexer::token::{Token, TokenKind};
 
-use crate::{
-  ast::{BinaryOp, Expr, ExprPath, FieldAccess, Item, RangeKind, Stmt, Type, UnaryOp},
-  Parser,
-};
+use crate::{ast::*, Parser};
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -158,8 +155,8 @@ impl Parser {
   // *                    | pathExpr
   // *                    | groupedExpr [x]
   // *                    | arrayExpr   [x]
-  // *                    | tupleExpr   [_]
-  // *                    | structExpr
+  // *                    | tupleExpr   [x]
+  // *                    | structExpr  [_]
   // *                    | closureExpr
   // *                    | blockExpr
   // *                    | asyncBlockExpr
@@ -178,20 +175,25 @@ impl Parser {
     let mut token = self.current_token();
 
     match token.kind {
-      TokenKind::Literal { kind } => self.parser_literal(engine, &token, kind),
-      TokenKind::Ident => self.parser_ident(engine, &token),
-      TokenKind::KwFalse | TokenKind::KwTrue => self.parser_bool(engine, &token),
+      TokenKind::Literal { kind } => self.parser_literal(&token, kind, engine),
+      TokenKind::Ident => {
+        if matches!(
+          self.peek(1).kind,
+          TokenKind::OpenBrace | TokenKind::ColonColon
+        ) {
+          return self.parse_struct_expr(&mut token, engine);
+        }
+
+        self.parser_ident(&mut token, engine)
+      },
+      TokenKind::KwFalse | TokenKind::KwTrue => self.parser_bool(&mut token, engine),
       TokenKind::KwSelfValue | TokenKind::KwSuper | TokenKind::KwCrate | TokenKind::KwSelfType => {
-        self.parse_keyword_ident(engine, &token)
+        self.parse_keyword_ident(&mut token, engine)
       },
       TokenKind::OpenParen => self.parse_grouped_expr(&mut token, engine),
       TokenKind::OpenBracket => self.parse_array_expr(&mut token, engine),
       _ => {
-        let lexeme = self
-          .source_file
-          .src
-          .get(token.span.start..token.span.end)
-          .unwrap();
+        let lexeme = self.get_token_lexeme(&token);
 
         let diagnostic = Diagnostic::new(
           DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
@@ -213,5 +215,15 @@ impl Parser {
         Err(())
       },
     }
+  }
+
+  /// Helper function that takes a token and returns the lexeme as a string
+  pub(crate) fn get_token_lexeme(&mut self, token: &Token) -> String {
+    self
+      .source_file
+      .src
+      .get(token.span.start..token.span.end)
+      .unwrap()
+      .to_string()
   }
 }
