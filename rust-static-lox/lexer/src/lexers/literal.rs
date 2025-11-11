@@ -1160,7 +1160,10 @@ impl Lexer {
             },
           }
         },
-        '\n' => {
+        // NOTE: This handles cases like ('a: Clone) where the leading `'` starts a lifetime,
+        // not a character literal. It also accounts for newline or unterminated scenarios,
+        // since a character literal isn't always guaranteed to contain exactly one character.
+        '\n' | ':' => {
           break;
         },
         _ => {
