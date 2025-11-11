@@ -2,6 +2,7 @@
 // Complete Rust AST - FIXED (duplications removed)
 // ============================================================================
 
+pub(crate) mod item_print;
 pub(crate) mod print_tree;
 
 use diagnostic::Span;
@@ -36,10 +37,10 @@ pub(crate) enum Item {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ExternTypeDecl {
-  pub(crate) visibility: Visibility,
-  pub(crate) name: String,
-  pub(crate) generics: Option<GenericParams>,
-  pub(crate) span: Span,
+  pub visibility: Visibility,
+  pub name: String,
+  pub generics: Option<GenericParams>,
+  pub span: Span,
 }
 
 // ----------------------------------------------------------------------------
@@ -48,48 +49,48 @@ pub(crate) struct ExternTypeDecl {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ConstDecl {
-  pub(crate) visibility: Visibility,
-  pub(crate) name: String,
-  pub(crate) ty: Type,
-  pub(crate) value: Option<Expr>,
-  pub(crate) span: Span,
+  pub visibility: Visibility,
+  pub name: String,
+  pub ty: Type,
+  pub value: Option<Expr>,
+  pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct StaticDecl {
-  pub(crate) visibility: Visibility,
-  pub(crate) name: String,
-  pub(crate) ty: Type,
-  pub(crate) mutability: Mutability,
-  pub(crate) value: Option<Expr>,
-  pub(crate) span: Span,
+  pub visibility: Visibility,
+  pub name: String,
+  pub ty: Type,
+  pub mutability: Mutability,
+  pub value: Option<Expr>,
+  pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct TypeAliasDecl {
-  pub(crate) visibility: Visibility,
-  pub(crate) name: String,
-  pub(crate) generics: Option<GenericParams>,
-  pub(crate) bounds: Option<Vec<TypeBound>>,
-  pub(crate) where_clause: Option<WhereClause>,
-  pub(crate) ty: Option<Type>,
-  pub(crate) span: Span,
+  pub visibility: Visibility,
+  pub name: String,
+  pub generics: Option<GenericParams>,
+  pub bounds: Option<Vec<TypeBound>>,
+  pub where_clause: Option<WhereClause>,
+  pub ty: Option<Type>,
+  pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct ModuleDecl {
-  pub(crate) visibility: Visibility,
-  pub(crate) name: String,
-  pub(crate) items: Option<Vec<Item>>,
-  pub(crate) is_unsafe: bool,
-  pub(crate) span: Span,
+  pub visibility: Visibility,
+  pub name: String,
+  pub items: Option<Vec<Item>>,
+  pub is_unsafe: bool,
+  pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct UseDecl {
-  pub(crate) visibility: Visibility,
-  pub(crate) tree: UseTree,
-  pub(crate) span: Span,
+  pub visibility: Visibility,
+  pub tree: UseTree,
+  pub span: Span,
 }
 
 #[derive(Debug, Clone)]
@@ -109,10 +110,10 @@ pub(crate) enum UseTree {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ExternCrateDecl {
-  pub(crate) visibility: Visibility,
-  pub(crate) name: String,
-  pub(crate) alias: Option<String>,
-  pub(crate) span: Span,
+  pub visibility: Visibility,
+  pub name: String,
+  pub alias: Option<String>,
+  pub span: Span,
 }
 
 // ----------------------------------------------------------------------------
@@ -121,24 +122,24 @@ pub(crate) struct ExternCrateDecl {
 
 #[derive(Debug, Clone)]
 pub(crate) struct MacroDecl {
-  pub(crate) name: String,
-  pub(crate) rules: Vec<MacroRule>,
-  pub(crate) span: Span,
+  pub name: String,
+  pub rules: Vec<MacroRule>,
+  pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct Macro2Decl {
-  pub(crate) visibility: Visibility,
-  pub(crate) name: String,
-  pub(crate) params: Vec<MacroParam>,
-  pub(crate) body: Vec<TokenTree>,
-  pub(crate) span: Span,
+  pub visibility: Visibility,
+  pub name: String,
+  pub params: Vec<MacroParam>,
+  pub body: Vec<TokenTree>,
+  pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct MacroParam {
-  pub(crate) name: String,
-  pub(crate) kind: MacroParamKind,
+  pub name: String,
+  pub kind: MacroParamKind,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -161,8 +162,8 @@ pub(crate) enum MacroParamKind {
 
 #[derive(Debug, Clone)]
 pub(crate) struct MacroRule {
-  pub(crate) matcher: Vec<TokenTree>,
-  pub(crate) transcriber: Vec<TokenTree>,
+  pub matcher: Vec<TokenTree>,
+  pub transcriber: Vec<TokenTree>,
 }
 
 #[derive(Debug, Clone)]
@@ -203,10 +204,10 @@ pub(crate) enum RepeatKind {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ForeignModDecl {
-  pub(crate) is_unsafe: bool,
-  pub(crate) abi: Option<String>,
-  pub(crate) items: Vec<ForeignItem>,
-  pub(crate) span: Span,
+  pub is_unsafe: bool,
+  pub abi: Option<String>,
+  pub items: Vec<ForeignItem>,
+  pub span: Span,
 }
 
 #[derive(Debug, Clone)]
@@ -237,12 +238,12 @@ pub(crate) enum ForeignItem {
 
 #[derive(Debug, Clone)]
 pub(crate) struct UnionDecl {
-  pub(crate) visibility: Visibility,
-  pub(crate) name: String,
-  pub(crate) generics: Option<GenericParams>,
-  pub(crate) fields: Vec<FieldDecl>,
-  pub(crate) where_clause: Option<WhereClause>,
-  pub(crate) span: Span,
+  pub visibility: Visibility,
+  pub name: String,
+  pub generics: Option<GenericParams>,
+  pub fields: Vec<FieldDecl>,
+  pub where_clause: Option<WhereClause>,
+  pub span: Span,
 }
 
 // ----------------------------------------------------------------------------
@@ -251,28 +252,28 @@ pub(crate) struct UnionDecl {
 
 #[derive(Debug, Clone)]
 pub(crate) struct FnDecl {
-  pub(crate) visibility: Visibility,
-  pub(crate) name: String,
-  pub(crate) generics: Option<GenericParams>,
-  pub(crate) params: Vec<Param>,
-  pub(crate) return_type: Option<Type>,
-  pub(crate) where_clause: Option<WhereClause>,
-  pub(crate) body: Option<Vec<Stmt>>,
-  pub(crate) is_async: bool,
-  pub(crate) is_const: bool,
-  pub(crate) is_unsafe: bool,
-  pub(crate) is_extern: bool,
-  pub(crate) abi: Option<String>,
-  pub(crate) span: Span,
+  pub visibility: Visibility,
+  pub name: String,
+  pub generics: Option<GenericParams>,
+  pub params: Vec<Param>,
+  pub return_type: Option<Type>,
+  pub where_clause: Option<WhereClause>,
+  pub body: Option<Vec<Stmt>>,
+  pub is_async: bool,
+  pub is_const: bool,
+  pub is_unsafe: bool,
+  pub is_extern: bool,
+  pub abi: Option<String>,
+  pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct Param {
-  pub(crate) attributes: Vec<Attribute>,
-  pub(crate) pattern: Pattern,
-  pub(crate) type_annotation: Option<Type>,
-  pub(crate) is_self: bool,
-  pub(crate) is_variadic: bool,
+  pub attributes: Vec<Attribute>,
+  pub pattern: Pattern,
+  pub type_annotation: Option<Type>,
+  pub is_self: bool,
+  pub is_variadic: bool,
 }
 
 // ----------------------------------------------------------------------------
@@ -281,9 +282,9 @@ pub(crate) struct Param {
 
 #[derive(Debug, Clone)]
 pub(crate) struct Attribute {
-  pub(crate) style: AttrStyle,
-  pub(crate) kind: AttrKind,
-  pub(crate) span: Span,
+  pub style: AttrStyle,
+  pub kind: AttrKind,
+  pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -317,14 +318,14 @@ pub(crate) enum AttrKind {
 /// Replaces SimplePath, TypePath, and ExprPath
 #[derive(Debug, Clone)]
 pub(crate) struct Path {
-  pub(crate) leading_colon: bool,
-  pub(crate) segments: Vec<PathSegment>,
+  pub leading_colon: bool,
+  pub segments: Vec<PathSegment>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct PathSegment {
-  pub(crate) kind: PathSegmentKind,
-  pub(crate) args: Option<GenericArgs>,
+  pub kind: PathSegmentKind,
+  pub args: Option<GenericArgs>,
 }
 
 impl PathSegment {
@@ -368,13 +369,13 @@ pub(crate) enum MetaItemValue {
 
 #[derive(Debug, Clone)]
 pub(crate) struct StructDecl {
-  pub(crate) attributes: Vec<Attribute>,
-  pub(crate) visibility: Visibility,
-  pub(crate) name: String,
-  pub(crate) generics: Option<GenericParams>,
-  pub(crate) kind: StructKind,
-  pub(crate) where_clause: Option<WhereClause>,
-  pub(crate) span: Span,
+  pub attributes: Vec<Attribute>,
+  pub visibility: Visibility,
+  pub name: String,
+  pub generics: Option<GenericParams>,
+  pub kind: StructKind,
+  pub where_clause: Option<WhereClause>,
+  pub span: Span,
 }
 
 #[derive(Debug, Clone)]
@@ -386,19 +387,19 @@ pub(crate) enum StructKind {
 
 #[derive(Debug, Clone)]
 pub(crate) struct TupleField {
-  pub(crate) attributes: Vec<Attribute>,
-  pub(crate) visibility: Visibility,
-  pub(crate) ty: Type,
-  pub(crate) span: Span,
+  pub attributes: Vec<Attribute>,
+  pub visibility: Visibility,
+  pub ty: Type,
+  pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct FieldDecl {
-  pub(crate) attributes: Vec<Attribute>,
-  pub(crate) visibility: Visibility,
-  pub(crate) name: String,
-  pub(crate) ty: Type,
-  pub(crate) span: Span,
+  pub attributes: Vec<Attribute>,
+  pub visibility: Visibility,
+  pub name: String,
+  pub ty: Type,
+  pub span: Span,
 }
 
 // ----------------------------------------------------------------------------
@@ -407,23 +408,23 @@ pub(crate) struct FieldDecl {
 
 #[derive(Debug, Clone)]
 pub(crate) struct EnumDecl {
-  pub(crate) attributes: Vec<Attribute>,
-  pub(crate) visibility: Visibility,
-  pub(crate) name: String,
-  pub(crate) generics: Option<GenericParams>,
-  pub(crate) variants: Vec<EnumVariant>,
-  pub(crate) where_clause: Option<WhereClause>,
-  pub(crate) span: Span,
+  pub attributes: Vec<Attribute>,
+  pub visibility: Visibility,
+  pub name: String,
+  pub generics: Option<GenericParams>,
+  pub variants: Vec<EnumVariant>,
+  pub where_clause: Option<WhereClause>,
+  pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct EnumVariant {
-  pub(crate) attributes: Vec<Attribute>,
-  pub(crate) visibility: Visibility,
-  pub(crate) name: String,
-  pub(crate) kind: EnumVariantKind,
-  pub(crate) discriminant: Option<Expr>,
-  pub(crate) span: Span,
+  pub attributes: Vec<Attribute>,
+  pub visibility: Visibility,
+  pub name: String,
+  pub kind: EnumVariantKind,
+  pub discriminant: Option<Expr>,
+  pub span: Span,
 }
 
 #[derive(Debug, Clone)]
@@ -439,16 +440,16 @@ pub(crate) enum EnumVariantKind {
 
 #[derive(Debug, Clone)]
 pub(crate) struct TraitDecl {
-  pub(crate) attributes: Vec<Attribute>,
-  pub(crate) visibility: Visibility,
-  pub(crate) name: String,
-  pub(crate) is_auto: bool,
-  pub(crate) is_unsafe: bool,
-  pub(crate) generics: Option<GenericParams>,
-  pub(crate) supertraits: Option<Vec<TypeBound>>,
-  pub(crate) items: Vec<TraitItem>,
-  pub(crate) where_clause: Option<WhereClause>,
-  pub(crate) span: Span,
+  pub attributes: Vec<Attribute>,
+  pub visibility: Visibility,
+  pub name: String,
+  pub is_auto: bool,
+  pub is_unsafe: bool,
+  pub generics: Option<GenericParams>,
+  pub supertraits: Option<Vec<TypeBound>>,
+  pub items: Vec<TraitItem>,
+  pub where_clause: Option<WhereClause>,
+  pub span: Span,
 }
 
 #[derive(Debug, Clone)]
@@ -474,10 +475,10 @@ pub(crate) enum TraitItem {
 
 #[derive(Debug, Clone)]
 pub(crate) struct MacroInvocation {
-  pub(crate) path: Path,
-  pub(crate) delimiter: Delimiter,
-  pub(crate) tokens: Vec<TokenTree>,
-  pub(crate) span: Span,
+  pub path: Path,
+  pub delimiter: Delimiter,
+  pub tokens: Vec<TokenTree>,
+  pub span: Span,
 }
 
 // ----------------------------------------------------------------------------
@@ -486,16 +487,16 @@ pub(crate) struct MacroInvocation {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ImplBlock {
-  pub(crate) attributes: Vec<Attribute>,
-  pub(crate) is_unsafe: bool,
-  pub(crate) is_const: bool,
-  pub(crate) generics: Option<GenericParams>,
-  pub(crate) polarity: ImplPolarity,
-  pub(crate) trait_ref: Option<Path>,
-  pub(crate) self_ty: Type,
-  pub(crate) items: Vec<ImplItem>,
-  pub(crate) where_clause: Option<WhereClause>,
-  pub(crate) span: Span,
+  pub attributes: Vec<Attribute>,
+  pub is_unsafe: bool,
+  pub is_const: bool,
+  pub generics: Option<GenericParams>,
+  pub polarity: ImplPolarity,
+  pub trait_ref: Option<Path>,
+  pub self_ty: Type,
+  pub items: Vec<ImplItem>,
+  pub where_clause: Option<WhereClause>,
+  pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -532,23 +533,34 @@ pub(crate) enum ImplItem {
 
 #[derive(Debug, Clone)]
 pub(crate) struct GenericParams {
-  pub(crate) params: Vec<GenericParam>,
-  pub(crate) span: Span,
+  pub params: Vec<GenericParam>,
+  pub span: Span,
 }
 
+/// Represents a single generic parameter in a type, function, or struct.
+///
+/// Examples:
+/// - `T: Clone` → `Type`
+/// - `'a: 'b` → `Lifetime`
+/// - `const N: usize = 3` → `Const`
 #[derive(Debug, Clone)]
 pub(crate) enum GenericParam {
+  /// A type parameter like `T: Clone` or `T = i32`.
   Type {
     attributes: Vec<Attribute>,
     name: String,
     bounds: Option<Vec<TypeBound>>,
     default: Option<Type>,
   },
+
+  /// A lifetime parameter like `'a` or `'a: 'b`.
   Lifetime {
     attributes: Vec<Attribute>,
     name: String,
-    bounds: Option<Vec<String>>,
+    bounds: Option<Vec<TypeBound>>,
   },
+
+  /// A const parameter like `const N: usize = 3`.
   Const {
     attributes: Vec<Attribute>,
     name: String,
@@ -559,10 +571,10 @@ pub(crate) enum GenericParam {
 
 #[derive(Debug, Clone)]
 pub(crate) struct TypeBound {
-  pub(crate) modifier: TraitBoundModifier,
-  pub(crate) path: Path,
-  pub(crate) generics: Option<Vec<GenericArg>>,
-  pub(crate) for_lifetimes: Option<Vec<String>>,
+  pub modifier: TraitBoundModifier,
+  pub path: Path,
+  pub generics: Option<Vec<GenericArg>>,
+  pub for_lifetimes: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -575,7 +587,7 @@ pub(crate) enum TraitBoundModifier {
 
 #[derive(Debug, Clone)]
 pub(crate) struct WhereClause {
-  pub(crate) predicates: Vec<WherePredicate>,
+  pub predicates: Vec<WherePredicate>,
 }
 
 #[derive(Debug, Clone)]
@@ -688,9 +700,9 @@ pub(crate) enum Type {
 
 #[derive(Debug, Clone)]
 pub(crate) struct BareFnParam {
-  pub(crate) attributes: Vec<Attribute>,
-  pub(crate) name: Option<String>,
-  pub(crate) ty: Type,
+  pub attributes: Vec<Attribute>,
+  pub name: Option<String>,
+  pub ty: Type,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -849,10 +861,10 @@ pub(crate) enum Pattern {
 
 #[derive(Debug, Clone)]
 pub(crate) struct FieldPattern {
-  pub(crate) attributes: Vec<Attribute>,
-  pub(crate) name: String,
-  pub(crate) pattern: Option<Pattern>,
-  pub(crate) is_shorthand: bool,
+  pub attributes: Vec<Attribute>,
+  pub name: String,
+  pub pattern: Option<Pattern>,
+  pub is_shorthand: bool,
 }
 
 // ----------------------------------------------------------------------------
@@ -861,12 +873,12 @@ pub(crate) struct FieldPattern {
 
 #[derive(Debug, Clone)]
 pub(crate) struct MatchArm {
-  pub(crate) attributes: Vec<Attribute>,
-  pub(crate) pattern: Pattern,
-  pub(crate) guard: Option<Expr>,
-  pub(crate) body: Expr,
-  pub(crate) comma: bool,
-  pub(crate) span: Span,
+  pub attributes: Vec<Attribute>,
+  pub pattern: Pattern,
+  pub guard: Option<Expr>,
+  pub body: Expr,
+  pub comma: bool,
+  pub span: Span,
 }
 
 // ----------------------------------------------------------------------------
@@ -1191,21 +1203,21 @@ pub(crate) enum Expr {
 
 #[derive(Debug, Clone)]
 pub(crate) struct FormatArg {
-  pub(crate) name: Option<String>,
-  pub(crate) expr: Expr,
-  pub(crate) format_spec: Option<FormatSpec>,
+  pub name: Option<String>,
+  pub expr: Expr,
+  pub format_spec: Option<FormatSpec>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct FormatSpec {
-  pub(crate) fill: Option<char>,
-  pub(crate) align: Option<FormatAlign>,
-  pub(crate) sign: Option<FormatSign>,
-  pub(crate) alternate: bool,
-  pub(crate) zero_pad: bool,
-  pub(crate) width: Option<FormatCount>,
-  pub(crate) precision: Option<FormatCount>,
-  pub(crate) ty: Option<String>,
+  pub fill: Option<char>,
+  pub align: Option<FormatAlign>,
+  pub sign: Option<FormatSign>,
+  pub alternate: bool,
+  pub zero_pad: bool,
+  pub width: Option<FormatCount>,
+  pub precision: Option<FormatCount>,
+  pub ty: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1252,9 +1264,9 @@ pub(crate) enum FieldAccess {
 
 #[derive(Debug, Clone)]
 pub(crate) struct AsmOperand {
-  pub(crate) kind: AsmOperandKind,
-  pub(crate) constraint: String,
-  pub(crate) expr: Expr,
+  pub kind: AsmOperandKind,
+  pub constraint: String,
+  pub expr: Expr,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1269,9 +1281,9 @@ pub(crate) enum AsmOperandKind {
 
 #[derive(Debug, Clone)]
 pub(crate) struct FieldInit {
-  pub(crate) attributes: Vec<Attribute>,
-  pub(crate) name: String,
-  pub(crate) value: Option<Expr>,
+  pub attributes: Vec<Attribute>,
+  pub name: String,
+  pub value: Option<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1292,9 +1304,9 @@ pub(crate) enum CaptureKind {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ClosureParam {
-  pub(crate) attributes: Vec<Attribute>,
-  pub(crate) pattern: Pattern,
-  pub(crate) ty: Option<Type>,
+  pub attributes: Vec<Attribute>,
+  pub pattern: Pattern,
+  pub ty: Option<Type>,
 }
 
 // ----------------------------------------------------------------------------

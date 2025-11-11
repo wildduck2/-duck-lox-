@@ -529,10 +529,16 @@
 //  name: "wildduck" 
 //};
 
-
-Point { x: i32, y: i32 }     // Struct shape
-Point2(i32, i32);            // Tuple shape
+//Point2(i32, i32);            // Tuple shape
 //struct Marker;                      // Unit shape
 
+//struct User<Name, Age> {
+//  name: Name,
+//  age: Age,
+//}
 
-
+//struct User;
+//struct User<'a: Clone + Debug = String>;
+//struct User<Name: ?Clone>;
+//struct User<Name: const Clone>;
+struct User<Name: const ?Clone>;

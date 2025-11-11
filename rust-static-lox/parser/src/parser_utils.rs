@@ -21,7 +21,7 @@ impl Parser {
   /// Parses the top-level production, collecting statements until EOF.
   pub fn parse_program(&mut self, engine: &mut DiagnosticEngine) {
     while !self.is_eof() {
-      match self.parse_stmt(engine) {
+      match self.parse_item(engine) {
         // Returns Item, not Stmt
         Ok(item) => {
           item.print_tree("", true);
@@ -29,6 +29,13 @@ impl Parser {
         },
         Err(_) => self.synchronize(engine),
       }
+    }
+  }
+
+  fn parse_item(&mut self, engine: &mut DiagnosticEngine) -> Result<Item, ()> {
+    match self.current_token().kind {
+      TokenKind::KwStruct => self.parse_struct_decl(engine),
+      _ => Err(()),
     }
   }
 

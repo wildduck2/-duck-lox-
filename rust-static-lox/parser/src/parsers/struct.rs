@@ -1,4 +1,6 @@
-use crate::ast::{Expr, FieldInit, Path, PathSegment, PathSegmentKind};
+use crate::ast::{
+  Expr, FieldInit, Item, Path, PathSegment, PathSegmentKind, StructDecl, StructKind, Visibility,
+};
 use crate::parser_utils::ExprContext;
 use crate::{DiagnosticEngine, Parser};
 use diagnostic::code::DiagnosticCode;
@@ -30,15 +32,53 @@ impl Parser {
   //   pathIdentSegment → IDENTIFIER | "super" | "self" | "Self" | "crate" | "$crate" ;
   //
 
+  pub(crate) fn parse_struct_decl(&mut self, engine: &mut DiagnosticEngine) -> Result<Item, ()> {
+    let mut token = self.current_token();
+    self.advance(engine); // consume the struct keyword
+
+    let struct_name = self.get_token_lexeme(&self.current_token());
+    self.advance(engine); // consume the identifier
+
+    let generics = self.parse_generic_params(&mut token, engine)?;
+
+    // Handle the case where the struct is empty AKA (Unit Struct)
+    if matches!(self.current_token().kind, TokenKind::Semi) {
+      token.span.merge(self.current_token().span);
+      return Ok(Item::Struct(StructDecl {
+        attributes: vec![],
+        visibility: Visibility::Lic,
+        name: struct_name,
+        generics,
+        kind: StructKind::Unit,
+        where_clause: None,
+        span: token.span,
+      }));
+    };
+
+    if matches!(self.current_token().kind, TokenKind::OpenBrace) {
+      token.span.merge(self.current_token().span);
+      return Ok(Item::Struct(StructDecl {
+        attributes: vec![],
+        visibility: Visibility::Lic,
+        name: struct_name,
+        generics: None,
+        kind: StructKind::Named { fields: vec![] },
+        where_clause: None,
+        span: token.span,
+      }));
+    };
+
+    Err(())
+  }
+
   pub(crate) fn parse_struct_expr(
     &mut self,
     token: &mut Token,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
-    let mut token = self.current_token();
-    let struct_name = self.get_token_lexeme(&token);
+    let struct_name = self.get_token_lexeme(token);
     self.advance(engine); // consume the identifier
-    let args = self.parse_generic_args(&mut token, engine)?;
+    let args = self.parse_generic_args(token, engine)?;
     let mut fields = vec![];
 
     match self.current_token().kind {
@@ -75,16 +115,16 @@ impl Parser {
     };
 
     Ok(Expr::Struct {
-      // TODO: fix this type later one
       path: Path {
-        leading_colon: false,
+        leading_colon: false, // TODO: add this later
+        // TODO: make sure to match multiple segments
         segments: vec![PathSegment {
           kind: PathSegmentKind::Ident(struct_name),
           args, // these are generic args
         }],
       },
       fields,
-      base: None,
+      base: None, // TODO: add this later
       span: token.span,
     })
   }
@@ -101,6 +141,13 @@ impl Parser {
         TokenKind::CloseBrace | TokenKind::CloseParen
       )
     {
+      // TODO: remove this to the whole struct dcalaration
+      let attributes = if matches!(self.current_token().kind, TokenKind::Pound) {
+        self.parse_attributes(engine)?
+      } else {
+        vec![]
+      };
+
       let field_name = self.current_token();
       let lexme = self.get_token_lexeme(&field_name);
       self.advance(engine);
@@ -117,7 +164,6 @@ impl Parser {
       }
 
       fields.push(FieldInit {
-        // TODO: parse attributes per field
         attributes: vec![],
         name: lexme,
         value: field_value,
