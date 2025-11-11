@@ -1253,4 +1253,31 @@ impl Lexer {
       self.advance();
     }
   }
+
+  /// Helper that checks if the next two characters are a string prefix.
+  ///
+  /// Returns `true` if the next two characters are a string prefix.
+  pub(crate) fn is_string_prefix(&mut self, first: char) -> bool {
+    let next = self.peek();
+    let next2 = self.peek_next(1);
+
+    match first {
+      // b" or b' or br" or br#"
+      'b' => {
+        matches!(next, Some('"') | Some('\''))
+          || (matches!(next, Some('r')) && matches!(next2, Some('"') | Some('#')))
+      },
+
+      // c" or cr" or cr#" (C strings)
+      'c' => {
+        matches!(next, Some('"'))
+          || (matches!(next, Some('r')) && matches!(next2, Some('"') | Some('#')))
+      },
+
+      // r" or r#" (raw strings)
+      'r' => matches!(next, Some('"') | Some('#')),
+
+      _ => false,
+    }
+  }
 }

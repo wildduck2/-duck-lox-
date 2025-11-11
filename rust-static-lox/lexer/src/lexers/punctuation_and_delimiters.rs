@@ -142,7 +142,8 @@ impl Lexer {
   ///
   /// `Some(TokenKind::Pound)` or `Some(TokenKind::Shebang)`, or `None` for invalid shebang
   pub fn lex_pound(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
-    if self.match_char('!') {
+    //FIX: the shebang must be at the start of the file
+    if self.column == 0 && self.match_char('!') {
       return self.lex_shebang(engine);
     }
 

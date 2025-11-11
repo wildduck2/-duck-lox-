@@ -80,10 +80,17 @@ impl Lexer {
 
       // String and character literals
       '\'' => self.lex_string(engine), // Character literal
-      // Prefixed literals (need to check next char)
-      'b' if matches!(self.peek(), Some('"') | Some('r') | Some('\'')) => self.lex_string(engine),
-      'c' if matches!(self.peek(), Some('"') | Some('r')) => self.lex_string(engine),
-      'r' if matches!(self.peek(), Some('"') | Some('#')) => self.lex_string(engine),
+
+      // Handles b"", br"", b'c', etc.
+      'b' if self.is_string_prefix('b') => self.lex_string(engine),
+
+      // Handles c"", cr"", etc.
+      'c' if self.is_string_prefix('c') => self.lex_string(engine),
+
+      // Handles r"", r#"..."#, etc.
+      'r' if self.is_string_prefix('r') => self.lex_string(engine),
+
+      // Normal string
       '"' => self.lex_string(engine), // Regular string
 
       // Numbers
