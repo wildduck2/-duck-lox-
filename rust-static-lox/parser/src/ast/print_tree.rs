@@ -1,0 +1,632 @@
+// ----------------------------------------------------------------------------
+// Print Tree Methods - FIXED for unified Path type
+// ----------------------------------------------------------------------------
+
+use crate::ast::*;
+
+impl Expr {
+  pub(crate) fn span(&self) -> Span {
+    match self {
+      Expr::Integer { span, .. }
+      | Expr::Float { span, .. }
+      | Expr::String { span, .. }
+      | Expr::Char { span, .. }
+      | Expr::ByteString { span, .. }
+      | Expr::Byte { span, .. }
+      | Expr::Bool { span, .. }
+      | Expr::Binary { span, .. }
+      | Expr::Unary { span, .. }
+      | Expr::Assign { span, .. }
+      | Expr::AssignOp { span, .. }
+      | Expr::Field { span, .. }
+      | Expr::MethodCall { span, .. }
+      | Expr::Call { span, .. }
+      | Expr::Index { span, .. }
+      | Expr::Range { span, .. }
+      | Expr::Array { span, .. }
+      | Expr::ArrayRepeat { span, .. }
+      | Expr::Tuple { span, .. }
+      | Expr::Struct { span, .. }
+      | Expr::If { span, .. }
+      | Expr::IfLet { span, .. }
+      | Expr::Match { span, .. }
+      | Expr::Loop { span, .. }
+      | Expr::While { span, .. }
+      | Expr::WhileLet { span, .. }
+      | Expr::For { span, .. }
+      | Expr::Return { span, .. }
+      | Expr::Break { span, .. }
+      | Expr::Continue { span, .. }
+      | Expr::Yield { span, .. }
+      | Expr::Become { span, .. }
+      | Expr::Closure { span, .. }
+      | Expr::Block { span, .. }
+      | Expr::LabeledBlock { span, .. }
+      | Expr::Async { span, .. }
+      | Expr::Await { span, .. }
+      | Expr::Try { span, .. }
+      | Expr::TryBlock { span, .. }
+      | Expr::Cast { span, .. }
+      | Expr::Type { span, .. }
+      | Expr::Let { span, .. }
+      | Expr::Unsafe { span, .. }
+      | Expr::Const { span, .. }
+      | Expr::InlineConst { span, .. }
+      | Expr::Box { span, .. }
+      | Expr::Underscore { span, .. }
+      | Expr::Paren { span, .. }
+      | Expr::InlineAsm { span, .. }
+      | Expr::Ident { span, .. }
+      | Expr::Group { span, .. }
+      | Expr::Unit(span)
+      | Expr::FormatString { span, .. } => *span,
+      Expr::Path(_) => Span::default(),
+      Expr::Macro { mac } => mac.span,
+    }
+  }
+
+  pub fn print_tree(&self, prefix: &str, is_last: bool) {
+    let connector = if is_last { "└─>" } else { "├─>" };
+
+    match self {
+      Expr::Integer { value, suffix, .. } => {
+        println!(
+          "{}{} Integer: {}{}",
+          prefix,
+          connector,
+          value,
+          suffix.as_ref().map(|s| s.as_str()).unwrap_or("")
+        );
+      },
+      Expr::Float { value, suffix, .. } => {
+        println!(
+          "{}{} Float: {}{}",
+          prefix,
+          connector,
+          value,
+          suffix.as_ref().map(|s| s.as_str()).unwrap_or("")
+        );
+      },
+      Expr::String { value, kind, .. } => {
+        println!("{}{} String({:?}): \"{}\"", prefix, connector, kind, value);
+      },
+      Expr::Char { value, .. } => {
+        println!("{}{} Char: '{}'", prefix, connector, value);
+      },
+      Expr::Byte { value, .. } => {
+        println!("{}{} Byte: '{}'", prefix, connector, value);
+      },
+      Expr::Bool { value, .. } => {
+        println!("{}{} Bool: {}", prefix, connector, value);
+      },
+      Expr::Binary {
+        left, op, right, ..
+      } => {
+        println!("{}{} Binary {:?}", prefix, connector, op);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        left.print_tree(&new_prefix, false);
+        right.print_tree(&new_prefix, true);
+      },
+      Expr::Unary { op, expr, .. } => {
+        println!("{}{} Unary {:?}", prefix, connector, op);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        expr.print_tree(&new_prefix, true);
+      },
+      Expr::Assign { target, value, .. } => {
+        println!("{}{} Assign", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        target.print_tree(&new_prefix, false);
+        value.print_tree(&new_prefix, true);
+      },
+      Expr::Call { callee, args, .. } => {
+        println!("{}{} Call", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        callee.print_tree(&new_prefix, args.is_empty());
+        for (i, arg) in args.iter().enumerate() {
+          arg.print_tree(&new_prefix, i == args.len() - 1);
+        }
+      },
+      Expr::Path(path) => {
+        println!("{}{} Path: {}", prefix, connector, format_path(path));
+      },
+      Expr::Block { stmts, .. } => {
+        println!("{}{} Block", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        for (i, stmt) in stmts.iter().enumerate() {
+          stmt.print_tree(&new_prefix, i == stmts.len() - 1);
+        }
+      },
+      Expr::Ident { name, .. } => {
+        println!("{}{} Ident: '{}'", prefix, connector, name);
+      },
+      Expr::Field { object, field, .. } => {
+        println!("{}{} Field", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+
+        object.print_tree(&new_prefix, false);
+
+        match field {
+          FieldAccess::Named(name) => {
+            println!("{}└── Named field: {}", new_prefix, name);
+          },
+          FieldAccess::Unnamed(index) => {
+            println!("{}└── Unnamed field: .{}", new_prefix, index);
+          },
+        }
+      },
+      Expr::Index { object, index, .. } => {
+        println!("{}{} Index", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        object.print_tree(&new_prefix, false);
+        index.print_tree(&new_prefix, true);
+      },
+      Expr::Try { expr, .. } => {
+        println!("{}{} Try", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        expr.print_tree(&new_prefix, true);
+      },
+      Expr::Await { expr, .. } => {
+        println!("{}{} Await", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        expr.print_tree(&new_prefix, true);
+      },
+
+      Expr::Cast { expr, ty, .. } => {
+        println!("{}{} Cast", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        println!("{}├─> Expr:", new_prefix);
+        expr.print_tree(&format!("{}│  ", new_prefix), true);
+        println!("{}└─> Type:", new_prefix);
+        ty.print_tree(&format!("{}   ", new_prefix), true);
+      },
+
+      Expr::Range {
+        start, end, kind, ..
+      } => {
+        println!("{}{} Range", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+
+        match start {
+          Some(expr) => {
+            println!("{}├─> Start:", new_prefix);
+            expr.print_tree(&format!("{}│  ", new_prefix), end.is_none());
+          },
+          None => println!("{}├─> Start: <none>", new_prefix),
+        }
+
+        match end {
+          Some(expr) => {
+            println!("{}├─> End:", new_prefix);
+            expr.print_tree(&format!("{}│  ", new_prefix), true);
+          },
+          None => println!("{}├─> End: <none>", new_prefix),
+        }
+
+        println!("{}└─> RangeKind: {:?}", new_prefix, kind);
+      },
+
+      Expr::Array {
+        elements, repeat, ..
+      } => {
+        println!("{}{} Array", prefix, connector);
+        let base = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+
+        let has_elements = !elements.is_empty();
+        let has_repeat = repeat.is_some();
+
+        if !has_elements && !has_repeat {
+          println!("{}└─> <empty>", base);
+          return;
+        }
+
+        if has_elements {
+          let elem_hdr_conn = if has_repeat { "├─>" } else { "└─>" };
+          println!("{}{} Elements:", base, elem_hdr_conn);
+
+          let elems_prefix = format!("{}{}  ", base, if has_repeat { "│" } else { " " });
+
+          for (i, expr) in elements.iter().enumerate() {
+            let is_last_elem = i + 1 == elements.len();
+            expr.print_tree(&elems_prefix, is_last_elem);
+          }
+        }
+
+        if let Some(repeat_expr) = repeat {
+          println!("{}└─> Repeat:", base);
+          let repeat_prefix = format!("{}   ", base);
+          repeat_expr.print_tree(&repeat_prefix, true);
+        }
+      },
+
+      Expr::Group {
+        expr, attributes, ..
+      } => {
+        println!("{}{} Group", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+
+        if !attributes.is_empty() {
+          println!("{}├─> Attributes:", new_prefix);
+          for (i, attr) in attributes.iter().enumerate() {
+            let last_attr = i == attributes.len() - 1;
+            let branch = if last_attr { "└─>" } else { "├─>" };
+            println!("{}│  {} {}", new_prefix, branch, format_attr(attr));
+          }
+        }
+
+        println!("{}└─> Expr:", new_prefix);
+        expr.print_tree(&format!("{}   ", new_prefix), true);
+      },
+
+      Expr::Tuple {
+        elements,
+        attributes,
+        ..
+      } => {
+        println!("{}{} Tuple", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+
+        // --- Attributes block ---
+        if !attributes.is_empty() {
+          let attrs_last = elements.is_empty();
+          println!(
+            "{}{} Attributes:",
+            new_prefix,
+            if attrs_last { "└─>" } else { "├─>" }
+          );
+
+          for (i, attr) in attributes.iter().enumerate() {
+            let last_attr = i == attributes.len() - 1;
+            let attr_connector = if last_attr { "└─>" } else { "├─>" };
+            let attr_prefix = format!("{}{}  ", new_prefix, if attrs_last { " " } else { "│" });
+            println!("{}{} {}", attr_prefix, attr_connector, format_attr(attr));
+          }
+        }
+
+        // --- Elements block ---
+        if elements.is_empty() {
+          println!("{}└─> <empty>", new_prefix);
+        } else {
+          println!("{}└─> Elements:", new_prefix);
+          for (i, expr) in elements.iter().enumerate() {
+            let last_elem = i == elements.len() - 1;
+            let elem_prefix = format!("{}   ", new_prefix);
+            expr.print_tree(&elem_prefix, last_elem);
+          }
+        }
+      },
+
+      Expr::Struct {
+        path, fields, base, ..
+      } => {
+        println!("{}{} Struct", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+
+        // print path
+        let path_str = format_path(path);
+        println!("{}├─> Path: {}", new_prefix, path_str);
+
+        // print fields
+        if fields.is_empty() {
+          println!("{}├─> Fields: <empty>", new_prefix);
+        } else {
+          println!("{}├─> Fields:", new_prefix);
+          for (i, field) in fields.iter().enumerate() {
+            let last_field = i == fields.len() - 1 && base.is_none();
+            let branch = if last_field { "└─>" } else { "├─>" };
+            let field_prefix = format!("{}│  ", new_prefix);
+            println!("{}{} Field: {}", field_prefix, branch, field.name);
+
+            if let Some(ref value) = field.value {
+              let value_prefix =
+                format!("{}{}  ", field_prefix, if last_field { " " } else { "│" });
+              value.print_tree(&value_prefix, true);
+            }
+          }
+        }
+
+        // print base expression (if any)
+        if let Some(base_expr) = base {
+          println!("{}└─> Base:", new_prefix);
+          base_expr.print_tree(&format!("{}   ", new_prefix), true);
+        } else {
+          println!("{}└─> Base: <none>", new_prefix);
+        }
+      },
+
+      Expr::Unit(_) => {
+        println!("{}{}  Unit:()", prefix, connector);
+      },
+
+      _ => {
+        println!("{}{} [Other Expr]", prefix, connector);
+      },
+    }
+  }
+}
+
+/// Format a unified Path into a string representation
+fn format_path(p: &Path) -> String {
+  let mut s = String::new();
+  if p.leading_colon {
+    s.push_str("::");
+  }
+
+  let segs: Vec<String> = p
+    .segments
+    .iter()
+    .map(|seg| match &seg.kind {
+      PathSegmentKind::Ident(id) => id.clone(),
+      PathSegmentKind::Super => "super".to_string(),
+      PathSegmentKind::Self_ => "self".to_string(),
+      PathSegmentKind::Crate => "crate".to_string(),
+      PathSegmentKind::DollarCrate => "$crate".to_string(),
+      PathSegmentKind::SelfType => "Self".to_string(),
+    })
+    .collect();
+
+  s.push_str(&segs.join("::"));
+  s
+}
+
+fn format_tt(tt: &TokenTree) -> String {
+  match tt {
+    TokenTree::Token(t) => t.clone(),
+    TokenTree::Delimited { delimiter, tokens } => {
+      let (l, r) = match delimiter {
+        Delimiter::Paren => ('(', ')'),
+        Delimiter::Bracket => ('[', ']'),
+        Delimiter::Brace => ('{', '}'),
+      };
+      let inner = tokens.iter().map(format_tt).collect::<Vec<_>>().join(" ");
+      format!("{l}{inner}{r}")
+    },
+    TokenTree::Repeat { .. } => "$( … )*".into(),
+    TokenTree::MetaVar { name, kind } => format!("${name}:{kind}"),
+  }
+}
+
+fn format_attr(attr: &Attribute) -> String {
+  match &attr.kind {
+    AttrKind::Normal { path, tokens } => {
+      let prefix = match attr.style {
+        AttrStyle::Inner => "#!",
+        AttrStyle::Outer => "#",
+      };
+      let p = format_path(path);
+      if tokens.is_empty() {
+        format!("{prefix}[{p}]")
+      } else if tokens.len() == 1 {
+        // Common case: a single delimited token tree like (feature="debug")
+        let t = format_tt(&tokens[0]);
+        format!("{prefix}[{p}{t}]")
+      } else {
+        // Fallback: join multiple token trees with spaces
+        let joined = tokens.iter().map(format_tt).collect::<Vec<_>>().join(" ");
+        format!("{prefix}[{p} {joined}]")
+      }
+    },
+    AttrKind::DocComment { is_inner, content } => {
+      if *is_inner {
+        format!("//! {content}")
+      } else {
+        format!("/// {content}")
+      }
+    },
+    AttrKind::Cfg(meta) => {
+      let prefix = match attr.style {
+        AttrStyle::Inner => "#!",
+        AttrStyle::Outer => "#",
+      };
+      format!("{prefix}[cfg({meta:?})]")
+    },
+    AttrKind::CfgAttr { condition, attrs } => {
+      let prefix = match attr.style {
+        AttrStyle::Inner => "#!",
+        AttrStyle::Outer => "#",
+      };
+      let inner = attrs.len();
+      format!("{prefix}[cfg_attr({condition:?}, /* {inner} attr(s) */)]")
+    },
+  }
+}
+
+impl Type {
+  pub fn print_tree(&self, prefix: &str, is_last: bool) {
+    let connector = if is_last { "└─>" } else { "├─>" };
+
+    match self {
+      // Primitive integer types
+      Type::I8 => println!("{}{} i8", prefix, connector),
+      Type::I16 => println!("{}{} i16", prefix, connector),
+      Type::I32 => println!("{}{} i32", prefix, connector),
+      Type::I64 => println!("{}{} i64", prefix, connector),
+      Type::I128 => println!("{}{} i128", prefix, connector),
+      Type::Isize => println!("{}{} isize", prefix, connector),
+      Type::U8 => println!("{}{} u8", prefix, connector),
+      Type::U16 => println!("{}{} u16", prefix, connector),
+      Type::U32 => println!("{}{} u32", prefix, connector),
+      Type::U64 => println!("{}{} u64", prefix, connector),
+      Type::U128 => println!("{}{} u128", prefix, connector),
+      Type::Usize => println!("{}{} usize", prefix, connector),
+
+      // Floating point types
+      Type::F32 => println!("{}{} f32", prefix, connector),
+      Type::F64 => println!("{}{} f64", prefix, connector),
+
+      // Other primitive types
+      Type::Bool => println!("{}{} bool", prefix, connector),
+      Type::Char => println!("{}{} char", prefix, connector),
+      Type::Str => println!("{}{} str", prefix, connector),
+      Type::Never => println!("{}{} !", prefix, connector),
+      Type::Unit => println!("{}{} ()", prefix, connector),
+      Type::SelfType => println!("{}{} Self", prefix, connector),
+
+      // Path types
+      Type::Path(path) => {
+        println!("{}{} Path: {}", prefix, connector, format_path(path));
+      },
+
+      // Reference types
+      Type::Reference {
+        lifetime,
+        mutability,
+        inner,
+      } => {
+        let mut_str = if *mutability == Mutability::Mutable {
+          "mut "
+        } else {
+          ""
+        };
+        let life_str = lifetime
+          .as_ref()
+          .map(|l| format!("'{} ", l))
+          .unwrap_or_default();
+        println!("{}{} &{}{}", prefix, connector, life_str, mut_str);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        inner.print_tree(&new_prefix, true);
+      },
+
+      // Slice and Array
+      Type::Slice(inner) => {
+        println!("{}{} [_]", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        inner.print_tree(&new_prefix, true);
+      },
+
+      Type::Array { element, size } => {
+        println!("{}{} Array [_; _]", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        println!("{}├─> Element:", new_prefix);
+        element.print_tree(&format!("{}│  ", new_prefix), false);
+        println!("{}└─> Size:", new_prefix);
+        size.print_tree(&format!("{}   ", new_prefix), true);
+      },
+
+      // Tuple
+      Type::Tuple(types) => {
+        println!("{}{} Tuple", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        for (i, ty) in types.iter().enumerate() {
+          ty.print_tree(&new_prefix, i == types.len() - 1);
+        }
+      },
+
+      _ => {
+        println!("{}{} [Other Type]", prefix, connector);
+      },
+    }
+  }
+}
+
+impl Stmt {
+  pub fn print_tree(&self, prefix: &str, is_last: bool) {
+    let connector = if is_last { "└─>" } else { "├─>" };
+
+    match self {
+      Stmt::Expr(expr) => {
+        println!(
+          "{}{} parse_expr()  (for expression statements)",
+          prefix, connector
+        );
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        expr.print_tree(&new_prefix, true);
+      },
+      Stmt::Semi(expr) => {
+        println!("{}{} Stmt::Semi", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        expr.print_tree(&new_prefix, true);
+      },
+      Stmt::TailExpr(expr) => {
+        println!("{}{} Stmt::TailExpr", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        expr.print_tree(&new_prefix, true);
+      },
+      Stmt::Let {
+        pattern, ty, init, ..
+      } => {
+        println!(
+          "{}{} parse_let_statement()  (for let statements)",
+          prefix, connector
+        );
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        println!("{}├─> pattern: {:?}", new_prefix, pattern);
+        if let Some(ty) = ty {
+          println!("{}├─> type:", new_prefix);
+          ty.print_tree(&format!("{}│  ", new_prefix), init.is_none());
+        }
+        if let Some(init) = init {
+          println!("{}└─> init:", new_prefix);
+          init.print_tree(&format!("{}   ", new_prefix), true);
+        }
+      },
+      Stmt::Item(item) => {
+        println!("{}{} Stmt::Item", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+        item.print_tree(&new_prefix, true);
+      },
+      Stmt::Empty => {
+        println!("{}{} Stmt::Empty", prefix, connector);
+      },
+    }
+  }
+}
+
+impl Item {
+  pub fn print_tree(&self, prefix: &str, is_last: bool) {
+    let connector = if is_last { "└─>" } else { "├─>" };
+
+    match self {
+      Item::Function(fn_decl) => {
+        println!("{}{} parse_fn_decl()  (for functions)", prefix, connector);
+        if let Some(body) = &fn_decl.body {
+          let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+          println!(
+            "{}└─> parse_block_contents()  ← USES parse_stmt HERE",
+            new_prefix
+          );
+          let stmt_prefix = format!("{}    ", new_prefix);
+          for (i, stmt) in body.iter().enumerate() {
+            stmt.print_tree(&stmt_prefix, i == body.len() - 1);
+          }
+        }
+      },
+      Item::Const(const_decl) => {
+        println!("{}{} Item::Const '{}'", prefix, connector, const_decl.name);
+        if let Some(value) = &const_decl.value {
+          let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+          value.print_tree(&new_prefix, true);
+        }
+      },
+      Item::Static(static_decl) => {
+        println!(
+          "{}{} Item::Static '{}'",
+          prefix, connector, static_decl.name
+        );
+        if let Some(value) = &static_decl.value {
+          let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+          value.print_tree(&new_prefix, true);
+        }
+      },
+      Item::Struct(struct_decl) => {
+        println!(
+          "{}{} Item::Struct '{}'",
+          prefix, connector, struct_decl.name
+        );
+      },
+      Item::Enum(enum_decl) => {
+        println!("{}{} Item::Enum '{}'", prefix, connector, enum_decl.name);
+      },
+      _ => {
+        println!("{}{} [Other Item]", prefix, connector);
+      },
+    }
+  }
+}
+
+// Helper function to start printing from the root
+pub fn print_ast_tree(items: &[Item]) {
+  println!("parse_program()");
+  for (i, item) in items.iter().enumerate() {
+    item.print_tree("  ", i == items.len() - 1);
+  }
+}
