@@ -451,5 +451,73 @@
 //[ arr[i]; len ]; // repetition with indexed expr
 //
 
+//(1, 2);
+//("hello", "world");
+//(true, false);
+//(a, b);
+//(x, y, z);
+//
+//(1,);
+//("hi",);
+//(a,);
+//((x + y),);
+//
+//(); // should NOT be tuple, it will be unit
+//
+//(1 + 2, );
+//(1 + 2, a * b);
+//(x / y, (a + b) * c);
+//(foo(), bar(1, 2));
+//((a..b), [1, 2, 3]);
+//
+//((1, 2), 3);
+//(1, (2, 3));
+//((a, b), (c, d));
+
+//(#inline, 1, 2); 
+//(#debug, (a + b), c);
+
+//( (1, 2), [a, b, c], (true, false), ("x", "y", "z") );
+//((1, (2, (3, 4))), (a + b, c * d));
+//( [1, 2], (x..y), func_call(1, 2) );
+//
+//(1, 2, 3,);
+//(a, b, c,);
+//(foo(), bar(), baz(),);
+//
+//(1);    // group
+//(1,);   // tuple
+//(a);    // group
+//(a,);   // tuple
+//(foo()); // group
+//(foo(),); // tuple
+//
+//(x + y);
+//(heavy_computation());
+//(#![inner] (x * y));
+//();
+//(#![inner] (x + y), z, w);
+//(#![debug::foo::bar]);
+//(#![::debug::foo]);
+//(#![$crate::debug]);
+//(#![name = "foo"]);
+//(#![cfg(feature = "debug")] 1 + 2);
+//(1, 2);
+//(#[inline] 1, 2);
+//(#[inline] #[cfg(feature = "debug")] 1, 2);
+//(#[allow(dead_code)]);
+//(#[debug = "true"] 42);
+//(#![allow(unused_variables)] 10);
+//(#![cfg(feature = "debug")] #[inline] 123, 456);
+//(#[test] (#![cfg(feature = "inner")] 1, 2), 3);
+//(#[cfg(debug_assertions)] (1 + 2), (3 * 4));
+//(#[cfg(feature = "x")] (#![inner_attr] (5)));
+//(1 + 2);
+//(#![feature(special_attr)] (2 * 3));
+//((#![allow(unused)] (1)));
+//(#![cfg(feature = "debug")] #[inline(always)] (x + y * 2));
+//(#![feature(tuple_attrs)] (#[inline] (1, 2)));
+//(#![cfg_attr(feature = "debug", allow(dead_code))] (a + b));
+
 
 

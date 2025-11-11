@@ -157,8 +157,8 @@ impl Parser {
   // *   primary          → literalExpr [x]
   // *                    | pathExpr
   // *                    | groupedExpr [x]
-  // *                    | arrayExpr
-  // *                    | tupleExpr
+  // *                    | arrayExpr   [x]
+  // *                    | tupleExpr   [_]
   // *                    | structExpr
   // *                    | closureExpr
   // *                    | blockExpr

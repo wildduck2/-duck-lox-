@@ -1,1 +1,3 @@
--- Well this  has been a good session i will find something to eat and start another session 
+
+- what we are doing right now it parsing the attributes
+  > whether it's outer or inner

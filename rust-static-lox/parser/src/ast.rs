@@ -169,27 +169,51 @@ pub struct MacroRule {
 
 #[derive(Debug, Clone)]
 pub enum TokenTree {
+  /// A single atomic token, identifier, keyword, literal, or symbol.
+  /// Examples:
+  ///   - `Token("inline")`
+  ///   - `Token("=")`
+  ///   - `Token("\"value\"")`
+  ///   - `Token("+")`
   Token(String),
+
+  /// A delimited group of tokens, represents things inside (), [], or {}.
+  /// Examples:
+  ///   - `(a, b, c)`  => Delimited { delimiter: Paren, tokens: [...] }
+  ///   - `[x * 2]`    => Delimited { delimiter: Bracket, tokens: [...] }
+  ///   - `{ key = val }` → Delimited { delimiter: Brace, tokens: [...] }
   Delimited {
-    delimiter: Delimiter,
+    delimiter: Delimiter, // e.g. (), [], {}
     tokens: Vec<TokenTree>,
   },
+
+  // TODO:
+  /// A macro repetition,  used in macro definitions like `$($x),*`.
+  /// Examples:
+  ///   - `$($x),*` =>  Repeat { tokens: [MetaVar{name: "x", kind: "expr"}], separator: Some(","), kind: ZeroOrMore }
+  ///   - `$($item);+` => Repeat { tokens: [MetaVar{name: "item", kind: "stmt"}], separator: Some(";"), kind: OneOrMore }
   Repeat {
-    tokens: Vec<TokenTree>,
-    separator: Option<String>,
-    kind: RepeatKind,
+    tokens: Vec<TokenTree>,    // the body of the repetition, e.g. $x
+    separator: Option<String>, // e.g. "," or ";"
+    kind: RepeatKind,          // e.g. ZeroOrMore (*), OneOrMore (+)
   },
+
+  // TODO:
+  /// A metavariable in macros, e.g. `$name:expr`, `$id:ident`.
+  /// Examples:
+  ///   - `$x:expr` => MetaVar { name: "x", kind: "expr" }
+  ///   - `$path:ident` => MetaVar { name: "path", kind: "ident" }
   MetaVar {
-    name: String,
-    kind: String,
+    name: String, // the variable name (without $)
+    kind: String, // the fragment specifier, e.g. "expr", "ident"
   },
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Delimiter {
-  Parenthesis,
-  Brace,
-  Bracket,
+  Paren,   // ()
+  Brace,   // {}
+  Bracket, // []
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -297,7 +321,7 @@ pub enum AttrStyle {
 #[derive(Debug, Clone)]
 pub enum AttrKind {
   Normal {
-    path: SimplePath, // CHANGED: Was ExprPath, should be SimplePath
+    path: SimplePath,
     tokens: Vec<TokenTree>,
   },
   DocComment {
@@ -311,11 +335,20 @@ pub enum AttrKind {
   },
 }
 
-// ADDED: SimplePath for attributes
+// SimplePath for attributes
 #[derive(Debug, Clone)]
 pub struct SimplePath {
   pub leading_colon: bool,
-  pub segments: Vec<String>, // Can include "super", "self", "crate", "$crate"
+  pub segments: Vec<SimplePathSegment>,
+}
+
+#[derive(Debug, Clone)]
+pub enum SimplePathSegment {
+  Ident(String), // Regular identifier
+  Super,         // "super"
+  Self_,         // "self"
+  Crate,         // "crate"
+  DollarCrate,   // "$crate"
 }
 
 #[derive(Debug, Clone)]
@@ -770,6 +803,7 @@ pub enum Pattern {
   },
 
   Tuple {
+    attributes: Vec<Attribute>,
     patterns: Vec<Pattern>,
     span: Span,
   },
@@ -910,7 +944,14 @@ pub enum Expr {
   },
 
   Group {
+    attributes: Vec<Attribute>,
     expr: Box<Expr>,
+    span: Span,
+  },
+
+  Tuple {
+    attributes: Vec<Attribute>,
+    elements: Vec<Expr>,
     span: Span,
   },
 
@@ -952,6 +993,8 @@ pub enum Expr {
     span: Span,
   },
 
+  Unit(Span),
+
   Range {
     start: Option<Box<Expr>>,
     end: Option<Box<Expr>>,
@@ -967,10 +1010,6 @@ pub enum Expr {
   ArrayRepeat {
     element: Box<Expr>,
     count: Box<Expr>,
-    span: Span,
-  },
-  Tuple {
-    elements: Vec<Expr>,
     span: Span,
   },
 
@@ -1387,6 +1426,7 @@ impl Expr {
       | Expr::InlineAsm { span, .. }
       | Expr::Ident { span, .. }
       | Expr::Group { span, .. }
+      | Expr::Unit(span)
       | Expr::FormatString { span, .. } => *span,
       Expr::Path(_) => Span::default(),
       Expr::Macro { mac } => mac.span,
@@ -1504,11 +1544,6 @@ impl Expr {
         let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
         expr.print_tree(&new_prefix, true);
       },
-      Expr::Group { expr, .. } => {
-        println!("{}{} Group", prefix, connector);
-        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
-        expr.print_tree(&new_prefix, true);
-      },
 
       Expr::Cast { expr, ty, .. } => {
         println!("{}{} Cast", prefix, connector);
@@ -1558,13 +1593,10 @@ impl Expr {
           return;
         }
 
-        // ---- Elements block ---------------------------------------------------
         if has_elements {
-          // If a Repeat follows, Elements is not last at the Array level.
           let elem_hdr_conn = if has_repeat { "├─>" } else { "└─>" };
           println!("{}{} Elements:", base, elem_hdr_conn);
 
-          // Inside Elements: keep the vertical bar if a sibling (Repeat) follows.
           let elems_prefix = format!("{}{}  ", base, if has_repeat { "│" } else { " " });
 
           for (i, expr) in elements.iter().enumerate() {
@@ -1573,19 +1605,158 @@ impl Expr {
           }
         }
 
-        // ---- Repeat block -----------------------------------------------------
         if let Some(repeat_expr) = repeat {
-          // Repeat is always the last child at the Array level.
           println!("{}└─> Repeat:", base);
           let repeat_prefix = format!("{}   ", base);
           repeat_expr.print_tree(&repeat_prefix, true);
         }
       },
 
+      Expr::Group {
+        expr, attributes, ..
+      } => {
+        println!("{}{} Group", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+
+        if !attributes.is_empty() {
+          println!("{}├─> Attributes:", new_prefix);
+          for (i, attr) in attributes.iter().enumerate() {
+            let last_attr = i == attributes.len() - 1;
+            let branch = if last_attr { "└─>" } else { "├─>" };
+            println!("{}│  {} {}", new_prefix, branch, format_attr(attr));
+          }
+        }
+
+        println!("{}└─> Expr:", new_prefix);
+        expr.print_tree(&format!("{}   ", new_prefix), true);
+      },
+
+      Expr::Tuple {
+        elements,
+        attributes,
+        ..
+      } => {
+        println!("{}{} Tuple", prefix, connector);
+        let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
+
+        // --- Attributes block ---
+        if !attributes.is_empty() {
+          let attrs_last = elements.is_empty();
+          println!(
+            "{}{} Attributes:",
+            new_prefix,
+            if attrs_last { "└─>" } else { "├─>" }
+          );
+
+          for (i, attr) in attributes.iter().enumerate() {
+            let last_attr = i == attributes.len() - 1;
+            let attr_connector = if last_attr { "└─>" } else { "├─>" };
+            let attr_prefix = format!("{}{}  ", new_prefix, if attrs_last { " " } else { "│" });
+            println!("{}{} {}", attr_prefix, attr_connector, format_attr(attr));
+          }
+        }
+
+        // --- Elements block ---
+        if elements.is_empty() {
+          println!("{}└─> <empty>", new_prefix);
+        } else {
+          println!("{}└─> Elements:", new_prefix);
+          for (i, expr) in elements.iter().enumerate() {
+            let last_elem = i == elements.len() - 1;
+            let elem_prefix = format!("{}   ", new_prefix);
+            expr.print_tree(&elem_prefix, last_elem);
+          }
+        }
+      },
+
+      Expr::Unit(_) => {
+        println!("   └─> Unit:()");
+      },
+
       _ => {
         println!("{}{} [Other Expr]", prefix, connector);
       },
     }
+  }
+}
+
+fn format_simple_path(p: &SimplePath) -> String {
+  let mut s = String::new();
+  if p.leading_colon {
+    s.push_str("::");
+  }
+  let segs = p.segments.iter().map(|seg| match seg {
+    SimplePathSegment::Ident(id) => id.clone(),
+    SimplePathSegment::Super => "super".into(),
+    SimplePathSegment::Self_ => "self".into(),
+    SimplePathSegment::Crate => "crate".into(),
+    SimplePathSegment::DollarCrate => "$crate".into(),
+  });
+  s.push_str(&segs.collect::<Vec<_>>().join("::"));
+  s
+}
+
+fn format_tt(tt: &TokenTree) -> String {
+  match tt {
+    TokenTree::Token(t) => t.clone(),
+    TokenTree::Delimited { delimiter, tokens } => {
+      let (l, r) = match delimiter {
+        Delimiter::Paren => ('(', ')'),
+        Delimiter::Bracket => ('[', ']'),
+        Delimiter::Brace => ('{', '}'),
+      };
+      let inner = tokens.iter().map(format_tt).collect::<Vec<_>>().join(" ");
+      format!("{l}{inner}{r}")
+    },
+    // If you don’t support these yet, print a placeholder that won’t crash the tree printer
+    TokenTree::Repeat { .. } => "$( … )*".into(),
+    TokenTree::MetaVar { name, kind } => format!("${name}:{kind}"),
+  }
+}
+
+fn format_attr(attr: &Attribute) -> String {
+  match &attr.kind {
+    AttrKind::Normal { path, tokens } => {
+      let prefix = match attr.style {
+        AttrStyle::Inner => "#!",
+        AttrStyle::Outer => "#",
+      };
+      let p = format_simple_path(path);
+      if tokens.is_empty() {
+        format!("{prefix}[{p}]")
+      } else if tokens.len() == 1 {
+        // Common case: a single delimited token tree like (feature="debug")
+        let t = format_tt(&tokens[0]);
+        format!("{prefix}[{p}{t}]")
+      } else {
+        // Fallback: join multiple token trees with spaces
+        let joined = tokens.iter().map(format_tt).collect::<Vec<_>>().join(" ");
+        format!("{prefix}[{p} {joined}]")
+      }
+    },
+    AttrKind::DocComment { is_inner, content } => {
+      if *is_inner {
+        format!("//! {content}")
+      } else {
+        format!("/// {content}")
+      }
+    },
+    AttrKind::Cfg(meta) => {
+      // Minimal readable placeholder if you have MetaItem pretty-printing elsewhere
+      let prefix = match attr.style {
+        AttrStyle::Inner => "#!",
+        AttrStyle::Outer => "#",
+      };
+      format!("{prefix}[cfg({meta:?})]")
+    },
+    AttrKind::CfgAttr { condition, attrs } => {
+      let prefix = match attr.style {
+        AttrStyle::Inner => "#!",
+        AttrStyle::Outer => "#",
+      };
+      let inner = attrs.len();
+      format!("{prefix}[cfg_attr({condition:?}, /* {inner} attr(s) */)]")
+    },
   }
 }
 
