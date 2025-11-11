@@ -19,6 +19,20 @@ impl Lexer {
   ///
   /// Returns `TokenKind::Lifetime { starts_with_number }` or `TokenKind::Unknown` on error.
   pub fn lex_lifetime(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
+    let chars: Vec<char> = self.get_current_lexeme().chars().rev().collect();
+
+    // INFO: We're scanning the lexeme in reverse to trim any trailing non-alphabetic
+    // characters after a lifetime marker. For example, a malformed lifetime might look like `'a>;`.
+    // We only want to keep the valid part `'a`, so this loop steps backward until it
+    // finds the first alphabetic character, adjusting `self.current` and `self.column` accordingly.
+    for c in chars {
+      if c.is_ascii_alphabetic() {
+        break;
+      }
+      self.current -= 1;
+      self.column -= 1;
+    }
+
     let lexeme = self.get_current_lexeme();
 
     // Determine if the lifetime starts with a number after the apostrophe `'`
