@@ -607,9 +607,11 @@ pub(crate) enum Type {
   Usize,
   F32,
   F64,
+  F128,
   Bool,
   Char,
   Str,
+  String,
   Never,
 
   SelfType,

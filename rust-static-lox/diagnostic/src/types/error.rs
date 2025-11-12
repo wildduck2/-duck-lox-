@@ -23,6 +23,8 @@ pub enum DiagnosticError {
   InvalidLiteral,
   EmptyChar,
   MissingClosingBracket,
+  InvalidVisibilityRestriction,
+  InvalidNameIdentifier,
 }
 
 impl DiagnosticError {
@@ -43,6 +45,8 @@ impl DiagnosticError {
       Self::InvalidLiteral => "E0013",
       Self::EmptyChar => "E0014",
       Self::MissingClosingBracket => "E0015",
+      Self::InvalidVisibilityRestriction => "E0016",
+      Self::InvalidNameIdentifier => "E0017",
     }
   }
 

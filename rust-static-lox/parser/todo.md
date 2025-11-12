@@ -1,4 +1,7 @@
 > [x] parse struct values in different ways
-> [x] parse generic arguments
-> [ ] parse type paths
-> [ ] parse fields attributes
+> [_] parse generic arguments
+> [_] parse generic params
+> [_] parse type paths
+> [_] parse fields attributes
+
+
