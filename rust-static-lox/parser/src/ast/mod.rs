@@ -2,10 +2,10 @@
 // Complete Rust AST - FIXED (duplications removed)
 // ============================================================================
 
-pub(crate) mod item_print;
-pub(crate) mod print_tree;
-
+pub(crate) mod path;
+pub(crate) mod print;
 use diagnostic::Span;
+use path::*;
 
 // ----------------------------------------------------------------------------
 // Top-level Items
@@ -311,41 +311,6 @@ pub(crate) enum AttrKind {
 }
 
 // ----------------------------------------------------------------------------
-// Path Types (UNIFIED)
-// ----------------------------------------------------------------------------
-
-/// Unified path type used throughout the AST
-/// Replaces SimplePath, TypePath, and ExprPath
-#[derive(Debug, Clone)]
-pub(crate) struct Path {
-  pub leading_colon: bool,
-  pub segments: Vec<PathSegment>,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct PathSegment {
-  pub kind: PathSegmentKind,
-  pub args: Option<GenericArgs>,
-}
-
-impl PathSegment {
-  // TODO: later on remove this will be removed do not rely on it
-  pub(crate) fn new(kind: PathSegmentKind) -> Self {
-    Self { kind, args: None }
-  }
-}
-
-#[derive(Debug, Clone)]
-pub(crate) enum PathSegmentKind {
-  Ident(String),
-  Super,
-  Self_,
-  Crate,
-  DollarCrate,
-  SelfType, // For `Self` as a type
-}
-
-// ----------------------------------------------------------------------------
 // Meta Items
 // ----------------------------------------------------------------------------
 
@@ -612,7 +577,7 @@ pub(crate) enum WherePredicate {
 // ----------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
-pub(crate) enum Visibility {
+pub enum Visibility {
   Lic,
   LicCrate,
   LicSuper,
