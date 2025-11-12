@@ -1,6 +1,4 @@
-use crate::ast::{
-  Expr, FieldInit, Item, Path, PathSegment, PathSegmentKind, StructDecl, StructKind, Visibility,
-};
+use crate::ast::{path::*, *};
 use crate::parser_utils::ExprContext;
 use crate::{DiagnosticEngine, Parser};
 use diagnostic::code::DiagnosticCode;
@@ -9,68 +7,303 @@ use diagnostic::types::error::DiagnosticError;
 use lexer::token::{Token, TokenKind};
 
 impl Parser {
-  //   structExpr       → structExprStruct
-  //                    | structExprTuple
-  //                    | structExprUnit ;
-  //
-  //   structExprStruct → pathInExpression "{" (structExprFields | structBase)? "}" ;
-  //
-  //   structExprFields → structExprField ("," structExprField)* ("," structBase | ","?) ;
-  //
-  //   structExprField  → outerAttr* (IDENTIFIER | (IDENTIFIER | tupleIndex) ":" expression) ;
-  //
-  //   structBase       → ".." expression ;
-  //
-  //   structExprTuple  → pathInExpression "(" (expression ("," expression)* ","?)? ")" ;
-  //
-  //   structExprUnit   → pathInExpression ;
-  //
-  //   pathInExpression → "::"? pathExprSegment ("::" pathExprSegment)* ;
-  //
-  //   pathExprSegment  → pathIdentSegment ("::" genericArgs)? ;
-  //
-  //   pathIdentSegment → IDENTIFIER | "super" | "self" | "Self" | "crate" | "$crate" ;
-  //
-
-  pub(crate) fn parse_struct_decl(&mut self, engine: &mut DiagnosticEngine) -> Result<Item, ()> {
+  pub(crate) fn parse_struct_decl(
+    &mut self,
+    attributes: Vec<Attribute>,
+    visibility: Visibility,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Item, ()> {
     let mut token = self.current_token();
     self.advance(engine); // consume the struct keyword
 
-    let struct_name = self.get_token_lexeme(&self.current_token());
+    let name = self.get_token_lexeme(&self.current_token());
     self.advance(engine); // consume the identifier
-
-    let generics = self.parse_generic_params(&mut token, engine)?;
 
     // Handle the case where the struct is empty AKA (Unit Struct)
     if matches!(self.current_token().kind, TokenKind::Semi) {
+      // Note: that only unit | tuple structs can have a semicolon
+      self.advance(engine); // consume the semicolon
+
       token.span.merge(self.current_token().span);
       return Ok(Item::Struct(StructDecl {
-        attributes: vec![],
-        visibility: Visibility::Lic,
-        name: struct_name,
-        generics,
+        attributes,
+        visibility,
+        name,
+        generics: None, // Unit Structs don't have generics
         kind: StructKind::Unit,
-        where_clause: None,
+        where_clause: None, // Unit Structs don't have where clauses
         span: token.span,
       }));
     };
 
-    if matches!(self.current_token().kind, TokenKind::OpenBrace) {
-      token.span.merge(self.current_token().span);
-      return Ok(Item::Struct(StructDecl {
-        attributes: vec![],
-        visibility: Visibility::Lic,
-        name: struct_name,
-        generics: None,
-        kind: StructKind::Named { fields: vec![] },
-        where_clause: None,
-        span: token.span,
-      }));
+    let generics = if matches!(self.current_token().kind, TokenKind::Lt) {
+      self.parse_generic_params(&mut token, engine)?
+    } else {
+      None
     };
+
+    let kind = if matches!(self.current_token().kind, TokenKind::OpenBrace) {
+      // Handles the case where we have a struct body like `struct User { ... }`
+      self.expect(TokenKind::OpenBrace, engine)?; // consume '{'
+      let fields = self.parse_struct_dec_fields(engine)?;
+      StructKind::Named { fields }
+    } else if matches!(self.current_token().kind, TokenKind::OpenParen) {
+      // Handles the case where we have a tuple struct body like `struct User(String, u8)`
+      self.expect(TokenKind::OpenParen, engine)?; // consume '('
+      let fields = self.parse_struct_tuple_fields(engine)?;
+
+      self.expect(TokenKind::Semi, engine)?; // consume ';'
+      StructKind::Tuple(fields)
+    } else {
+      // This handles the case where we have a syntax error while declaring a struct body
+      // like `struct User from ...`
+      //                   ^^^^ Error here this should be a `(` or `{` hence we only
+      //                        accept tow type of struct bodies
+      let token = self.current_token();
+      let lexeme = self.get_token_lexeme(&token);
+
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+        format!("Unexpected token `{}` in this context", lexeme),
+        self.source_file.path.clone(),
+      )
+      .with_label(
+        token.span,
+        Some(format!(
+          "Expected a valid primary expression (like an identifier, literal, or grouped expression), but found `{}`",
+          lexeme
+        )),
+        LabelStyle::Primary,
+      )
+      .with_help(format!(
+        "Check for missing delimiters or misplaced symbols. For example:\n  - `foo(bar)` instead of `foo bar`\n  - `{}` is not valid here.",
+        lexeme
+      ));
+
+      engine.add(diagnostic);
+      return Err(());
+    };
+
+    token.span.merge(self.current_token().span);
+
+    Ok(Item::Struct(StructDecl {
+      attributes: vec![],
+      visibility,
+      name,
+      generics,
+      kind,
+      where_clause: None,
+      span: token.span,
+    }))
+  }
+
+  /// Function that parses a list of struct field declarations
+  /// It returns a vector of `FieldDecl` structs that represents a list of struct fields
+  ///
+  /// for example:
+  /// ```rust
+  /// let fields = self.parse_struct_dec_fields(engine)?;
+  /// ```
+  pub(crate) fn parse_struct_dec_fields(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Vec<FieldDecl>, ()> {
+    let mut fields = vec![];
+
+    while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::CloseBrace) {
+      fields.push(self.parse_struct_dec_field(engine)?);
+    }
+
+    self.expect(TokenKind::CloseBrace, engine)?; // consume '}'
+    Ok(fields)
+  }
+
+  /// Function that parses a struct field declaration
+  /// It returns a `FieldDecl` struct that represents a struct field
+  ///
+  /// for example:
+  /// ```rust
+  /// let field = self.parse_struct_dec_field(engine)?;
+  /// ```
+  fn parse_struct_dec_field(&mut self, engine: &mut DiagnosticEngine) -> Result<FieldDecl, ()> {
+    let mut token = self.current_token();
+
+    let attributes = if matches!(self.current_token().kind, TokenKind::Pound) {
+      self.parse_attributes(engine)?
+    } else {
+      vec![]
+    };
+
+    let visibility = self.parse_visibility(engine)?;
+    let name = self.parse_name_identifier(engine)?;
+
+    self.expect(TokenKind::Colon, engine)?; // consume ':'
+    let ty = self.parse_type(engine)?;
+
+    if self.current_token().kind == TokenKind::Comma {
+      self.advance(engine); // consume ','
+    } else if !matches!(self.current_token().kind, TokenKind::CloseBrace) {
+      // This cover the case where there is not a comma after the last field
+      // like `struct User { name: String  age: u8 }`
+      //                                 ^ Error here expected a comma
+      let lexeme = self.get_token_lexeme(&self.current_token());
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+        "Unexpected token between struct fields".to_string(),
+        self.source_file.path.clone(),
+      )
+      .with_label(
+        self.current_token().span,
+        Some(format!(
+          "Expected a comma `,` or closing brace `}}`, found `{}`",
+          lexeme
+        )),
+        LabelStyle::Primary,
+      )
+      .with_help(
+        "Struct fields must be separated by commas. Example: `struct User { name: String, age: u8 }`"
+          .to_string(),
+      );
+      engine.add(diagnostic);
+      return Err(());
+    }
+
+    token.span.merge(self.current_token().span);
+
+    Ok(FieldDecl {
+      attributes,
+      name,
+      ty,
+      visibility,
+      span: token.span,
+    })
+  }
+
+  /// Function that parses a list of struct field declarations
+  /// It returns a vector of `TupleField` structs that represents a list of struct fields
+  ///
+  /// for example:
+  /// ```rust
+  /// let fields = self.parse_struct_tuple_fields(engine)?;
+  /// ```
+  pub(crate) fn parse_struct_tuple_fields(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Vec<TupleField>, ()> {
+    let mut fields = vec![];
+
+    while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::CloseParen) {
+      fields.push(self.parse_struct_tuple_field(engine)?);
+    }
+    self.expect(TokenKind::CloseParen, engine)?; // consume ')'
+
+    Ok(fields)
+  }
+
+  /// Function that parses a struct field declaration
+  /// It returns a `TupleField` struct that represents a struct field
+  ///
+  /// for example:
+  /// ```rust
+  /// let field = self.parse_struct_tuple_field(engine)?;
+  /// ```
+  pub(crate) fn parse_struct_tuple_field(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<TupleField, ()> {
+    let mut token = self.current_token();
+    let attributes = self.parse_attributes(engine)?;
+    let visibility = self.parse_visibility(engine)?;
+
+    let ty = self.parse_type(engine)?;
+    token.span.merge(self.current_token().span);
+
+    if self.current_token().kind == TokenKind::Comma {
+      self.advance(engine); // consume ','
+    } else if !matches!(self.current_token().kind, TokenKind::CloseParen) {
+      // This cover the case where there is not a comma after the last field
+      // like `struct User(String  u8)`
+      //                         ^ Error here expected a comma
+      let lexeme = self.get_token_lexeme(&self.current_token());
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+        "Unexpected token between struct fields".to_string(),
+        self.source_file.path.clone(),
+      )
+      .with_label(
+        token.span,
+        Some(format!(
+          "Expected a comma `,` or closing paren `)`, found `{}`",
+          lexeme
+        )),
+        LabelStyle::Primary,
+      )
+      .with_help(
+        "Struct fields must be separated by commas. Example: `struct User(String, u8)`".to_string(),
+      );
+      engine.add(diagnostic);
+      return Err(());
+    }
+
+    Ok(TupleField {
+      attributes,
+      visibility,
+      ty,
+      span: self.current_token().span,
+    })
+  }
+
+  /// Function that parses a name identifier
+  /// It returns a string that represents the name identifier
+  ///
+  /// for example:
+  /// ```rust
+  /// let name = self.parse_name_identifier(engine)?;
+  /// ```
+  ///
+  /// You will use this to get the name of a field, a struct, or a function
+  pub(crate) fn parse_name_identifier(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<String, ()> {
+    if matches!(self.current_token().kind, TokenKind::Ident) {
+      let name = self.get_token_lexeme(&self.current_token());
+      self.advance(engine); // consume the identifier
+      return Ok(name);
+    }
+
+    let lexeme = self.get_token_lexeme(&self.current_token());
+    let diagnostic = Diagnostic::new(
+      DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+      "Unexpected name identifier".to_string(),
+      self.source_file.path.clone(),
+    )
+    .with_label(
+      self.current_token().span,
+      Some(format!(
+        "Expected a primary expression, found \"{}\"",
+        lexeme
+      )),
+      LabelStyle::Primary,
+    )
+    .with_help("Expected a valid name identifier".to_string());
+
+    engine.add(diagnostic);
 
     Err(())
   }
 
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  ////  TODO: check this when we handle primary structs
   pub(crate) fn parse_struct_expr(
     &mut self,
     token: &mut Token,

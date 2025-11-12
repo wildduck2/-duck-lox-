@@ -33,8 +33,11 @@ impl Parser {
   }
 
   fn parse_item(&mut self, engine: &mut DiagnosticEngine) -> Result<Item, ()> {
+    let attributes = self.parse_attributes(engine)?;
+    let visibility = self.parse_visibility(engine)?;
+
     match self.current_token().kind {
-      TokenKind::KwStruct => self.parse_struct_decl(engine),
+      TokenKind::KwStruct => self.parse_struct_decl(attributes, visibility, engine),
       _ => Err(()),
     }
   }
@@ -184,6 +187,11 @@ impl Parser {
   }
 
   /// Helper function that takes a token and returns the lexeme as a string
+  ///
+  /// for example:
+  /// ```rust
+  /// let lexeme = self.get_token_lexeme(&token);
+  /// ```
   pub(crate) fn get_token_lexeme(&mut self, token: &Token) -> String {
     self
       .source_file
@@ -191,5 +199,32 @@ impl Parser {
       .get(token.span.start..token.span.end)
       .unwrap()
       .to_string()
+  }
+
+  /// Helper function that advances the parser until it finds a token of a specific kind
+  /// This is useful when you want to parse a sequence of tokens until you find a specific token
+  /// For example, you want to parse a sequence of generic arguments until you find a `>`
+  /// ```
+  /// let mut token = self.current_token();
+  /// self.advance_till_match(engine, TokenKind::Gt);
+  /// ```
+  ///
+  /// Most of the use cases are for diagnosing errors, so you can use this function to
+  /// diagnose errors in the middle of a sequence of tokens
+  ///
+  /// for example:
+  /// ```rust
+  /// pub(in path::to::<T>::module) struct User;
+  /// ```
+  /// The `pub(in path::to::<T>::module)` is invalid, so we will diagnose the error
+  /// at the `pub` token, not at the `>`
+  /// ```
+  /// pub(in path::to::<T>::module) struct User;
+  ///              // ^^^ Error here
+  ///
+  pub(crate) fn advance_till_match(&mut self, engine: &mut DiagnosticEngine, kind: TokenKind) {
+    while !self.is_eof() && self.current_token().kind != kind {
+      self.advance(engine);
+    }
   }
 }

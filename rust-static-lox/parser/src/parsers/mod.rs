@@ -1,4 +1,5 @@
 mod array;
+mod attribute;
 mod bitwise;
 mod bool;
 mod cast;
@@ -9,6 +10,7 @@ mod grouped_expression;
 mod identifier;
 mod literal;
 mod logical;
+mod path;
 mod postfix;
 mod range;
 mod shift;
@@ -16,3 +18,4 @@ mod r#struct;
 mod term;
 mod r#type;
 mod unary;
+mod visibility;

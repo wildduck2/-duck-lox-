@@ -1,6 +1,5 @@
 use crate::ast::{
-  GenericArg, GenericArgs, GenericParam, GenericParams, Path, PathSegment, PathSegmentKind,
-  TraitBoundModifier, TypeBound,
+  GenericArg, GenericArgs, GenericParam, GenericParams, TraitBoundModifier, TypeBound,
 };
 use crate::{DiagnosticEngine, Parser};
 use diagnostic::code::DiagnosticCode;
@@ -14,11 +13,11 @@ impl Parser {
     token: &mut Token,
     engine: &mut DiagnosticEngine,
   ) -> Result<Option<GenericParams>, ()> {
-    let mut args = Vec::<GenericParam>::new();
+    let mut params = Vec::<GenericParam>::new();
 
     self.expect(TokenKind::Lt, engine)?; // consume the "<"
     while !self.is_eof() && self.current_token().kind != TokenKind::Gt {
-      args.push(self.parse_generic_param(engine)?);
+      params.push(self.parse_generic_param(engine)?);
 
       if matches!(self.current_token().kind, TokenKind::Comma) {
         self.advance(engine); // consume the comma
@@ -28,7 +27,7 @@ impl Parser {
 
     token.span.merge(self.current_token().span);
     Ok(Some(GenericParams {
-      params: args,
+      params,
       span: token.span,
     }))
   }
@@ -38,7 +37,7 @@ impl Parser {
     engine: &mut DiagnosticEngine,
   ) -> Result<GenericParam, ()> {
     let token = self.current_token();
-    let lexeme = self.get_token_lexeme(&token);
+    let name = self.get_token_lexeme(&token);
     self.advance(engine); // consume the identifier
 
     match token.kind {
@@ -59,7 +58,7 @@ impl Parser {
 
         Ok(GenericParam::Type {
           attributes: vec![],
-          name: lexeme,
+          name,
           bounds,
           default,
         })
@@ -68,7 +67,7 @@ impl Parser {
         // TODO: handle the lifetime bounds like `for<'a: 'b>`
         Ok(GenericParam::Lifetime {
           attributes: vec![],
-          name: lexeme,
+          name,
           bounds: None,
         })
       },
@@ -107,8 +106,8 @@ impl Parser {
         TraitBoundModifier::None
       };
 
-      let lexeme = self.get_token_lexeme(&self.current_token());
-      let path = self.parse_path(lexeme, engine)?;
+      // TODO: check if we need generics parsing in the path here
+      let path = self.parse_path(true, engine)?;
       self.advance(engine); // consume the identifier
 
       bounds.push(TypeBound {
@@ -131,10 +130,9 @@ impl Parser {
     token: &mut Token,
     engine: &mut DiagnosticEngine,
   ) -> Result<Option<GenericArgs>, ()> {
-    // TODO: make sure to check this later
-    // if matches!(self.current_token().kind, TokenKind::ColonColon) {
-    //   self.advance(engine); // consume the "::"
-    // }
+    if matches!(self.current_token().kind, TokenKind::ColonColon) {
+      self.advance(engine); // consume the "::"
+    }
 
     let mut args = Vec::<GenericArg>::new();
 
