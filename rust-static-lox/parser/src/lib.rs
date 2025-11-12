@@ -8,7 +8,7 @@ use lexer::token::{Token, TokenKind};
 
 use crate::ast::Item;
 
-mod ast;
+pub mod ast;
 mod grammar;
 mod parser_utils;
 mod parsers;
@@ -53,17 +53,9 @@ impl Parser {
     self.tokens[self.current + n].clone()
   }
 
-  /// Peeks one token ahead without advancing and returns true if it matches the text
-  fn peek_is(&self, text: &str) -> bool {
-    if self.is_eof() {
-      return false;
-    }
-    self
-      .source_file
-      .src
-      .get(self.current_token().span.start..self.current_token().span.end)
-      .map(|s| s == text)
-      .unwrap_or(false)
+  fn peek_prev(&self, n: usize) -> Token {
+    let index = self.current.saturating_sub(n + 1);
+    self.tokens[index].clone()
   }
 
   /// Advances to the next token, emitting an unterminated-string diagnostic if we passed EOF.

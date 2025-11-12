@@ -519,26 +519,50 @@
 //(#![feature(tuple_attrs)] (#[inline] (1, 2)));
 //(#![cfg_attr(feature = "debug", allow(dead_code))] (a + b));
 
-//User { 
-//  name: Name { 
-//    value: "wildduck" 
-//  } 
-//};
 
-//User::<Name> {
-//  name: "wildduck" 
-//};
 
-//Point2(i32, i32);            // Tuple shape
-//struct Marker;                      // Unit shape
-
-//struct User<Name, Age> {
-//  name: Name,
-//  age: Age,
+//// --- Basic named struct ---
+//struct User {
+//  id: i32,
+//  name: String,
+//}
+//
+//// --- Tuple struct ---
+//struct Point(f64, f64);
+//
+//// --- Unit struct ---
+//struct Empty;
+//
+//// --- Public named struct ---
+//pub struct Config {
+//    key: String,
+//    value: String,
+//}
+//
+//// --- Scoped visibility ---
+//pub(crate) struct InternalData;
+//pub(super) struct ChildOnly;
+//pub(self) struct SelfVisible;
+//pub(in crate::core::system) struct ScopedPath;
+//
+//// --- Struct with generics ---
+//struct Wrapper<T> {
+//  item: T,
+//}
+//
+//// --- Struct with multiple generic parameters ---
+//struct Pair<K, V> {
+//    key: K,
+//    value: V,
 //}
 
-//struct User;
-//struct User<'a: Clone + Debug = String>;
-//struct User<Name: ?Clone>;
-//struct User<Name: const Clone>;
-struct User<Name: const ?Clone>;
+//// --- Struct with generic bounds ---
+//struct Limited<T: Clone + Default> {
+//    data: T,
+//}
+
+// --- Struct with lifetime parameter ---
+struct Ref {
+  value: &'a &'wild str,
+}
+
