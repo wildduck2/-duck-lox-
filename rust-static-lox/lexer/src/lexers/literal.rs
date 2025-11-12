@@ -1084,6 +1084,9 @@ impl Lexer {
 
     while let Some(c) = self.peek() {
       match c {
+        ' ' => {
+          break;
+        },
         '\'' => {
           self.advance();
           terminated = true;

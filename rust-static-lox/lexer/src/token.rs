@@ -444,12 +444,12 @@ pub enum TokenKind {
   KwDo,       // do
   KwFinal,    // final
   KwOverride, // override
-  KwPriv,     // priv
-  KwTry,      // try
-  KwTypeof,   // typeof
-  KwUnsized,  // unsized
-  KwVirtual,  // virtual
-  KwYield,    // yield
+  //KwPriv,     // priv
+  KwTry,     // try
+  KwTypeof,  // typeof
+  KwUnsized, // unsized
+  KwVirtual, // virtual
+  KwYield,   // yield
 
   // =========================================================================
   // PUNCTUATION & DELIMITERS
@@ -681,7 +681,6 @@ impl TokenKind {
         | TokenKind::KwFinal
         | TokenKind::KwMacro
         | TokenKind::KwOverride
-        | TokenKind::KwPriv
         | TokenKind::KwTry
         | TokenKind::KwTypeof
         | TokenKind::KwUnion

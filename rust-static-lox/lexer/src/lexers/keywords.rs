@@ -86,7 +86,6 @@ impl Lexer {
       "do" => Some(TokenKind::KwDo),
       "final" => Some(TokenKind::KwFinal),
       "override" => Some(TokenKind::KwOverride),
-      "priv" => Some(TokenKind::KwPriv),
       "try" => Some(TokenKind::KwTry),
       "typeof" => Some(TokenKind::KwTypeof),
       "unsized" => Some(TokenKind::KwUnsized),

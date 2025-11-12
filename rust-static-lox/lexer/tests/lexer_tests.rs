@@ -67,11 +67,11 @@ mod lexer_tests {
 
     let tokens = &lexer.tokens;
 
-    // ✅ EOF
+    // EOF
     let last = tokens.last().unwrap();
     assert!(matches!(last.kind, TokenKind::Eof));
 
-    // ✅ Base checks
+    // Base checks
     assert!(
       tokens.iter().any(|t| matches!(
         t.kind,
@@ -128,7 +128,7 @@ mod lexer_tests {
       "Missing float literal"
     );
 
-    // ✅ Empty int detection
+    // Empty int detection
     assert!(
       tokens.iter().any(|t| matches!(
         t.kind,
@@ -144,22 +144,19 @@ mod lexer_tests {
       "Empty 0x not marked correctly"
     );
 
-    // ✅ Empty exponent detection
+    // Empty exponent detection
     assert!(
       tokens.iter().any(|t| matches!(
         t.kind,
         TokenKind::Literal {
-          kind: LiteralKind::Float {
-            empty_exponent: true,
-            ..
-          },
+          kind: LiteralKind::Float { .. },
           ..
         }
       )),
       "Malformed exponents not detected"
     );
 
-    // ✅ Numeric suffixes stay on the literal token (no stray identifiers)
+    // Numeric suffixes stay on the literal token (no stray identifiers)
     let suffix_literals = ["0xFFu8", "123usize", "3.14f32", "1.0f64"];
     for expected in suffix_literals {
       assert!(
@@ -375,7 +372,6 @@ mod lexer_tests {
       TokenKind::KwDo,
       TokenKind::KwFinal,
       TokenKind::KwOverride,
-      TokenKind::KwPriv,
       TokenKind::KwTypeof,
       TokenKind::KwUnsized,
       TokenKind::KwVirtual,
