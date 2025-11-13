@@ -3,6 +3,26 @@
 
 Change Log
 ----------
+2025-11-12
+- Completed the generics/struct push by refactoring the AST (new `ast/mod.rs`, dedicated print
+  modules, and split-out path definitions) so expanded tree output stays maintainable.
+- Polished the Rust-like type pipeline—grouped-expression, generic, struct, and type parsers now
+  share clearer helpers and emit better diagnostics across field shapes and nested arguments.
+- Added dedicated attribute, path, and visibility parsers, hooked them into the entrypoint, and
+  covered them with `core/lox/duck.lox` samples plus new diagnostic error kinds.
+- Tightened lifetime and literal lexing (contextual keywords, escape handling, spans) and broadened
+  regression tests to lock in the new edge-case coverage.
+
+2025-11-11
+- Unblocked tuple/group expression parsing with attribute propagation, AST printer updates, and
+  real programs that mix inner/outer attributes inside nested tuples.
+- Removed the duplicated AST monolith in favor of a modular `ast/mod.rs` + printer setup, giving
+  `print_tree` richer output while keeping definitions in one place.
+- Brought in the first full cut of Rust-style type + struct parsing (generic arguments, field
+  initializers, path unification) and retired the old parser scaffolding.
+- Hardened literal scanning by recognizing prefixed/raw string starters through a helper and by
+  enforcing that shebangs only trigger in column zero.
+
 2025-11-10
 - Extended the expression parser through unary, factor, cast, shift, and bitwise layers, keeping 
   the AST updates and grouped-expression handling in sync.

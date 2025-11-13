@@ -156,7 +156,7 @@ impl Parser {
         self.parser_ident(&mut token, engine)
       },
       TokenKind::KwFalse | TokenKind::KwTrue => self.parser_bool(&mut token, engine),
-      TokenKind::KwSelfValue | TokenKind::KwSuper | TokenKind::KwCrate | TokenKind::KwSelfType => {
+      TokenKind::KwSelf | TokenKind::KwSuper | TokenKind::KwCrate | TokenKind::KwSelfType => {
         self.parse_keyword_ident(&mut token, engine)
       },
       TokenKind::OpenParen => self.parse_grouped_expr(&mut token, engine),

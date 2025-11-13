@@ -29,8 +29,8 @@ impl Parser {
         attributes,
         visibility,
         name,
-        generics: None, // Unit Structs don't have generics
         kind: StructKind::Unit,
+        generics: None,     // Unit Structs don't have generics
         where_clause: None, // Unit Structs don't have where clauses
         span: token.span,
       }));
@@ -41,6 +41,8 @@ impl Parser {
     } else {
       None
     };
+
+    let where_clause = self.parse_where_clause(engine)?;
 
     let kind = if matches!(self.current_token().kind, TokenKind::OpenBrace) {
       // Handles the case where we have a struct body like `struct User { ... }`
@@ -86,15 +88,18 @@ impl Parser {
 
     token.span.merge(self.current_token().span);
 
-    Ok(Item::Struct(StructDecl {
-      attributes: vec![],
+    let hi = Item::Struct(StructDecl {
+      attributes,
       visibility,
       name,
       generics,
       kind,
-      where_clause: None,
+      where_clause,
       span: token.span,
-    }))
+    });
+    println!("debug struct: {:?}", hi);
+
+    Ok(hi)
   }
 
   /// Function that parses a list of struct field declarations
@@ -293,7 +298,7 @@ impl Parser {
     Err(())
   }
 
-  //
+  // DO NO CHANGE THIS YET
   //
   //
   //
@@ -311,7 +316,7 @@ impl Parser {
   ) -> Result<Expr, ()> {
     let struct_name = self.get_token_lexeme(token);
     self.advance(engine); // consume the identifier
-    let args = self.parse_generic_args(token, engine)?;
+    let args = self.parse_generic_args(engine)?;
     let mut fields = vec![];
 
     match self.current_token().kind {

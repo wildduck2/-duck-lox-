@@ -1,8 +1,13 @@
-use crate::ast::{path::*, Mutability, Type};
-use crate::{DiagnosticEngine, Parser};
-use diagnostic::code::DiagnosticCode;
-use diagnostic::diagnostic::{Diagnostic, LabelStyle};
-use diagnostic::types::error::DiagnosticError;
+use crate::{
+  ast::{Mutability, Type},
+  parser_utils::ExprContext,
+  DiagnosticEngine, Parser,
+};
+use diagnostic::{
+  code::DiagnosticCode,
+  diagnostic::{Diagnostic, LabelStyle},
+  types::error::DiagnosticError,
+};
 use lexer::token::TokenKind;
 
 impl Parser {
@@ -12,7 +17,7 @@ impl Parser {
     self.advance(engine); // consume the identifier
 
     match token.kind {
-      TokenKind::Ident => match lexeme.as_str() {
+      TokenKind::Ident | TokenKind::KwCrate => match lexeme.as_str() {
         "u8" => Ok(Type::U8),
         "u16" => Ok(Type::U16),
         "u32" => Ok(Type::U32),
@@ -36,12 +41,116 @@ impl Parser {
         "string" => Ok(Type::String),
 
         "bool" => Ok(Type::Bool),
-        // TODO: check if we need generics parsing in the path here
-        _ => Ok(Type::Path(self.parse_path(true, engine)?)),
+        // We allow parsing generic types like `Vec<T>` and `Option<T>`
+        _ => {
+          self.current -= 1; // This resests the current token to the last token
+                             // thence the parse_path function will consume the last token
+          Ok(Type::Path(self.parse_path(true, engine)?))
+        },
       },
-      TokenKind::And => {
+
+      TokenKind::OpenParen => {
+        // TODO:
+        println!("debug tuple: {:?}", self.current_token().kind);
+        Err(())
+        // let mut params = vec![];
+        // while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::CloseParen) {
+        //   params.push(self.parse_type(engine)?);
+        //   if matches!(self.current_token().kind, TokenKind::Comma) {
+        //     self.advance(engine); // consume the comma
+        //   }
+        // }
+        // self.expect(TokenKind::CloseParen, engine)?; // consume ')'
+        //
+        // Ok(Type::Tuple(params))
+      },
+
+      TokenKind::OpenBracket => {
+        let element = self.parse_type(engine)?;
+        self.expect(TokenKind::Semi, engine)?; // consume ';'
+
+        let size = self.parse_expression(ExprContext::Default, engine)?;
+        self.expect(TokenKind::CloseBracket, engine)?; // consume ']'
+
+        Ok(Type::Array {
+          element: Box::new(element),
+          size: Box::new(size),
+        })
+      },
+
+      TokenKind::Star => {
+        if matches!(self.current_token().kind, TokenKind::Ident) {
+          // This handles the case where we have an incomplete raw pointer like `*T`
+          let diagnostic = Diagnostic::new(
+            DiagnosticCode::Error(DiagnosticError::InvalidPointerType),
+            "Missing mutability qualifier for raw pointer type.".to_string(),
+            self.source_file.path.clone(),
+          )
+          .with_label(
+            self.current_token().span,
+            Some("expected `const` or `mut` after `*`.".to_string()),
+            LabelStyle::Primary,
+          )
+          .with_note(
+            "Raw pointers in Rust must explicitly specify mutability — either `*const T` or `*mut T`."
+              .to_string(),
+          )
+          .with_help(
+            "Use `*const T` for an immutable raw pointer, or `*mut T` for a mutable one."
+              .to_string(),
+          );
+
+          engine.add(diagnostic);
+          return Err(());
+        }
+
         let mutability = self.parse_mutability(engine)?;
+
+        Ok(Type::RawPointer {
+          mutability,
+          inner: Box::new(self.parse_type(engine)?),
+        })
+      },
+
+      TokenKind::And => {
+        if matches!(self.current_token().kind, TokenKind::KwConst) {
+          // This handles the case where we have a const keyword after a &
+          // like `&const T`
+          //        ^^^^^ Error here
+          let diagnostic = Diagnostic::new(
+            DiagnosticCode::Error(DiagnosticError::InvalidMutabilityInField),
+            "Invalid `const` specifier in struct field declaration.".to_string(),
+            self.source_file.path.clone(),
+          )
+          .with_label(
+            self.current_token().span,
+            Some("`const` is not allowed after `&` or before a field type.".to_string()),
+            LabelStyle::Primary,
+          )
+          .with_note(
+            "`const` does not apply to references. Only raw pointers support const qualifiers."
+              .to_string(),
+          )
+          .with_help(
+            "Use `*const T` for a raw const pointer, or `&T` for an immutable reference."
+              .to_string(),
+          );
+
+          engine.add(diagnostic);
+          return Err(());
+        }
+
+        // This will handle the case where we have a &* like `&*const T` so a reference of a raw pointer
+        if matches!(self.current_token().kind, TokenKind::Star) {
+          return Ok(Type::Reference {
+            lifetime: None,
+            mutability: Mutability::Immutable,
+            inner: Box::new(self.parse_type(engine)?),
+          });
+        }
+
         let lifetime = self.parse_lifetime(engine)?;
+        let mutability = self.parse_mutability(engine)?;
 
         Ok(Type::Reference {
           lifetime,
@@ -50,26 +159,53 @@ impl Parser {
         })
       },
 
-      _ => {
-        // TODO: Handle the errors diagnostics here
+      _ if matches!(token.kind, TokenKind::KwMut | TokenKind::KwConst) => {
+        // This handles the case where we have a (const|mut) keyword before a type
+        // and it's not a reference or pointer
+        // like `const T` or `mut T`
         token.span.merge(self.current_token().span);
+        let lexeme = self.get_token_lexeme(&token);
+
         let diagnostic = Diagnostic::new(
-          DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
-          format!("Unexpected token {:?}", lexeme),
-          "duck.lox".to_string(),
+          DiagnosticCode::Error(DiagnosticError::InvalidMutabilityInField),
+          format!("Invalid `{:?}` specifier in struct field declaration.", lexeme),
+          self.source_file.path.clone(),
+        )
+        .with_label(
+          token.span,
+          Some(format!("`{:?}` is not allowed before a field type.", lexeme)),
+          LabelStyle::Primary,
+        )
+        .with_note("`mut` and `const` cannot modify field declarations directly.".to_string())
+        .with_help("Use `&mut T` or `*mut T` for references or pointers, or make the struct binding mutable.".to_string());
+
+        engine.add(diagnostic);
+        Err(())
+      },
+
+      _ => {
+        token.span.merge(self.current_token().span);
+        let lexeme = self.get_token_lexeme(&token);
+
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::InvalidType),
+          format!("Unknown type or unexpected token `{:?}`", lexeme),
+          self.source_file.path.clone(),
         )
         .with_label(
           token.span,
           Some(format!(
-            "Expected a primary expression, found \"{}\"",
+            "Type `{:?}` is not recognized in this context",
             lexeme
           )),
           LabelStyle::Primary,
         )
-        .with_help(Parser::get_token_help(&token.kind, &token));
+        .with_help(format!(
+          r"If `{:?}` is a custom type, ensure it is declared before use. Otherwise, \ check for typos or missing imports.",
+          lexeme
+        ));
 
         engine.add(diagnostic);
-
         Err(())
       },
     }
@@ -87,59 +223,6 @@ impl Parser {
       Ok(Some(self.get_token_lexeme(&token)))
     } else {
       Ok(None)
-    }
-  }
-
-  pub(crate) fn parse_mutability(
-    &mut self,
-    engine: &mut DiagnosticEngine,
-  ) -> Result<Mutability, ()> {
-    let mut token = self.current_token();
-
-    match token.kind {
-      TokenKind::KwMut => {
-        self.advance(engine); // consume the "mut"
-        Ok(Mutability::Mutable)
-      },
-      TokenKind::KwConst => {
-        self.advance(engine); // consume the "const"
-        Ok(Mutability::Immutable)
-      },
-      // TODO: check for all the edge cases that kind is not allowed here
-      _ if !matches!(token.kind, TokenKind::Ident | TokenKind::Lifetime { .. }) => {
-        token.span.merge(self.current_token().span);
-        let lexeme = self.get_token_lexeme(&token);
-
-        let diagnostic = Diagnostic::new(
-          DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
-          format!(
-            "Unexpected token `{}` while parsing mutability specifier.",
-            lexeme
-          ),
-          self.source_file.path.clone(),
-        )
-        .with_label(
-          token.span,
-          Some(format!(
-            "Expected `mut` or `const`, but found `{}` instead.",
-            lexeme
-          )),
-          LabelStyle::Primary,
-        )
-        .with_note(
-          "Mutability specifiers must precede variable declarations or bindings.".to_string(),
-        )
-        .with_help(
-          "Try using `mut` for mutable bindings, or `const` for immutable constants.\n\
-                Example: `mut x = 10` or `const PI = 3.14`"
-            .to_string(),
-        )
-        .with_help(Parser::get_token_help(&token.kind, &token));
-
-        engine.add(diagnostic);
-        Err(())
-      },
-      _ => Ok(Mutability::Immutable),
     }
   }
 }

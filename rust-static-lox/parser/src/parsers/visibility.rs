@@ -35,7 +35,7 @@ impl Parser {
 
         let visibility = match restriction.kind {
           TokenKind::KwCrate => Ok(Visibility::LicCrate),
-          TokenKind::KwSelfValue => Ok(Visibility::LicSelf),
+          TokenKind::KwSelf => Ok(Visibility::LicSelf),
           TokenKind::KwSuper => Ok(Visibility::LicSuper),
           TokenKind::KwIn => {
             // Check if we have `pub(in crate)`, thus it's the same as `pub(crate)`
