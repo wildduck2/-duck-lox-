@@ -41,7 +41,15 @@ impl Parser {
     while !self.is_eof()
       && !matches!(
         self.current_token().kind,
-        TokenKind::CloseBracket | TokenKind::Eq | TokenKind::OpenParen | TokenKind::CloseParen
+        TokenKind::CloseBracket
+          | TokenKind::Lt
+          | TokenKind::Eq
+          | TokenKind::OpenParen
+          | TokenKind::CloseParen
+          | TokenKind::Comma
+          | TokenKind::Gt
+          | TokenKind::Plus
+          | TokenKind::Colon
       )
     {
       self.expect(TokenKind::ColonColon, engine)?;
@@ -89,44 +97,17 @@ impl Parser {
     with_args: bool,
     engine: &mut DiagnosticEngine,
   ) -> Result<(PathSegment, bool), ()> {
-    let mut token = self.current_token();
+    let token = self.current_token();
     self.advance(engine); // consume the path segment
 
     let args = if with_args && matches!(self.current_token().kind, TokenKind::Lt) {
-      self.parse_generic_args(&mut token, engine)?
-    } else if !with_args
-        // This covers the case like `pub(in path::to<T>)` with a generic arg
-      && (matches!(self.current_token().kind, TokenKind::Lt)
-        // This covers the case like `pub(in path::to::module::<T>)` with a turbofish
-        || (matches!(self.current_token().kind, TokenKind::ColonColon)
-          && self.peek(1).kind == TokenKind::Lt))
-    {
-      let mut token = self.current_token();
-      self.advance_till_match(engine, TokenKind::Gt);
-
-      token.span.merge(self.current_token().span);
-      let lexeme = self.get_token_lexeme(&token);
-
-      let diagnostic = Diagnostic::new(
-        DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
-        format!("Unexpected generic argument '{}'", lexeme),
-        self.source_file.path.clone(),
-      )
-      .with_label(
-        token.span,
-        Some(format!("Expected path segment, found \"{}\"", lexeme)),
-        LabelStyle::Primary,
-      )
-      .with_help("Generic arguments are only allowed in path segments.".to_string());
-
-      engine.add(diagnostic);
-      return Err(());
+      self.parse_generic_args(engine)?
     } else {
       None
     };
 
     match token.kind {
-      TokenKind::KwSelfValue => Ok((PathSegment::new(PathSegmentKind::Self_, args), false)),
+      TokenKind::KwSelf => Ok((PathSegment::new(PathSegmentKind::Self_, args), false)),
       TokenKind::KwSuper => Ok((PathSegment::new(PathSegmentKind::Super, args), false)),
       TokenKind::KwCrate => Ok((PathSegment::new(PathSegmentKind::Crate, args), false)),
       TokenKind::Ident => Ok((

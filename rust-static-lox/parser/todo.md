@@ -1,7 +1,8 @@
 > [x] parse struct values in different ways
 > [_] parse generic arguments
-> [_] parse generic params
+> [x] parse generic params
 > [_] parse type paths
-> [_] parse fields attributes
+> [x] parse fields attributes
+> [ ] test the lifetiems and types in the structs
 
 

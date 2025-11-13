@@ -530,7 +530,7 @@ pub(crate) enum GenericParam {
     attributes: Vec<Attribute>,
     name: String,
     ty: Type,
-    default: Option<Expr>,
+    default: Option<Type>,
   },
 }
 

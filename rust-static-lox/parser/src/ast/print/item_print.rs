@@ -221,8 +221,8 @@ fn print_generic_param(prefix: &str, is_last: bool, gp: &GenericParam) {
       let inner = format!("{prefix}{}  ", if is_last { " " } else { "│" });
       print_attribute_list(&inner, false, attributes);
       println!("{inner}├─> Type: {}", format_type(ty));
-      if let Some(expr) = default {
-        println!("{inner}└─> Default: {}", format_expr(expr));
+      if let Some(r#type) = default {
+        println!("{inner}└─> Default: {}", format_type(r#type));
       } else {
         println!("{inner}└─> Default: <none>");
       }

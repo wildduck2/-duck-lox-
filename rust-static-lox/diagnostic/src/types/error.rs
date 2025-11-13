@@ -25,6 +25,11 @@ pub enum DiagnosticError {
   MissingClosingBracket,
   InvalidVisibilityRestriction,
   InvalidNameIdentifier,
+  UnexpectedLifetime,
+  InvalidType,
+  InvalidMutabilityInField,
+  InvalidPointerType,
+  InvalidWherePredicate,
 }
 
 impl DiagnosticError {
@@ -47,6 +52,11 @@ impl DiagnosticError {
       Self::MissingClosingBracket => "E0015",
       Self::InvalidVisibilityRestriction => "E0016",
       Self::InvalidNameIdentifier => "E0017",
+      Self::UnexpectedLifetime => "E0018",
+      Self::InvalidType => "E0019",
+      Self::InvalidMutabilityInField => "E0020",
+      Self::InvalidPointerType => "E0021",
+      Self::InvalidWherePredicate => "E0022",
     }
   }
 
