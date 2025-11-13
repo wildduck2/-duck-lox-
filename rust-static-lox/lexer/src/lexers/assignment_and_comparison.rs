@@ -47,7 +47,6 @@ impl Lexer {
   /// Handles:
   /// - `<` - Less than comparison
   /// - `<=` - Less than or equal
-  /// - `<<` - Left shift
   /// - `<<=` - Left shift assignment
   ///
   /// # Returns
@@ -56,12 +55,11 @@ impl Lexer {
   pub(crate) fn lex_less(&mut self) -> Option<TokenKind> {
     if self.match_char('=') {
       return Some(TokenKind::Le);
-    } else if self.match_char('<') {
+    } else if self.match_char('<') && self.match_char('=') {
       if self.match_char('=') {
         return Some(TokenKind::ShiftLeftEq);
       }
-
-      return Some(TokenKind::ShiftLeft);
+      self.current -= 1; // revert the '<' char
     }
 
     Some(TokenKind::Lt)
@@ -72,7 +70,6 @@ impl Lexer {
   /// Handles:
   /// - `>` - Greater than comparison
   /// - `>=` - Greater than or equal
-  /// - `>>` - Right shift
   /// - `>>=` - Right shift assignment
   ///
   /// # Returns
@@ -85,8 +82,7 @@ impl Lexer {
       if self.match_char('=') {
         return Some(TokenKind::ShiftRightEq);
       }
-
-      return Some(TokenKind::ShiftRight);
+      self.current -= 1; // revert the '>' char
     }
 
     Some(TokenKind::Gt)

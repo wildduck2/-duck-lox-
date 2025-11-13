@@ -510,10 +510,6 @@ pub enum TokenKind {
   ShiftLeftEq,  // <<=
   ShiftRightEq, // >>=
 
-  // Bit Shifts
-  ShiftLeft,  // <<
-  ShiftRight, // >>
-
   // Special Operators
   ColonColon, // :: (path separator)
   ThinArrow,  // -> (return type, match arm)

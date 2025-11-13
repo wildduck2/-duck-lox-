@@ -15,14 +15,17 @@ impl Parser {
     'shift_find: while !self.is_eof() {
       let token = self.current_token();
       match token.kind {
-        TokenKind::ShiftLeft | TokenKind::ShiftRight => {
+        TokenKind::Gt | TokenKind::Lt
+          if matches!(self.peek(1).kind, TokenKind::Gt | TokenKind::Lt) =>
+        {
           self.advance(engine); // consume the shift operator
 
           let op = match token.kind {
-            TokenKind::ShiftLeft => BinaryOp::Shl,
-            TokenKind::ShiftRight => BinaryOp::Shr,
+            TokenKind::Gt => BinaryOp::Shl,
+            TokenKind::Lt => BinaryOp::Shr,
             _ => unreachable!(),
           };
+          self.advance(engine); // consume the other shift operator
 
           let rhs = self.parse_term(engine)?;
 
