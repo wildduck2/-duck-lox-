@@ -358,7 +358,7 @@ mod lexer_tests {
       TokenKind::KwAsync,
       TokenKind::KwAwait,
       TokenKind::KwDyn,
-      TokenKind::KwSelfValue,
+      TokenKind::KwSelf,
       TokenKind::KwSelfType,
       TokenKind::KwSuper,
       TokenKind::KwTrue,

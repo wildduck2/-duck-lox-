@@ -423,10 +423,10 @@ pub enum TokenKind {
   KwDyn,    // dyn
 
   // Special Identifiers
-  KwSelfValue, // self (value)
-  KwSelfType,  // Self (type)
-  KwSuper,     // super
-  KwCrate,     // crate
+  KwSelf,     // self (value)
+  KwSelfType, // Self (type)
+  KwSuper,    // super
+  KwCrate,    // crate
 
   // Literal Keywords
   KwTrue,  // true
@@ -657,7 +657,7 @@ impl TokenKind {
         | TokenKind::KwPub
         | TokenKind::KwRef
         | TokenKind::KwReturn
-        | TokenKind::KwSelfValue
+        | TokenKind::KwSelf
         | TokenKind::KwSelfType
         | TokenKind::KwStatic
         | TokenKind::KwStruct

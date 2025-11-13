@@ -65,7 +65,7 @@ impl Lexer {
       "dyn" => Some(TokenKind::KwDyn),
 
       // Special Identifiers
-      "self" => Some(TokenKind::KwSelfValue),
+      "self" => Some(TokenKind::KwSelf),
       "Self" => Some(TokenKind::KwSelfType),
       "super" => Some(TokenKind::KwSuper),
       "crate" => Some(TokenKind::KwCrate),
