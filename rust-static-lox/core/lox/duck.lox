@@ -518,151 +518,149 @@
 //(#![cfg(feature = "debug")] #[inline(always)] (x + y * 2));
 //(#![feature(tuple_attrs)] (#[inline] (1, 2)));
 //(#![cfg_attr(feature = "debug", allow(dead_code))] (a + b));
-
-
-
-// --- Basic named struct ---
-struct User {
-  id: i32,
-  name: String,
-}
-
-// --- Tuple struct ---
-struct Point(f64, f64);
-
-// --- Unit struct ---
-struct Empty;
-
-// --- Public named struct ---
-pub struct Config {
-    key: String,
-    value: String,
-}
-
-// --- Scoped visibility ---
-pub(crate) struct InternalData;
-pub(super) struct ChildOnly;
-pub(self) struct SelfVisible;
-pub(in crate::core::system) struct ScopedPath;
-
-// --- Struct with generics ---
-struct Wrapper<T> {
-  item: T,
-}
-
-// --- Struct with multiple generic parameters ---
-struct Pair<K, V> {
-    key: K,
-    value: V,
-}
-
-// --- Struct with generic bounds ---
-struct Limited<T: Clone + Default> {
-    data: T,
-}
-
-// --- Struct with lifetime parameter ---
-struct Ref<'a> {
-    value: &'a str,
-}
-
-
-// --- Struct with lifetime and generic ---
-struct Scoped<'a, T> {
-    data: &'a T,
-}
-
-// --- Struct with const generic ---
-struct Buffer<const N: usize> {
-    bytes: [u8; N],
-}
-
-// --- Struct with lifetime + const generic ---
-struct Bounded<'a, const N: usize> {
-    buf: &'a [u8; N],
-    buf2: &[u8; N],
-}
-
-
-// --- Struct with generic defaults ---
-struct Defaulted<T = String> {
-    inner: T,
-}
-
-// --- Struct with generic bounds and defaults ---
-struct SmartBox<T: Clone + Default = StringType<String>> {
-    value: T,
-}
-
-// --- Struct with where clause ---
-struct Complex<T, U>
+//
+//// --- Basic named struct ---
+//struct User {
+//  id: i32,
+//  name: String,
+//}
+//
+//// --- Tuple struct ---
+//struct Point(f64, f64);
+//
+//// --- Unit struct ---
+//struct Empty;
+//
+//// --- Public named struct ---
+//pub struct Config {
+//    key: String,
+//    value: String,
+//}
+//
+//// --- Scoped visibility ---
+//pub(crate) struct InternalData;
+//pub(super) struct ChildOnly;
+//pub(self) struct SelfVisible;
+//pub(in crate::core::system) struct ScopedPath;
+//
+//// --- Struct with generics ---
+//struct Wrapper<T> {
+//  item: T,
+//}
+//
+//// --- Struct with multiple generic parameters ---
+//struct Pair<K, V> {
+//    key: K,
+//    value: V,
+//}
+//
+//// --- Struct with generic bounds ---
+//struct Limited<T: Clone + Default> {
+//    data: T,
+//}
+//
+//// --- Struct with lifetime parameter ---
+//struct Ref<'a> {
+//    value: &'a str,
+//}
+//
+//
+//// --- Struct with lifetime and generic ---
+//struct Scoped<'a, T> {
+//    data: &'a T,
+//}
+//
+//// --- Struct with const generic ---
+//struct Buffer<const N: usize> {
+//    bytes: [u8; N],
+//}
+//
+//// --- Struct with lifetime + const generic ---
+//struct Bounded<'a, const N: usize> {
+//    buf: &'a [u8; N],
+//    buf2: &[u8; N],
+//}
+//
+//
+//// --- Struct with generic defaults ---
+//struct Defaulted<T = String> {
+//    inner: T,
+//}
+//
+//// --- Struct with generic bounds and defaults ---
+//struct SmartBox<T: Clone + Default = StringType<String>> {
+//    value: T,
+//}
+//
+//// --- Struct with where clause ---
+//struct Complex<T, U>
+//where
+//    T: Clone + PartialEq,
+//    U: Default,
+//{
+//    left: T,
+//    right: U,
+//}
+//
+//// --- Struct with lifetime bounds ---
+//struct ScopedRef<'a: 'b, 'b> {
+//    r: &'b &'a str,
+//}
+//
+//// --- Tuple struct with visibility and generics ---
+//pub(crate) struct Vec2<T>(pub T, pub T);
+//
+//// --- Unit struct with attribute ---
+//#[derive(Debug, Clone)]
+//struct Marker;
+//
+//// --- Named struct with field attributes ---
+//struct Annotated {
+//    #[allow(dead_code)]
+//    #[cfg(feature = "debug")]
+//    debug_name: String,
+//
+//    #[deprecated(note = "use `active` instead")]
+//    enabled: bool,
+//}
+//
+//// --- Struct with path-based type ---
+//struct Nested {
+//    inner: crate::module::DeepType,
+//}
+//
+//// --- Struct with complex where clause ---
+//pub struct Graph<K, V>
+//where
+//    K: Eq + std::hash::Hash,
+//    V: Clone + Default,
+//{
+//    nodes: Vec<(K, V)>,
+//}
+//
+//// --- Empty tuple struct with visibility ---
+//pub struct Token();
+//
+//// --- Struct with Self type references ---
+//struct SelfAware {
+//    next: Option<Self>,
+//}
+//
+//// --- Nested generic parameters ---
+//struct Container<T: IntoIterator<Item = U>, U> {
+//    values: T,
+//    marker: std::marker::PhantomData<U>,
+//}
+//
+//// --- Struct using const generics with expressions ---
+//struct Matrix<const ROWS: usize, const COLS: usize> {
+////    data: [[f32; COLS]; ROWS],
+//}
+//: IntoIterator<Item>
+struct Container<U>
 where
-    T: Clone + PartialEq,
-    U: Default,
+    T: IntoIterator<Item<G>: U>,
 {
-    left: T,
-    right: U,
+//    values: T,
+//    marker: std::marker::PhantomData<U>,
 }
-
-// --- Struct with lifetime bounds ---
-struct ScopedRef<'a: 'b, 'b> {
-    r: &'b &'a str,
-}
-
-// --- Tuple struct with visibility and generics ---
-pub(crate) struct Vec2<T>(pub T, pub T);
-
-// --- Unit struct with attribute ---
-#[derive(Debug, Clone)]
-struct Marker;
-
-// --- Named struct with field attributes ---
-struct Annotated {
-    #[allow(dead_code)]
-    #[cfg(feature = "debug")]
-    debug_name: String,
-
-    #[deprecated(note = "use `active` instead")]
-    enabled: bool,
-}
-
-// --- Struct with path-based type ---
-struct Nested {
-    inner: crate::module::DeepType,
-}
-
-// --- Struct with complex where clause ---
-pub struct Graph<K, V>
-where
-    K: Eq + std::hash::Hash,
-    V: Clone + Default,
-{
-    nodes: Vec<(K, V)>,
-}
-
-// --- Empty tuple struct with visibility ---
-pub struct Token();
-
-// --- Struct with Self type references ---
-struct SelfAware {
-    next: Option<Self>,
-}
-
-// --- Nested generic parameters ---
-struct Container<T: IntoIterator<Item = U>, U> {
-    values: T,
-    marker: std::marker::PhantomData<U>,
-}
-
-// --- Struct using const generics with expressions ---
-struct Matrix<const ROWS: usize, const COLS: usize> {
-    data: [[f32; COLS]; ROWS],
-}
-struct Container<U: IntoIterator<Item>>
-where
-    T: IntoIterator<'a, Item>,
-{
-    values: T,
-    marker: std::marker::PhantomData<U>,
-}
-

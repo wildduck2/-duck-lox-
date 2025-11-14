@@ -1,9 +1,14 @@
-use crate::ast::{path::*, *};
-use crate::parser_utils::ExprContext;
-use crate::{DiagnosticEngine, Parser};
-use diagnostic::code::DiagnosticCode;
-use diagnostic::diagnostic::{Diagnostic, LabelStyle};
-use diagnostic::types::error::DiagnosticError;
+use crate::Parser;
+use crate::{
+  ast::{r#struct::*, *},
+  parser_utils::ExprContext,
+};
+use diagnostic::{
+  code::DiagnosticCode,
+  diagnostic::{Diagnostic, LabelStyle},
+  types::error::DiagnosticError,
+  DiagnosticEngine,
+};
 use lexer::token::{Token, TokenKind};
 
 impl Parser {
@@ -37,22 +42,15 @@ impl Parser {
       }));
     };
 
-    let generics = if matches!(self.current_token().kind, TokenKind::Lt) {
-      self.parse_generic_params(&mut token, engine)?
-    } else {
-      None
-    };
-
+    let generics = self.parse_generic_params(&mut token, engine)?;
     let where_clause = self.parse_where_clause(engine)?;
 
     let kind = if matches!(self.current_token().kind, TokenKind::OpenBrace) {
       // Handles the case where we have a struct body like `struct User { ... }`
-      self.expect(TokenKind::OpenBrace, engine)?; // consume '{'
       let fields = self.parse_struct_dec_fields(engine)?;
       StructKind::Named { fields }
     } else if matches!(self.current_token().kind, TokenKind::OpenParen) {
       // Handles the case where we have a tuple struct body like `struct User(String, u8)`
-      self.expect(TokenKind::OpenParen, engine)?; // consume '('
       let fields = self.parse_struct_tuple_fields(engine)?;
 
       self.expect(TokenKind::Semi, engine)?; // consume ';'
@@ -114,6 +112,8 @@ impl Parser {
     &mut self,
     engine: &mut DiagnosticEngine,
   ) -> Result<Vec<FieldDecl>, ()> {
+    self.expect(TokenKind::OpenBrace, engine)?; // consume '{'
+
     let mut fields = vec![];
 
     while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::CloseBrace) {
@@ -196,6 +196,8 @@ impl Parser {
     &mut self,
     engine: &mut DiagnosticEngine,
   ) -> Result<Vec<TupleField>, ()> {
+    self.expect(TokenKind::OpenParen, engine)?; // consume '('
+
     let mut fields = vec![];
 
     while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::CloseParen) {
@@ -316,57 +318,59 @@ impl Parser {
     token: &mut Token,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
-    let struct_name = self.get_token_lexeme(token);
-    self.advance(engine); // consume the identifier
-    let args = self.parse_generic_args(engine)?;
-    let mut fields = vec![];
-
-    match self.current_token().kind {
-      TokenKind::OpenBrace => {
-        self.expect(TokenKind::OpenBrace, engine)?; // consume '{'
-        fields = self.parse_struct_expr_fields(engine)?;
-        self.expect(TokenKind::CloseBrace, engine)?; // consume '}'
-      },
-      TokenKind::OpenParen => {
-        self.expect(TokenKind::OpenParen, engine)?; // consume '('
-        fields = self.parse_struct_expr_fields(engine)?;
-        self.expect(TokenKind::CloseParen, engine)?; // consume ')'
-      },
-      _ => {
-        let diagnostic = Diagnostic::new(
-          DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
-          "Unexpected token".to_string(),
-          self.source_file.path.clone(),
-        )
-        .with_label(
-          self.current_token().span,
-          Some("Expected a primary expression, found \"{}\"".to_string()),
-          LabelStyle::Primary,
-        )
-        .with_help(Parser::get_token_help(
-          &self.current_token().kind,
-          &self.current_token(),
-        ));
-
-        engine.add(diagnostic);
-
-        return Err(());
-      },
-    };
-
-    Ok(Expr::Struct {
-      path: Path {
-        leading_colon: false, // TODO: add this later
-        // TODO: make sure to match multiple segments
-        segments: vec![PathSegment {
-          kind: PathSegmentKind::Ident(struct_name),
-          args, // these are generic args
-        }],
-      },
-      fields,
-      base: None, // TODO: add this later
-      span: token.span,
-    })
+    println!("debug struct expr: {:?}", self.current_token().kind);
+    Err(())
+    // let struct_name = self.get_token_lexeme(token);
+    // self.advance(engine); // consume the identifier
+    // let args = self.parse_generic_args(engine)?;
+    // let mut fields = vec![];
+    //
+    // match self.current_token().kind {
+    //   TokenKind::OpenBrace => {
+    //     self.expect(TokenKind::OpenBrace, engine)?; // consume '{'
+    //     fields = self.parse_struct_expr_fields(engine)?;
+    //     self.expect(TokenKind::CloseBrace, engine)?; // consume '}'
+    //   },
+    //   TokenKind::OpenParen => {
+    //     self.expect(TokenKind::OpenParen, engine)?; // consume '('
+    //     fields = self.parse_struct_expr_fields(engine)?;
+    //     self.expect(TokenKind::CloseParen, engine)?; // consume ')'
+    //   },
+    //   _ => {
+    //     let diagnostic = Diagnostic::new(
+    //       DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+    //       "Unexpected token".to_string(),
+    //       self.source_file.path.clone(),
+    //     )
+    //     .with_label(
+    //       self.current_token().span,
+    //       Some("Expected a primary expression, found \"{}\"".to_string()),
+    //       LabelStyle::Primary,
+    //     )
+    //     .with_help(Parser::get_token_help(
+    //       &self.current_token().kind,
+    //       &self.current_token(),
+    //     ));
+    //
+    //     engine.add(diagnostic);
+    //
+    //     return Err(());
+    //   },
+    // };
+    //
+    // Ok(Expr::Struct {
+    //   path: Path {
+    //     leading_colon: false, // TODO: add this later
+    //     // TODO: make sure to match multiple segments
+    //     segments: vec![PathSegment {
+    //       kind: PathSegmentKind::Ident(struct_name),
+    //       args, // these are generic args
+    //     }],
+    //   },
+    //   fields,
+    //   base: None, // TODO: add this later
+    //   span: token.span,
+    // })
   }
 
   /// Parses the field list used in a struct literal.

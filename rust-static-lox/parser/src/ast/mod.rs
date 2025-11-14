@@ -1,11 +1,15 @@
 // ============================================================================
-// Complete Rust AST - FIXED (duplications removed)
+// Complete Rust AST
 // ============================================================================
 
+pub(crate) mod generic;
 pub(crate) mod path;
 pub(crate) mod print;
+pub(crate) mod r#struct;
 use diagnostic::Span;
+use generic::*;
 use path::*;
+use r#struct::*;
 
 // ----------------------------------------------------------------------------
 // Top-level Items
@@ -359,45 +363,6 @@ pub(crate) enum MetaItemValue {
 // Struct Declaration
 // ----------------------------------------------------------------------------
 
-/// Struct declarations in any of the three forms (record/tuple/unit).
-#[derive(Debug, Clone)]
-pub(crate) struct StructDecl {
-  pub attributes: Vec<Attribute>,
-  pub visibility: Visibility,
-  pub name: String,
-  pub generics: Option<GenericParams>,
-  pub kind: StructKind,
-  pub where_clause: Option<WhereClause>,
-  pub span: Span,
-}
-
-/// The concrete shape of a struct.
-#[derive(Debug, Clone)]
-pub(crate) enum StructKind {
-  Named { fields: Vec<FieldDecl> },
-  Tuple(Vec<TupleField>),
-  Unit,
-}
-
-/// Tuple struct field metadata.
-#[derive(Debug, Clone)]
-pub(crate) struct TupleField {
-  pub attributes: Vec<Attribute>,
-  pub visibility: Visibility,
-  pub ty: Type,
-  pub span: Span,
-}
-
-/// Named struct field metadata.
-#[derive(Debug, Clone)]
-pub(crate) struct FieldDecl {
-  pub attributes: Vec<Attribute>,
-  pub visibility: Visibility,
-  pub name: String,
-  pub ty: Type,
-  pub span: Span,
-}
-
 // ----------------------------------------------------------------------------
 // Enum Declaration
 // ----------------------------------------------------------------------------
@@ -533,91 +498,6 @@ pub(crate) enum ImplItem {
 }
 
 // ----------------------------------------------------------------------------
-// Generics
-// ----------------------------------------------------------------------------
-
-/// Container for all generic parameters attached to an item.
-#[derive(Debug, Clone)]
-pub(crate) struct GenericParams {
-  pub params: Vec<GenericParam>,
-  pub span: Span,
-}
-
-/// Represents a single generic parameter in a type, function, or struct.
-///
-/// Examples:
-/// - `T: Clone` → `Type`
-/// - `'a: 'b` → `Lifetime`
-/// - `const N: usize = 3` → `Const`
-#[derive(Debug, Clone)]
-pub(crate) enum GenericParam {
-  /// A type parameter like `T: Clone` or `T = i32`.
-  Type {
-    attributes: Vec<Attribute>,
-    name: String,
-    bounds: Option<Vec<TypeBound>>,
-    default: Option<Type>,
-  },
-
-  /// A lifetime parameter like `'a` or `'a: 'b`.
-  Lifetime {
-    attributes: Vec<Attribute>,
-    name: String,
-    bounds: Option<Vec<TypeBound>>,
-  },
-
-  /// A const parameter like `const N: usize = 3`.
-  Const {
-    attributes: Vec<Attribute>,
-    name: String,
-    ty: Type,
-    default: Option<Type>,
-  },
-}
-
-/// A single bound after `:` within generics or where clauses.
-#[derive(Debug, Clone)]
-pub(crate) struct TypeBound {
-  pub modifier: TraitBoundModifier,
-  pub path: Path,
-  pub generics: Option<Vec<GenericArg>>,
-  pub for_lifetimes: Option<Vec<String>>,
-}
-
-/// Optional modifiers that tweak the meaning of a trait bound.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) enum TraitBoundModifier {
-  None,
-  Maybe,
-  MaybeConst,
-  Const,
-}
-
-/// Represents a `where` clause along with its predicates.
-#[derive(Debug, Clone)]
-pub(crate) struct WhereClause {
-  pub predicates: Vec<WherePredicate>,
-}
-
-/// The supported predicate shapes that can appear inside a `where` clause.
-#[derive(Debug, Clone)]
-pub(crate) enum WherePredicate {
-  Type {
-    for_lifetimes: Option<Vec<String>>,
-    ty: Type,
-    bounds: Option<Vec<TypeBound>>,
-  },
-  Lifetime {
-    lifetime: String,
-    bounds: Vec<String>,
-  },
-  Equality {
-    ty: Type,
-    equals: Type,
-  },
-}
-
-// ----------------------------------------------------------------------------
 // Visibility
 // ----------------------------------------------------------------------------
 
@@ -727,40 +607,22 @@ pub(crate) enum Safety {
   Unsafe,
 }
 
-/// Collection of generic arguments applied to a path segment.
-#[derive(Debug, Clone)]
-pub(crate) enum GenericArgs {
-  AngleBracketed {
-    args: Vec<GenericArg>,
-  },
-  Parenthesized {
-    inputs: Vec<Type>,
-    output: Option<Type>,
-  },
-}
-
-/// A single entry inside a generic argument list.
-#[derive(Debug, Clone)]
-pub(crate) enum GenericArg {
-  Lifetime(String),
-  Type(Type),
-  Const(Expr),
-  Binding {
-    name: String,
-    generics: Option<GenericParams>,
-    ty: Type,
-  },
-  Constraint {
-    name: String,
-    generics: Option<GenericParams>,
-    bounds: Vec<TypeBound>,
-  },
-}
-
 /// Mutability flag for references, pointers, bindings, etc.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Mutability {
+  /// Mutable binding
+  ///
+  /// for example:
+  /// ```rust
+  /// let mut x = 1;
+  /// ```
   Mutable,
+  /// Immutable binding
+  ///
+  /// for example:
+  /// ```rust
+  /// let x = 1;
+  /// ```
   Immutable,
 }
 

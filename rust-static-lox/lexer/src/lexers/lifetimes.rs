@@ -39,7 +39,7 @@ impl Lexer {
     for (i, c) in chars.into_iter().enumerate() {
       if c.is_ascii_alphabetic()
         || c.is_ascii_whitespace()
-        || (c.is_ascii_punctuation() && c != '\'')
+        || (c.is_ascii_punctuation() && matches!(c, '\'' | ','))
       {
         self.current -= len - i;
         self.column -= len - i;

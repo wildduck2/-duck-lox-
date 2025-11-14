@@ -102,7 +102,7 @@ impl Parser {
     self.advance(engine); // consume the path segment
 
     let args = if with_args && matches!(self.current_token().kind, TokenKind::Lt) {
-      self.parse_generic_args(engine)?
+      self.parse_path_generic_args(engine)?
     } else {
       None
     };
