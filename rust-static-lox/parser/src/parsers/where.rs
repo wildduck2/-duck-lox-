@@ -6,10 +6,7 @@ use diagnostic::{
 };
 use lexer::token::TokenKind;
 
-use crate::{
-  ast::{WhereClause, WherePredicate},
-  Parser,
-};
+use crate::{ast::generic::*, Parser};
 
 impl Parser {
   /// Function that parses a where clause

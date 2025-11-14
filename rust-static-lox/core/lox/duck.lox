@@ -654,13 +654,12 @@
 //
 //// --- Struct using const generics with expressions ---
 //struct Matrix<const ROWS: usize, const COLS: usize> {
-////    data: [[f32; COLS]; ROWS],
+//    data: [[f32; COLS]; ROWS],
 //}
-//: IntoIterator<Item>
-struct Container<U>
-where
-    T: IntoIterator<Item<G>: U>,
-{
+//struct Container<U: IntoIterator<Item>>
+//where
+//    T: IntoIterator<'a, Item>,
+//{
 //    values: T,
 //    marker: std::marker::PhantomData<U>,
-}
+//}
