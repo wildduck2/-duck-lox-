@@ -7,6 +7,7 @@ use diagnostic::types::error::DiagnosticError;
 use lexer::token::{Token, TokenKind};
 
 impl Parser {
+  /// Parses `struct` declarations including unit, tuple, and record forms.
   pub(crate) fn parse_struct_decl(
     &mut self,
     attributes: Vec<Attribute>,
@@ -309,6 +310,7 @@ impl Parser {
   //
   //
   ////  TODO: check this when we handle primary structs
+  /// Parses struct literal expressions (record / tuple forms).
   pub(crate) fn parse_struct_expr(
     &mut self,
     token: &mut Token,
@@ -367,6 +369,7 @@ impl Parser {
     })
   }
 
+  /// Parses the field list used in a struct literal.
   pub(crate) fn parse_struct_expr_fields(
     &mut self,
     engine: &mut DiagnosticEngine,

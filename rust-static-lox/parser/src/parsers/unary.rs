@@ -9,6 +9,7 @@ impl Parser {
   /*                                     Unary Parsing                                            */
   /* -------------------------------------------------------------------------------------------- */
 
+  /// Parses prefix unary operators (negation, reference, deref, logical not).
   pub(crate) fn parse_unary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut token = self.current_token();
 

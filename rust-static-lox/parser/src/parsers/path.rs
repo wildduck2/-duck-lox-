@@ -56,13 +56,14 @@ impl Parser {
 
       let (segment, is_dollar_crate) = self.parse_path_segment(with_args, engine)?;
       if is_dollar_crate {
+        let offending = self.peek_prev(0);
         let diagnostic = Diagnostic::new(
           DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
           "Unexpected `$crate` segment in path".to_string(),
           self.source_file.path.clone(),
         )
         .with_label(
-          self.current_token().span,
+          offending.span,
           Some("`$crate` cannot appear in this position".to_string()),
           LabelStyle::Primary,
         )

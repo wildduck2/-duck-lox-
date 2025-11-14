@@ -9,6 +9,7 @@ impl Parser {
   /*                                     Comparison Parsing                                       */
   /* -------------------------------------------------------------------------------------------- */
 
+  /// Parses chained comparison operators (`==`, `<`, `>=`, …) with left associativity.
   pub(crate) fn parse_comparison(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_bitwise_or(engine)?;
     'comparison_find: while !self.is_eof() {

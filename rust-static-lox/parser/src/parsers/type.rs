@@ -11,6 +11,8 @@ use diagnostic::{
 use lexer::token::TokenKind;
 
 impl Parser {
+  /// Parses type names (primitive keywords, references, arrays, and basic paths).
+  /// This is intentionally limited until the full type grammar is implemented.
   pub(crate) fn parse_type(&mut self, engine: &mut DiagnosticEngine) -> Result<Type, ()> {
     let mut token = self.current_token();
     let lexeme = self.get_token_lexeme(&token);
@@ -201,8 +203,7 @@ impl Parser {
           LabelStyle::Primary,
         )
         .with_help(format!(
-          r"If `{:?}` is a custom type, ensure it is declared before use. Otherwise, \ check for typos or missing imports.",
-          lexeme
+          "If `{lexeme}` is a custom type, declare it or bring it into scope before use."
         ));
 
         engine.add(diagnostic);
@@ -211,6 +212,7 @@ impl Parser {
     }
   }
 
+  /// Parses optional lifetimes that immediately follow `&`.
   pub(crate) fn parse_lifetime(
     &mut self,
     engine: &mut DiagnosticEngine,

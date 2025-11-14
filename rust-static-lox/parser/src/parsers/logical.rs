@@ -9,6 +9,7 @@ impl Parser {
   /*                                     Logical Parsing                                           */
   /* -------------------------------------------------------------------------------------------- */
 
+  /// Parses logical OR (`||`) with proper short-circuit order.
   pub(crate) fn parse_logical_or(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_logical_and(engine)?;
 
@@ -34,6 +35,7 @@ impl Parser {
     Ok(lhs)
   }
 
+  /// Parses logical AND (`&&`) with left associativity.
   pub(crate) fn parse_logical_and(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_comparison(engine)?;
 

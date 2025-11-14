@@ -1,4 +1,9 @@
-use diagnostic::DiagnosticEngine;
+use diagnostic::{
+  code::DiagnosticCode,
+  diagnostic::{Diagnostic, LabelStyle},
+  types::error::DiagnosticError,
+  DiagnosticEngine,
+};
 use lexer::token::{LiteralKind, TokenKind};
 
 use crate::{
@@ -12,6 +17,7 @@ impl Parser {
   /*                                     Postfix Parsing                                          */
   /* -------------------------------------------------------------------------------------------- */
 
+  /// Parses chained postfix expressions (calls, indexing, `.await`, `?`, etc.).
   pub(crate) fn parse_postfix(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     // First, parse the base expression (primary)
     let mut expr = self.parse_primary(engine)?;
@@ -43,6 +49,7 @@ impl Parser {
     Ok(expr)
   }
 
+  /// Lowers `.await` into an `Expr::Await`.
   pub(crate) fn parse_await(
     &mut self,
     expr: Expr,
@@ -61,6 +68,7 @@ impl Parser {
     })
   }
 
+  /// Lowers the postfix `?` operator.
   pub(crate) fn parse_try(
     &mut self,
     expr: Expr,
@@ -76,6 +84,7 @@ impl Parser {
     })
   }
 
+  /// Parses indexing expressions `foo[expr]`.
   pub(crate) fn parse_index(
     &mut self,
     object: Expr,
@@ -96,6 +105,7 @@ impl Parser {
     })
   }
 
+  /// Parses `.field`, `.method()`, or tuple-field syntax.
   pub(crate) fn parse_field_or_method(
     &mut self,
     object: Expr,
@@ -164,9 +174,24 @@ impl Parser {
       });
     }
 
+    let lexeme = self.get_token_lexeme(&token);
+    let diagnostic = Diagnostic::new(
+      DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+      format!("invalid token `{lexeme}` after `.`"),
+      self.source_file.path.clone(),
+    )
+    .with_label(
+      token.span,
+      Some("expected an identifier, tuple index, or method call target".to_string()),
+      LabelStyle::Primary,
+    )
+    .with_help("Examples: `.foo`, `.0`, `.await`, or `.method(args)`.".to_string());
+    engine.add(diagnostic);
+
     Err(())
   }
 
+  /// Parses function-call syntax applied to an already-parsed callee.
   pub(crate) fn parse_method_call(
     &mut self,
     callee: Expr,
@@ -187,6 +212,7 @@ impl Parser {
     })
   }
 
+  /// Parses zero or more comma-separated call arguments.
   pub(crate) fn parse_call_params(
     &mut self,
     engine: &mut DiagnosticEngine,

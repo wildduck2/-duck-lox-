@@ -9,6 +9,8 @@ impl Parser {
   /*                                     Cast Parsing                                           */
   /* -------------------------------------------------------------------------------------------- */
 
+  /// Parses postfix `as` casts while chaining when multiple appear.
+  /// NOTE: RHS type parsing is still a placeholder and always returns `Type::U32`.
   pub(crate) fn parse_cast(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_unary(engine)?;
 
@@ -18,8 +20,8 @@ impl Parser {
         TokenKind::KwAs => {
           self.advance(engine); // consume the cast operator
 
-          // let type_no_bounds = self.parse_type_no_bounds(engine)?;
           // NOTE: later one you will parse the type bounds
+          // TODO: parse the full type after `as` once type grammar is wired up.
           self.advance(engine); // consume the type
           token.span.merge(self.current_token().span);
 

@@ -11,14 +11,20 @@ use crate::{ast::*, Parser};
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum ExprContext {
-  Default,           // Normal expression parsing
-  IfCondition,       // Parsing condition of if statement
-  MatchDiscriminant, // Parsing match expression (before arms)
-  WhileCondition,    // Parsing condition of while statement
+  /// Normal expression parsing with no contextual restrictions.
+  Default,
+  /// Parsing the condition of an `if` or `if let`.
+  IfCondition,
+  /// Parsing the scrutinee of a `match`.
+  MatchDiscriminant,
+  /// Parsing the predicate portion of a `while`.
+  WhileCondition,
 }
 
 impl Parser {
   /// Parses the top-level production, collecting statements until EOF.
+  /// Currently this routine prints each item tree for debugging and relies on
+  /// `parse_item` to decide which constructs are supported.
   pub fn parse_program(&mut self, engine: &mut DiagnosticEngine) {
     while !self.is_eof() {
       match self.parse_item(engine) {
@@ -32,17 +38,37 @@ impl Parser {
     }
   }
 
+  /// Dispatches to the correct item parser after consuming attributes & visibility.
   fn parse_item(&mut self, engine: &mut DiagnosticEngine) -> Result<Item, ()> {
     let attributes = self.parse_attributes(engine)?;
     let visibility = self.parse_visibility(engine)?;
 
     match self.current_token().kind {
       TokenKind::KwStruct => self.parse_struct_decl(attributes, visibility, engine),
-      _ => Err(()),
+      kind => {
+        let lexeme = self.get_token_lexeme(&self.current_token());
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+          format!("unsupported item starting with `{lexeme}`"),
+          self.source_file.path.clone(),
+        )
+        .with_label(
+          self.current_token().span,
+          Some("the parser currently only understands struct declarations".to_string()),
+          LabelStyle::Primary,
+        )
+        .with_help(format!(
+          "item kind `{:?}` is not implemented yet; add support in `parse_item`",
+          kind
+        ));
+        engine.add(diagnostic);
+        Err(())
+      },
     }
   }
 
   /// Parses a single statement node (stubbed for future grammar branches).
+  /// Currently supports empty statements and expression statements.
   fn parse_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     match self.current_token().kind {
       // TokenKind::Let => {
@@ -60,6 +86,7 @@ impl Parser {
     }
   }
 
+  /// Parses an expression statement, optionally consuming a trailing semicolon.
   fn parse_expr_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     let expr = self.parse_expression(ExprContext::Default, engine)?;
 
@@ -71,14 +98,20 @@ impl Parser {
     }
   }
 
+  /// Entry point for expression parsing. The supplied `context` controls
+  /// future diagnostic wording once more productions are wired in.
   pub(crate) fn parse_expression(
     &mut self,
     context: ExprContext,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
+    // NOTE: `context` will become relevant once we differentiate diagnostics
+    // based on expression position (e.g., `if` guards). For now it is carried
+    // through so callers already provide intent.
     self.parse_assignment_expr(engine)
   }
 
+  /// Parses assignment expressions (including compound assignments) with right associativity.
   pub(crate) fn parse_assignment_expr(
     &mut self,
     engine: &mut DiagnosticEngine,
@@ -103,10 +136,10 @@ impl Parser {
 
           let rhs = self.parse_range_expr(engine)?;
 
-          lhs = Expr::Assign {
-            target: Box::new(lhs),
-            value: Box::new(rhs),
-            span: token.span,
+      lhs = Expr::Assign {
+        target: Box::new(lhs),
+        value: Box::new(rhs),
+        span: token.span,
           };
         },
         _ => break,
@@ -139,7 +172,8 @@ impl Parser {
   // *                    | returnExpr
   // *                    | underscoreExpr
   // *                    | macroInvocation ;
-
+  /// Parses literals, identifiers, grouped constructs, arrays, and struct expressions.
+  /// Emits a targeted diagnostic when the current token cannot start a primary expression.
   pub(crate) fn parse_primary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut token = self.current_token();
 
@@ -186,12 +220,7 @@ impl Parser {
     }
   }
 
-  /// Helper function that takes a token and returns the lexeme as a string
-  ///
-  /// for example:
-  /// ```rust
-  /// let lexeme = self.get_token_lexeme(&token);
-  /// ```
+  /// Returns the substring that corresponds to `token`.
   pub(crate) fn get_token_lexeme(&mut self, token: &Token) -> String {
     self
       .source_file
@@ -201,27 +230,8 @@ impl Parser {
       .to_string()
   }
 
-  /// Helper function that advances the parser until it finds a token of a specific kind
-  /// This is useful when you want to parse a sequence of tokens until you find a specific token
-  /// For example, you want to parse a sequence of generic arguments until you find a `>`
-  /// ```
-  /// let mut token = self.current_token();
-  /// self.advance_till_match(engine, TokenKind::Gt);
-  /// ```
-  ///
-  /// Most of the use cases are for diagnosing errors, so you can use this function to
-  /// diagnose errors in the middle of a sequence of tokens
-  ///
-  /// for example:
-  /// ```rust
-  /// pub(in path::to::<T>::module) struct User;
-  /// ```
-  /// The `pub(in path::to::<T>::module)` is invalid, so we will diagnose the error
-  /// at the `pub` token, not at the `>`
-  /// ```
-  /// pub(in path::to::<T>::module) struct User;
-  ///              // ^^^ Error here
-  ///
+  /// Consumes tokens until `kind` is encountered or EOF is reached.
+  /// Useful for resynchronizing after a diagnostic within delimited lists.
   pub(crate) fn advance_till_match(&mut self, engine: &mut DiagnosticEngine, kind: TokenKind) {
     while !self.is_eof() && self.current_token().kind != kind {
       self.advance(engine);

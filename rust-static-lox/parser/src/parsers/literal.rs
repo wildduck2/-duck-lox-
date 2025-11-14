@@ -46,6 +46,7 @@ impl Parser {
   /*                                         Number Literal Parsing                                 */
   /* -------------------------------------------------------------------------------------------- */
 
+  /// Parses integer literals of any base and reports malformed or overflowing values.
   fn parser_integer(
     &mut self,
     engine: &mut DiagnosticEngine,
@@ -130,6 +131,7 @@ impl Parser {
     })
   }
 
+  /// Parses decimal floating-point literals.
   fn parser_float(
     &mut self,
     engine: &mut DiagnosticEngine,
@@ -170,12 +172,10 @@ impl Parser {
           Some("Float literal is too large or malformed".to_string()),
           LabelStyle::Primary,
         )
-        .with_help(
-          "Float literals must be in decimal, binary, octal, or hexadecimal format.".to_string(),
-        );
-        engine.add(diagnostic);
-        return Err(());
-      },
+        .with_help("Float literals must be written in decimal form, e.g. `1.0` or `0.5`.".to_string());
+      engine.add(diagnostic);
+      return Err(());
+    },
     };
 
     Ok(Expr::Float {
@@ -188,6 +188,7 @@ impl Parser {
   /* -------------------------------------------------------------------------------------------- */
   /*                                         String Literal Parsing                                 */
   /* -------------------------------------------------------------------------------------------- */
+  /// Parses standard UTF-8 string literals.
   fn parser_string(&mut self, _engine: &mut DiagnosticEngine, token: &Token) -> Result<Expr, ()> {
     let value = self
       .source_file
@@ -202,6 +203,7 @@ impl Parser {
     })
   }
 
+  /// Parses byte-string literals (`b"..."`).
   fn parser_byte_string(
     &mut self,
     _engine: &mut DiagnosticEngine,
@@ -220,6 +222,7 @@ impl Parser {
     })
   }
 
+  /// Parses C-string literals (`c"..."`).
   fn parser_c_string(&mut self, _engine: &mut DiagnosticEngine, token: &Token) -> Result<Expr, ()> {
     let value = self
       .source_file
@@ -234,6 +237,7 @@ impl Parser {
     })
   }
 
+  /// Parses raw string literals with `n` `#` delimiters.
   fn parser_raw_string(
     &mut self,
     _engine: &mut DiagnosticEngine,
@@ -253,6 +257,7 @@ impl Parser {
     })
   }
 
+  /// Parses raw byte-string literals (`br##"..."##`).
   fn parser_raw_byte_string(
     &mut self,
     _engine: &mut DiagnosticEngine,
@@ -272,6 +277,7 @@ impl Parser {
     })
   }
 
+  /// Parses raw C-string literals (`cr##"..."##`).
   fn parser_raw_c_string(
     &mut self,
     _engine: &mut DiagnosticEngine,
@@ -291,6 +297,7 @@ impl Parser {
     })
   }
 
+  /// Parses character literals (`'a'`).
   fn parser_char(&mut self, _engine: &mut DiagnosticEngine, token: &Token) -> Result<Expr, ()> {
     let value = self
       .source_file
@@ -307,6 +314,7 @@ impl Parser {
     })
   }
 
+  /// Parses byte literals (`b'a'`) ensuring they contain a single ASCII byte.
   fn parser_byte(&mut self, engine: &mut DiagnosticEngine, token: &Token) -> Result<Expr, ()> {
     if token.span.start == token.span.end - 1 {
       let diagnostic = Diagnostic::new(

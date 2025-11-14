@@ -12,12 +12,14 @@ pub struct Path {
   pub segments: Vec<PathSegment>,
 }
 
+/// One segment of a path, optionally carrying generic arguments.
 #[derive(Debug, Clone)]
 pub struct PathSegment {
   pub kind: PathSegmentKind,
   pub args: Option<GenericArgs>,
 }
 
+/// Different canonical forms a path segment can represent.
 #[derive(Debug, Clone)]
 pub enum PathSegmentKind {
   Ident(String),

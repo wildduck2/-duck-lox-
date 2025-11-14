@@ -6,6 +6,7 @@ impl Parser {
   // *   arrayExpr        → "[" arrayElements? "]" ;
   // *
   // *   arrayElements    → expression (";" expression | ("," expression)* ","?) ;
+  /// Parses `[...]` array literals including repetition form `[expr; len]`.
   pub(crate) fn parse_array_expr(
     &mut self,
     token: &mut Token,
@@ -24,6 +25,7 @@ impl Parser {
     })
   }
 
+  /// Parses the comma-separated elements or the `; repeat` segment inside an array literal.
   fn parse_array_elements(
     &mut self,
     engine: &mut DiagnosticEngine,

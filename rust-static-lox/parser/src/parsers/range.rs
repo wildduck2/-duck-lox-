@@ -10,6 +10,7 @@ impl Parser {
   /*                                     Range Parsing                                           */
   /* -------------------------------------------------------------------------------------------- */
 
+  /// Parses Rust range expressions (`..`, `..=`, `a..b`, etc.).
   pub(crate) fn parse_range_expr(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     // Case 1: range starts with ".." or "..="
     if matches!(
@@ -35,6 +36,7 @@ impl Parser {
     Ok(lhs.unwrap())
   }
 
+  /// Parses the `..` / `..=` portion once the start expression is known (or absent).
   fn parse_prefix_range(
     &mut self,
     start: Option<Expr>,

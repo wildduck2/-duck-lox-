@@ -9,6 +9,7 @@ impl Parser {
   /*                                     Factor Parsing                                           */
   /* -------------------------------------------------------------------------------------------- */
 
+  /// Parses multiplicative expressions (`*`, `/`, `%`).
   pub(crate) fn parse_factor(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_cast(engine)?;
 

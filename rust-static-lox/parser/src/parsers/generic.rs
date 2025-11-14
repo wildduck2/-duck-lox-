@@ -10,6 +10,7 @@ use diagnostic::types::error::DiagnosticError;
 use lexer::token::{Token, TokenKind};
 
 impl Parser {
+  /// Parses `<...>` generic parameter lists and returns `None` when absent.
   pub(crate) fn parse_generic_params(
     &mut self,
     token: &mut Token,
@@ -34,6 +35,7 @@ impl Parser {
     }))
   }
 
+  /// Parses a single generic parameter (type, lifetime, or const).
   pub(crate) fn parse_generic_param(
     &mut self,
     engine: &mut DiagnosticEngine,
@@ -134,6 +136,7 @@ impl Parser {
     }
   }
 
+  /// Parses either lifetime or trait bounds that follow a colon.
   pub(crate) fn parse_type_bounds(
     &mut self,
     engine: &mut DiagnosticEngine,
@@ -145,6 +148,7 @@ impl Parser {
     }
   }
 
+  /// Parses the `+ 'a + 'b` lifetime bounds chain.
   pub(crate) fn parse_type_lifetime_bounds(
     &mut self,
     engine: &mut DiagnosticEngine,
@@ -176,6 +180,7 @@ impl Parser {
     Ok(lifetime_bounds)
   }
 
+  /// Parses trait bounds (`T: Trait + ?Sized`) and their modifiers.
   pub(crate) fn parse_type_path_bounds(
     &mut self,
     engine: &mut DiagnosticEngine,
@@ -245,6 +250,7 @@ impl Parser {
     Ok(bounds)
   }
 
+  /// Parses generic arguments following `::?<...>`.
   pub(crate) fn parse_generic_args(
     &mut self,
     engine: &mut DiagnosticEngine,
@@ -268,6 +274,7 @@ impl Parser {
     Ok(Some(GenericArgs::AngleBracketed { args }))
   }
 
+  /// Parses a single generic argument (type, lifetime, const, binding, …).
   pub(crate) fn parse_generic_arg(
     &mut self,
     engine: &mut DiagnosticEngine,
@@ -302,8 +309,8 @@ impl Parser {
         // TODO: enhance the diagnostic later on when we have a full clousure
         let diagnostic = Diagnostic::new(
           DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
-          format!("Unexpected token {:?}", lexeme),
-          "duck.lox".to_string(),
+          format!("unexpected token `{lexeme}` in generic argument list"),
+          self.source_file.path.clone(),
         )
         .with_label(
           token.span,

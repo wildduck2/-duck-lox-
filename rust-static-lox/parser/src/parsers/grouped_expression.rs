@@ -4,6 +4,7 @@ use lexer::token::{Token, TokenKind};
 use crate::{ast::Expr, parser_utils::ExprContext, Parser};
 
 impl Parser {
+  /// Parses parenthesized expressions and distinguishes unit vs tuple/group cases.
   pub(crate) fn parse_grouped_expr(
     &mut self,
     token: &mut Token,

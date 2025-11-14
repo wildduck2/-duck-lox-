@@ -9,6 +9,7 @@ use diagnostic::{
 use lexer::token::TokenKind;
 
 impl Parser {
+  /// Parses zero or more attributes in sequence, returning them in declaration order.
   pub(crate) fn parse_attributes(
     &mut self,
     engine: &mut DiagnosticEngine,
@@ -21,6 +22,7 @@ impl Parser {
     Ok(attr)
   }
 
+  /// Parses a single `#[...]` or `#![...]` attribute into an [`Attribute`].
   pub(crate) fn parse_attribute(&mut self, engine: &mut DiagnosticEngine) -> Result<Attribute, ()> {
     let mut token = self.current_token();
 
@@ -35,16 +37,21 @@ impl Parser {
         AttrStyle::Outer
       },
       _ => {
+        let offending = self.current_token();
+        let lexeme = self.get_token_lexeme(&offending);
         let diagnostic = Diagnostic::new(
           DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
           "Unexpected token".to_string(),
           self.source_file.path.clone(),
         )
         .with_label(
-          self.current_token().span,
-          Some("Expected an attribute, found \"{}\"".to_string()),
+          offending.span,
+          Some(format!(
+            "expected `#` or `#!` to start an attribute, found `{lexeme}`"
+          )),
           LabelStyle::Primary,
         )
+        .with_help("Attributes must be prefixed with `#` (outer) or `#!` (inner).".to_string())
         .with_help(Parser::get_token_help(
           &self.current_token().kind,
           &self.current_token(),
@@ -69,6 +76,7 @@ impl Parser {
     })
   }
 
+  /// Parses attribute metadata like `derive(Debug)` or `path = \"foo\"`.
   pub(crate) fn parse_attribute_input(
     &mut self,
     engine: &mut DiagnosticEngine,
@@ -83,6 +91,7 @@ impl Parser {
     })
   }
 
+  /// Parses the attribute tail (`= value` or nested token trees inside delimiters).
   pub(crate) fn parse_attribute_input_tail(
     &mut self,
     engine: &mut DiagnosticEngine,
@@ -120,6 +129,7 @@ impl Parser {
     Ok(tokens)
   }
 
+  /// Recursively parses a delimited token-tree, handling nested delimiters.
   pub(crate) fn parse_delim_token_tree(
     &mut self,
     engine: &mut DiagnosticEngine,

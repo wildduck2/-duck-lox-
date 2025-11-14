@@ -9,6 +9,7 @@ impl Parser {
   /*                                     Shift Parsing                                            */
   /* -------------------------------------------------------------------------------------------- */
 
+  /// Parses `<<` and `>>` binary expressions, ensuring tokens are paired.
   pub(crate) fn parse_shift(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_term(engine)?;
 

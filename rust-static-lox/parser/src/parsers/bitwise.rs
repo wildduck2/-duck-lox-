@@ -9,6 +9,7 @@ impl Parser {
   /*                                     Bitwise Parsing                                           */
   /* -------------------------------------------------------------------------------------------- */
 
+  /// Parses chained bitwise OR expressions (`expr | expr`).
   pub(crate) fn parse_bitwise_or(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_bitwise_xor(engine)?;
 
@@ -34,6 +35,7 @@ impl Parser {
     Ok(lhs)
   }
 
+  /// Parses chained bitwise XOR expressions (`expr ^ expr`).
   pub(crate) fn parse_bitwise_xor(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_bitwise_and(engine)?;
 
@@ -59,6 +61,7 @@ impl Parser {
     Ok(lhs)
   }
 
+  /// Parses chained bitwise AND expressions (`expr & expr`).
   pub(crate) fn parse_bitwise_and(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_shift(engine)?;
 

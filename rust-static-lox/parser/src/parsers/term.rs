@@ -9,6 +9,7 @@ impl Parser {
   /*                                     Term Parsing                                             */
   /* -------------------------------------------------------------------------------------------- */
 
+  /// Parses additive expressions (`+`, `-`).
   pub(crate) fn parse_term(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_factor(engine)?;
 

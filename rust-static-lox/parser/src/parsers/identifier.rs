@@ -4,6 +4,7 @@ use lexer::token::Token;
 use crate::{ast::Expr, Parser};
 
 impl Parser {
+  /// Parses a standard identifier expression.
   pub(crate) fn parser_ident(
     &mut self,
     token: &mut Token,
@@ -25,6 +26,7 @@ impl Parser {
     })
   }
 
+  /// Parses contextual keywords (`self`, `super`, `crate`, `Self`) as identifiers.
   pub(crate) fn parse_keyword_ident(
     &mut self,
     token: &mut Token,

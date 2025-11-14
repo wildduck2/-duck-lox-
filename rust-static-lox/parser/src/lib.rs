@@ -53,6 +53,8 @@ impl Parser {
     self.tokens[self.current + n].clone()
   }
 
+  /// Returns the token `n` positions behind the cursor without rewinding.
+  /// Useful for diagnostics that need to point at the most recently consumed lexeme.
   fn peek_prev(&self, n: usize) -> Token {
     let index = self.current.saturating_sub(n + 1);
     self.tokens[index].clone()
@@ -137,10 +139,7 @@ impl Parser {
     )
     .with_label(
       token.span,
-      Some(format!(
-        "" // "Expected a {:?} expression, found {:?}",
-           // expected, token
-      )),
+      Some(format!("expected '{expected:?}' here")),
       LabelStyle::Primary,
     );
 
@@ -211,11 +210,7 @@ impl Parser {
     )
     .with_label(
       token.span,
-      Some(format!(
-        "",
-        // "Expected a primary expression, found \"{}\"",
-        // token.lexeme
-      )),
+      Some("parser ran out of input while this token was being processed".to_string()),
       LabelStyle::Primary,
     );
 

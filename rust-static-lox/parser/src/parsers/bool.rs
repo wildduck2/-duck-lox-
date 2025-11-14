@@ -4,6 +4,7 @@ use lexer::token::Token;
 use crate::{ast::Expr, Parser};
 
 impl Parser {
+  /// Parses the `true`/`false` keywords into a boolean literal expression.
   pub(crate) fn parser_bool(
     &mut self,
     token: &mut Token,

@@ -2,6 +2,7 @@ use crate::{DiagnosticEngine, Parser};
 use lexer::token::TokenKind;
 
 impl Parser {
+  /// Parses the `+ 'a + 'b` portion of a lifetime bound list, stopping on delimiters.
   pub(crate) fn parse_lifetime_bounds(
     &mut self,
     engine: &mut DiagnosticEngine,
