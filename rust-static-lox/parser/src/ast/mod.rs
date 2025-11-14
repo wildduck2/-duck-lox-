@@ -1183,15 +1183,24 @@ pub(crate) struct FieldInit {
   pub value: Option<Expr>,
 }
 
-/// All supported range expression flavors.
-#[derive(Debug, Clone, PartialEq)]
+/// Represents all possible range kinds in Rust.
+/// Mirrors Rust’s real range syntax, plus a few extensions for completeness.
+#[derive(Debug, Clone)]
 pub(crate) enum RangeKind {
-  Exclusive,
-  Inclusive,
-  From,
-  To,
-  ToInclusive,
+  /// `..` - fully open range
   Full,
+  /// `a..` - range starting at a value, exclusive end
+  From,
+  /// `a..=` - range starting at a value, inclusive end (rare but possible in macros)
+  FromInclusive,
+  /// `..b` - range ending at a value, exclusive end
+  To,
+  /// `..=b` - range ending at a value, inclusive end
+  ToInclusive,
+  /// Legacy/ambiguous: raw `..` treated as exclusive
+  Exclusive,
+  /// Legacy/ambiguous: raw `..=` treated as inclusive
+  Inclusive,
 }
 
 /// Determines whether closures capture by move or by reference.

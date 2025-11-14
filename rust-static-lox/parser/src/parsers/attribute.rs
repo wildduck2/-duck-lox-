@@ -1,3 +1,64 @@
+//! TODO: Attribute parsing is incomplete compared with full Rust grammar.
+//!
+//! Missing or incomplete features:
+//!
+//! - **Meta-item grammar support (`Meta`, `MetaList`, `MetaNameValue`)**  
+//!   Current implementation treats all attribute contents as raw token trees.  
+//!   Rust requires structured parsing of items like:  
+//!   - `#[path = "x"]`  
+//!   - `#[cfg(any(feature = "a", feature = "b"))]`  
+//!   - `#[derive(Clone, Debug)]`
+//!
+//! - **Proper token-tree preservation**  
+//!   Token trees should preserve spans, token kinds, nested structure, and  
+//!   delimiters. The current representation loses important information.
+//!
+//! - **Support for outer vs inner attribute placement rules**  
+//!   Rust enforces where `#![...]` is allowed (modules, crates only).  
+//!   Parser currently accepts inner attributes anywhere.
+//!
+//! - **Diagnostics for invalid attribute paths**  
+//!   Rust forbids some forms, e.g. keywords other than `cfg`, `derive`, etc.  
+//!   Should produce errors for malformed meta paths.
+//!
+//! - **Attribute argument delimiters**  
+//!   Rust allows only parentheses for meta lists (`foo(...)`).  
+//!   Your parser accepts all delimiter kinds—may need tightening or  
+//!   explicit validation depending on language goals.
+//!
+//! - **Support for key-value pairs with expressions**  
+//!   Example: `#[doc = concat!("hi", foo())]`  
+//!   Current implementation only records raw tokens; an expression parser  
+//!   is needed for correctness if attributes need semantic meaning.
+//!
+//! - **Multi-segment attribute paths**  
+//!   Example: `#[foo::bar::baz]`  
+//!   Parser supports paths but does not validate or distinguish  
+//!   `foo::bar` from `foo(bar)` or `foo = bar` forms.
+//!
+//! - **Error recovery**  
+//!   Unterminated brackets, nested brackets, misplaced commas, or stray  
+//!   tokens inside meta items should generate clearer, context-aware diagnostics.
+//!
+//! - **Duplicates and attribute ordering rules**  
+//!   Rust has rules for when multiple attributes conflict, e.g. multiple  
+//!   `#[repr(...)]`, duplicate `doc` attributes, etc.  
+//!   Parser currently accepts everything silently.
+//!
+//! Grammar reminder (simplified):
+//! ```text
+//! attr        → outerAttr | innerAttr
+//! outerAttr   → "#[" meta "]"
+//! innerAttr   → "#![" meta "]"
+//! meta        → PATH
+//!             | PATH "(" metaItem* ")"
+//!             | PATH "=" LITERAL
+//! metaItem    → meta | LITERAL
+//! ```
+//!
+//! This module provides foundational parsing but does not yet implement  
+//! full Rust-compatible attribute semantics or meta-item structures.
+
 use crate::{ast::*, Parser};
 
 use diagnostic::{

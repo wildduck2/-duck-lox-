@@ -6,46 +6,70 @@ use diagnostic::DiagnosticEngine;
 use lexer::token::TokenKind;
 
 impl Parser {
-  /* -------------------------------------------------------------------------------------------- */
-  /*                                     Range Parsing                                           */
-  /* -------------------------------------------------------------------------------------------- */
+  //! TODO: Enforce Rust's exact precedence for range expressions.
+  //!       According to Rust grammar, ranges sit *below* `||` and above assignment,
+  //!       but your implementation currently attaches ranges directly to `logicalOr`.
+  //!
+  //!       Example: `a + b .. c` must parse as `(a + b) .. c`, but
+  //!       `a .. b + c` must parse as `a .. (b + c)`.
+  //!
+  //!       Also ensure that range expressions cannot nest or chain:
+  //!       `a..b..c` must be rejected.
+  //!
+  //!       Relevant Rust spec: https://doc.rust-lang.org/reference/expressions/range-expr.html
 
-  /// Parses Rust range expressions (`..`, `..=`, `a..b`, etc.).
+  /// Parses Rust range expressions:
+  /// ```
+  /// rangeExpr → logicalOr ( (".." | "..=") logicalOr? )?
+  /// ```
+  ///
+  /// Supported forms:
+  /// - `a..b`         → `RangeKind::To`
+  /// - `a..=b`        → `RangeKind::ToInclusive`
+  /// - `a..`          → `RangeKind::From`
+  /// - `..b`          → `RangeKind::To`
+  /// - `..=b`         → `RangeKind::ToInclusive`
+  /// - `..`           → `RangeKind::Full`
+  ///
+  /// Example:
+  /// ```rust
+  /// 0..10
+  /// ..=len
+  /// start.. // open-ended
+  /// ```
   pub(crate) fn parse_range_expr(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    // Case 1: range starts with ".." or "..="
+    // Case 1: starts directly with a range operator
     if matches!(
       self.current_token().kind,
       TokenKind::DotDot | TokenKind::DotDotEq
     ) {
-      return self.parse_prefix_range(None, engine);
+      return self.parse_range(None, engine);
     }
 
-    // Case 2: range starts with a single expression
-    let mut lhs = Some(self.parse_logical_or(engine)?);
+    // Case 2: starts with a left-hand expression
+    let lhs = self.parse_logical_or(engine)?;
 
-    'range_expr_find: while !self.is_eof() {
-      let token = self.current_token();
-      match token.kind {
-        TokenKind::DotDot | TokenKind::DotDotEq => {
-          lhs = Some(self.parse_prefix_range(lhs.take(), engine)?);
-        },
-        _ => break 'range_expr_find,
-      }
+    // Only one range operator allowed per expression
+    if matches!(
+      self.current_token().kind,
+      TokenKind::DotDot | TokenKind::DotDotEq
+    ) {
+      self.parse_range(Some(lhs), engine)
+    } else {
+      Ok(lhs)
     }
-
-    Ok(lhs.unwrap())
   }
 
-  /// Parses the `..` / `..=` portion once the start expression is known (or absent).
-  fn parse_prefix_range(
+  /// Parses a single `..` or `..=` range operator with optional start and end expressions.
+  fn parse_range(
     &mut self,
     start: Option<Expr>,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
     let token = self.current_token();
-    self.advance(engine); // consume the range operator
+    self.advance(engine); // consume the '..' or '..='
 
-    // Check if an expression follows
+    // Detect whether an expression follows
     let has_end = !matches!(
       self.current_token().kind,
       TokenKind::CloseBracket
@@ -55,22 +79,25 @@ impl Parser {
         | TokenKind::Eof
     );
 
-    let rhs = if has_end {
+    let end = if has_end {
       Some(Box::new(self.parse_logical_or(engine)?))
     } else {
       None
     };
 
-    let kind = match token.kind {
-      TokenKind::DotDot => RangeKind::To,
-      TokenKind::DotDotEq => RangeKind::ToInclusive,
-      _ => unreachable!(),
+    let kind = match (token.kind, start.is_some(), end.is_some()) {
+      (TokenKind::DotDot, false, false) => RangeKind::Full, // `..`
+      (TokenKind::DotDot, true, false) => RangeKind::From,  // `a..`
+      (TokenKind::DotDot, _, true) => RangeKind::To,        // `a..b` or `..b`
+      (TokenKind::DotDotEq, _, true) => RangeKind::ToInclusive, // `a..=b` or `..=b`
+      (TokenKind::DotDotEq, true, false) => RangeKind::FromInclusive, // `a..=` (rare, macros)
+      _ => RangeKind::Exclusive,                            // fallback safety case
     };
 
     Ok(Expr::Range {
       kind,
       start: start.map(Box::new),
-      end: rhs,
+      end,
       span: token.span,
     })
   }

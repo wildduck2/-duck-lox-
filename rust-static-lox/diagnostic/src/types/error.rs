@@ -30,6 +30,7 @@ pub enum DiagnosticError {
   InvalidMutabilityInField,
   InvalidPointerType,
   InvalidWherePredicate,
+  InvalidMutability,
 }
 
 impl DiagnosticError {
@@ -57,6 +58,7 @@ impl DiagnosticError {
       Self::InvalidMutabilityInField => "E0020",
       Self::InvalidPointerType => "E0021",
       Self::InvalidWherePredicate => "E0022",
+      Self::InvalidMutability => "E0023",
     }
   }
 

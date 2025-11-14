@@ -1,3 +1,15 @@
+//! TODO:
+//! - Rust allows outer attributes on visibility such as #[cfg], but those
+//!   belong to the item parser, not here.
+//! - The simple path parser used by pub(in ...) must support full Rust paths
+//!   including leading colons, self, super, and $crate if macros are added.
+//! - Validate that pub(in ...) uses a valid module path in the semantic pass.
+//! - Rust allows whitespace and comments everywhere; ensure lexer already
+//!   provides that behavior.
+//! - Future: support macro fragments that may expand into visibility.
+//! - Future: handle token trees in proc macro contexts where visibility is
+//!   not constrained by normal grammar.
+
 use diagnostic::code::DiagnosticCode;
 use diagnostic::diagnostic::{Diagnostic, LabelStyle};
 use diagnostic::types::error::DiagnosticError;
@@ -7,106 +19,98 @@ use lexer::token::TokenKind;
 use crate::{ast::Visibility, Parser};
 
 impl Parser {
-  /// Parses the visibility modifiers like :
-  /// `pub`, `pub(crate)`, `pub(self)`, `pub(in path::to::module)`, or `pub(in path::to::module)`
+  /// Parses a Rust visibility modifier.
   ///
-  /// Returns a `Visibility` enum variant.
-  /// We use this to parse the visibility modifiers before any item declarations.
+  /// Rust grammar (simplified):
   ///
-  /// for example:
-  /// ```rust
-  /// pub(self) struct User{
-  ///   name: String,
-  /// }
-  /// ```
+  /// visibility :
+  ///     "pub"
+  ///   | "pub" "(" "crate" ")"
+  ///   | "pub" "(" "self" ")"
+  ///   | "pub" "(" "super" ")"
+  ///   | "pub" "(" "in" simple_path ")"
+  ///
+  /// Notes:
+  /// - If no "pub" keyword is present, the visibility is private.
+  /// - The "in" form accepts any crate-visible path.
+  /// - "pub(in crate)" is equivalent to "pub(crate)".
+  ///
+  /// Returns:
+  /// - A Visibility enum describing the parsed visibility.
+  ///
+  /// Examples:
+  /// pub struct Foo
+  /// pub(crate) mod util
+  /// pub(self) fn f
+  /// pub(super) fn g
+  /// pub(in path::to::module) type X
   pub(crate) fn parse_visibility(
     &mut self,
     engine: &mut DiagnosticEngine,
   ) -> Result<Visibility, ()> {
     let token = self.current_token();
 
-    self.advance(engine); // consume the "pub"
-    match token.kind {
-      TokenKind::KwPub if matches!(self.current_token().kind, TokenKind::OpenParen) => {
-        self.advance(engine); // consume '('
+    // If not "pub" then visibility is private.
+    if !matches!(token.kind, TokenKind::KwPub) {
+      return Ok(Visibility::Private);
+    }
 
-        let restriction = self.current_token();
-        self.advance(engine); // consume keyword inside ()
+    self.advance(engine); // consume "pub"
 
-        let visibility = match restriction.kind {
-          TokenKind::KwCrate => Ok(Visibility::LicCrate),
-          TokenKind::KwSelf => Ok(Visibility::LicSelf),
-          TokenKind::KwSuper => Ok(Visibility::LicSuper),
-          TokenKind::KwIn => {
-            // Check if we have `pub(in crate)`, thus it's the same as `pub(crate)`
-            if matches!(self.current_token().kind, TokenKind::KwCrate)
-              && self.peek(1).kind == TokenKind::CloseParen
-            {
-              return Ok(Visibility::LicCrate);
-            }
+    // Check for restricted form: pub( ... )
+    if matches!(self.current_token().kind, TokenKind::OpenParen) {
+      self.advance(engine); // consume "("
 
-            // Handle the `pub(in path::to::module)` case
-            // Notice we do not expect the path here to have generic args
-            // so if any occur, we will report an error
-            // for example: `pub(in path::to::<T>::module)`
-            Ok(Visibility::LicIn(self.parse_path(false, engine)?))
-          },
-          _ => {
-            let lexeme = self.get_token_lexeme(&restriction);
+      let restriction = self.current_token();
+      self.advance(engine); // consume identifier inside parens
 
-            let diagnostic = Diagnostic::new(
-              DiagnosticCode::Error(DiagnosticError::InvalidVisibilityRestriction),
-              format!("Invalid visibility restriction '{}'", lexeme),
-              self.source_file.path.clone(),
-            )
-            .with_label(
-              restriction.span,
-              Some(format!(
-                "Expected one of 'crate', 'self', 'super', or a valid module path, but found '{}'",
-                lexeme
-              )),
-              LabelStyle::Primary,
-            )
-            .with_help("Valid forms are: 'pub(crate)', 'pub(super)', 'pub(self)', or 'pub(in path::to::module)'.".to_string())
-            .with_note("Visibility restrictions limit the scope of public items.".to_string());
+      let visibility = match restriction.kind {
+        TokenKind::KwCrate => Ok(Visibility::LicCrate),
+        TokenKind::KwSelf => Ok(Visibility::LicSelf),
+        TokenKind::KwSuper => Ok(Visibility::LicSuper),
 
-            engine.add(diagnostic);
-            Err(())
-          },
-        };
+        TokenKind::KwIn => {
+          // Special case: pub(in crate)
+          if matches!(self.current_token().kind, TokenKind::KwCrate)
+            && self.peek(1).kind == TokenKind::CloseParen
+          {
+            return Ok(Visibility::LicCrate);
+          }
 
-        self.expect(TokenKind::CloseParen, engine)?; // consume ')'
-        visibility
-      },
-      TokenKind::KwPub => Ok(Visibility::Lic),
-      TokenKind::Ident | TokenKind::KwStruct => {
-        // This sets the current token to the previous token
-        // so that we can consume the identifier
-        // Hence the private visibility does not have any words to consume
-        self.current -= 1;
-        Ok(Visibility::Private)
-      },
+          // Otherwise: pub(in path)
+          Ok(Visibility::LicIn(self.parse_path(false, engine)?))
+        },
 
-      _ => {
-        let lexeme = self.get_token_lexeme(&token);
-        let diagnostic = Diagnostic::new(
-          DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
-          format!("Unexpected token '{}'", lexeme),
-          self.source_file.path.clone(),
-        )
-        .with_label(
-          token.span,
-          Some(format!("Unexpected token '{}'", lexeme)),
-          LabelStyle::Primary,
-        )
-        .with_help(
-          "Expected a visibility modifier like 'pub', 'pub(crate)', or leave it private."
-            .to_string(),
-        );
+        _ => {
+          let lexeme = self.get_token_lexeme(&restriction);
+          let diagnostic = Diagnostic::new(
+            DiagnosticCode::Error(DiagnosticError::InvalidVisibilityRestriction),
+            format!("invalid visibility restriction '{}'", lexeme),
+            self.source_file.path.clone(),
+          )
+          .with_label(
+            restriction.span,
+            Some(format!(
+              "expected crate, self, super, or in <path>, found {}",
+              lexeme
+            )),
+            LabelStyle::Primary,
+          )
+          .with_help(
+            "valid forms are: pub(crate), pub(self), pub(super), pub(in path::to::module)"
+              .to_string(),
+          );
 
-        engine.add(diagnostic);
-        Err(())
-      },
+          engine.add(diagnostic);
+          Err(())
+        },
+      };
+
+      self.expect(TokenKind::CloseParen, engine)?; // consume ")"
+      visibility
+    } else {
+      // Simple "pub"
+      Ok(Visibility::Lic)
     }
   }
 }

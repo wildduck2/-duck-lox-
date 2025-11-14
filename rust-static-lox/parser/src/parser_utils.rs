@@ -45,6 +45,7 @@ impl Parser {
 
     match self.current_token().kind {
       TokenKind::KwStruct => self.parse_struct_decl(attributes, visibility, engine),
+      TokenKind::KwFn => self.parse_fn_decl(attributes, visibility, engine),
       kind => {
         let lexeme = self.get_token_lexeme(&self.current_token());
         let diagnostic = Diagnostic::new(
@@ -136,10 +137,10 @@ impl Parser {
 
           let rhs = self.parse_range_expr(engine)?;
 
-      lhs = Expr::Assign {
-        target: Box::new(lhs),
-        value: Box::new(rhs),
-        span: token.span,
+          lhs = Expr::Assign {
+            target: Box::new(lhs),
+            value: Box::new(rhs),
+            span: token.span,
           };
         },
         _ => break,
@@ -184,7 +185,8 @@ impl Parser {
           self.peek(1).kind,
           TokenKind::OpenBrace | TokenKind::OpenParen | TokenKind::ColonColon
         ) {
-          return self.parse_struct_expr(&mut token, engine);
+          println!("debug: {:?}", self.peek(1).kind);
+          // return self.parse_struct_expr(&mut token, engine);
         }
 
         self.parser_ident(&mut token, engine)

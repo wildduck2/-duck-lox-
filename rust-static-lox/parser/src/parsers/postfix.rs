@@ -13,23 +13,43 @@ use crate::{
 };
 
 impl Parser {
-  /* -------------------------------------------------------------------------------------------- */
-  /*                                     Postfix Parsing                                          */
-  /* -------------------------------------------------------------------------------------------- */
+  //! TODO: Support turbofish syntax after method names.
+  //!       Example: `foo.method::<T, U>(args)`.
+  //!       Grammar: methodCallOp -> "." IDENTIFIER genericArgs? "(" callParams? ")".
 
-  /// Parses chained postfix expressions (calls, indexing, `.await`, `?`, etc.).
+  /// Parses **postfix expressions** following a primary expression.
+  ///
+  /// Grammar (simplified):
+  /// ```
+  /// postfixExpr   -> primaryExpr ( callOp | fieldAccessOp | indexOp | awaitOp | tryOp )*
+  ///
+  /// callOp         -> "(" callParams? ")"
+  /// fieldAccessOp  -> "." IDENTIFIER | "." INTEGER | "." "await"
+  /// indexOp        -> "[" expression "]"
+  /// awaitOp        -> "." "await"
+  /// tryOp          -> "?"
+  /// ```
+  ///
+  /// Examples:
+  /// ```rust
+  /// foo.bar()
+  /// foo[0].baz()?.await
+  /// (get()?).len()
+  /// ```
+  ///
+  /// This function chains postfix operators of equal precedence
+  /// until no further valid operator is found.
   pub(crate) fn parse_postfix(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    // First, parse the base expression (primary)
+    // Parse the base primary expression
     let mut expr = self.parse_primary(engine)?;
 
-    // Then, repeatedly apply postfix operators
-    'postfix_find: loop {
+    // Apply postfix operations repeatedly (chained)
+    loop {
       match self.current_token().kind {
         TokenKind::OpenParen => {
-          expr = self.parse_method_call(expr, engine)?; // normal call
+          expr = self.parse_call(expr, engine)?;
         },
         TokenKind::Dot => {
-          // look ahead for .await vs .foo vs .0
           if self.peek(1).kind == TokenKind::KwAwait {
             expr = self.parse_await(expr, engine)?;
           } else {
@@ -42,24 +62,30 @@ impl Parser {
         TokenKind::Question => {
           expr = self.parse_try(expr, engine)?;
         },
-        _ => break 'postfix_find,
+        _ => break,
       }
     }
 
     Ok(expr)
   }
 
-  /// Lowers `.await` into an `Expr::Await`.
+  /// Parses `.await` as a postfix operator.
+  ///
+  /// Example:
+  /// ```rust
+  /// future.await
+  /// ```
+  ///
+  /// This lowers into an `Expr::Await` node.
   pub(crate) fn parse_await(
     &mut self,
     expr: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
     let mut span = expr.span();
-
     self.expect(TokenKind::Dot, engine)?;
     let token = self.current_token();
-    self.advance(engine);
+    self.advance(engine); // consume `await`
     span.merge(token.span);
 
     Ok(Expr::Await {
@@ -68,172 +94,212 @@ impl Parser {
     })
   }
 
-  /// Lowers the postfix `?` operator.
+  /// Parses the postfix `?` operator for error propagation.
+  ///
+  /// Example:
+  /// ```rust
+  /// foo()?
+  /// ```
+  ///
+  /// Lowers into an `Expr::Try` AST node.
   pub(crate) fn parse_try(
     &mut self,
     expr: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
-    let mut start_span = expr.span();
+    let mut span = expr.span();
     self.expect(TokenKind::Question, engine)?;
-    start_span.merge(self.current_token().span);
+    span.merge(self.current_token().span);
 
     Ok(Expr::Try {
       expr: Box::new(expr),
-      span: start_span,
+      span,
     })
   }
 
-  /// Parses indexing expressions `foo[expr]`.
+  /// Parses an indexing expression such as `foo[expr]`.
+  ///
+  /// Grammar:
+  /// ```
+  /// indexExpr -> primaryExpr "[" expression "]"
+  /// ```
+  ///
+  /// Example:
+  /// ```rust
+  /// arr[i + 1]
+  /// ```
   pub(crate) fn parse_index(
     &mut self,
     object: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
-    let mut start_span = object.span();
-
+    let mut span = object.span();
     self.expect(TokenKind::OpenBracket, engine)?;
     let index = self.parse_expression(ExprContext::Default, engine)?;
-    let close_bracket = self.current_token();
+    let close = self.current_token();
     self.expect(TokenKind::CloseBracket, engine)?;
-    start_span.merge(close_bracket.span);
+    span.merge(close.span);
 
     Ok(Expr::Index {
       object: Box::new(object),
       index: Box::new(index),
-      span: start_span,
+      span,
     })
   }
 
-  /// Parses `.field`, `.method()`, or tuple-field syntax.
+  /// Parses `.field`, `.method(args)`, or tuple indexing like `.0`.
+  ///
+  /// Grammar:
+  /// ```
+  /// fieldAccessOp -> "." IDENTIFIER
+  /// tupleFieldOp  -> "." INTEGER
+  /// methodCallOp  -> "." IDENTIFIER "(" callParams? ")"
+  /// ```
+  ///
+  /// Examples:
+  /// ```rust
+  /// foo.bar
+  /// foo.bar()
+  /// tuple.0
+  /// ```
   pub(crate) fn parse_field_or_method(
     &mut self,
     object: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
-    let mut start_span = object.span();
+    let mut span = object.span();
     self.expect(TokenKind::Dot, engine)?;
 
     let token = self.current_token();
 
-    // Look ahead for method call
-    if let TokenKind::Ident = token.kind {
-      let name = self
-        .source_file
-        .src
-        .get(token.span.start..token.span.end)
-        .unwrap()
-        .to_string();
+    match &token.kind {
+      // Named field or method access
+      TokenKind::Ident => {
+        let name = self.get_token_lexeme(&token);
+        self.advance(engine); // consume identifier
 
-      self.advance(engine);
+        // `.method(args)`
+        if self.current_token().kind == TokenKind::OpenParen {
+          self.expect(TokenKind::OpenParen, engine)?;
+          let args = self.parse_call_params(engine)?;
+          let close = self.current_token();
+          self.expect(TokenKind::CloseParen, engine)?;
+          span.merge(close.span);
 
-      // If next is '(', it's a method call
-      if !self.is_eof() && self.current_token().kind == TokenKind::OpenParen {
-        self.expect(TokenKind::OpenParen, engine)?;
-        let args = self.parse_call_params(engine)?;
-        let close_paren = self.current_token();
-        self.expect(TokenKind::CloseParen, engine)?;
-        start_span.merge(close_paren.span);
+          return Ok(Expr::MethodCall {
+            receiver: Box::new(object),
+            method: name,
+            turbofish: None,
+            args,
+            span,
+          });
+        }
 
-        return Ok(Expr::MethodCall {
-          receiver: Box::new(object),
-          method: name,
-          turbofish: None,
-          args,
-          span: start_span,
-        });
-      }
+        // `.field`
+        span.merge(token.span);
+        Ok(Expr::Field {
+          object: Box::new(object),
+          field: FieldAccess::Named(name),
+          span,
+        })
+      },
 
-      // Otherwise it's a field access
-      start_span.merge(token.span);
-      return Ok(Expr::Field {
-        object: Box::new(object),
-        field: FieldAccess::Named(name),
-        span: start_span,
-      });
+      // Tuple field access: `.0`, `.1`, etc.
+      TokenKind::Literal {
+        kind: LiteralKind::Integer { .. },
+      } => {
+        let value_str = self.get_token_lexeme(&token);
+        let index = value_str.parse::<usize>().unwrap_or(0);
+        self.advance(engine);
+        span.merge(token.span);
+
+        Ok(Expr::Field {
+          object: Box::new(object),
+          field: FieldAccess::Unnamed(index),
+          span,
+        })
+      },
+
+      // Invalid token after `.`
+      _ => {
+        let lexeme = self.get_token_lexeme(&token);
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+          format!("invalid token `{lexeme}` after `.`"),
+          self.source_file.path.clone(),
+        )
+        .with_label(
+          token.span,
+          Some("expected an identifier, tuple index, or method call target".to_string()),
+          LabelStyle::Primary,
+        )
+        .with_help("Examples: `.foo`, `.0`, `.await`, or `.method(args)`.".to_string());
+        engine.add(diagnostic);
+        Err(())
+      },
     }
-
-    // Tuple indexing: .0, .1, etc.
-    if let TokenKind::Literal {
-      kind: LiteralKind::Integer { .. },
-    } = token.kind
-    {
-      let value_str = self
-        .source_file
-        .src
-        .get(token.span.start..token.span.end)
-        .unwrap();
-      let index = value_str.parse::<usize>().unwrap_or(0);
-      self.advance(engine);
-      start_span.merge(token.span);
-
-      return Ok(Expr::Field {
-        object: Box::new(object),
-        field: FieldAccess::Unnamed(index),
-        span: start_span,
-      });
-    }
-
-    let lexeme = self.get_token_lexeme(&token);
-    let diagnostic = Diagnostic::new(
-      DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
-      format!("invalid token `{lexeme}` after `.`"),
-      self.source_file.path.clone(),
-    )
-    .with_label(
-      token.span,
-      Some("expected an identifier, tuple index, or method call target".to_string()),
-      LabelStyle::Primary,
-    )
-    .with_help("Examples: `.foo`, `.0`, `.await`, or `.method(args)`.".to_string());
-    engine.add(diagnostic);
-
-    Err(())
   }
 
-  /// Parses function-call syntax applied to an already-parsed callee.
-  pub(crate) fn parse_method_call(
+  /// Parses a regular function call expression like `foo(arg1, arg2)`.
+  ///
+  /// Grammar:
+  /// ```
+  /// callOp ->"(" callParams? ")"
+  /// ```
+  ///
+  /// Example:
+  /// ```rust
+  /// add(1, 2)
+  /// ```
+  pub(crate) fn parse_call(
     &mut self,
     callee: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
-    let mut start_span = callee.span();
-
+    let mut span = callee.span();
     self.expect(TokenKind::OpenParen, engine)?;
     let args = self.parse_call_params(engine)?;
-    let close_paren = self.current_token();
+    let close = self.current_token();
     self.expect(TokenKind::CloseParen, engine)?;
-    start_span.merge(close_paren.span);
+    span.merge(close.span);
 
     Ok(Expr::Call {
       callee: Box::new(callee),
       args,
-      span: start_span,
+      span,
     })
   }
 
-  /// Parses zero or more comma-separated call arguments.
+  /// Parses a comma-separated list of call arguments.
+  ///
+  /// Grammar:
+  /// ```
+  /// callParams -> expression ("," expression)* ","?
+  /// ```
+  ///
+  /// Example:
+  /// ```rust
+  /// foo(x, y + 1, bar())
+  /// ```
+  ///
+  /// This supports nested calls such as `foo(bar(1), baz(2))`.
   pub(crate) fn parse_call_params(
     &mut self,
     engine: &mut DiagnosticEngine,
   ) -> Result<Vec<Expr>, ()> {
-    let mut exprs = vec![];
+    let mut args = vec![];
 
     while !self.is_eof() && self.current_token().kind != TokenKind::CloseParen {
-      // NOTE: move the higher precednce when you make more productions ready to aboid bugs like
-      // `foo(foo(1, 2), 3)` thus it will be unable to parse the nested call
       let expr = self.parse_expression(ExprContext::Default, engine)?;
-      exprs.push(expr);
+      args.push(expr);
 
       if matches!(self.current_token().kind, TokenKind::Comma) {
-        self.expect(TokenKind::Comma, engine)?;
-      }
-
-      if matches!(self.current_token().kind, TokenKind::CloseParen) {
+        self.advance(engine); // consume comma
+      } else {
         break;
       }
     }
 
-    Ok(exprs)
+    Ok(args)
   }
 }

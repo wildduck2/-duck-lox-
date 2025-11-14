@@ -1,3 +1,26 @@
+//! TODO: Implement support for non short circuit boolean operators if your language adds them.
+//!
+//! TODO: Integrate parse_range_expr before parse_logical_or if your grammar supports ranges
+//!       with lower precedence than logical or. In real Rust range expressions bind tighter
+//!       than comparisons but looser than assignments and do not interfere with || and &&.
+//!
+//! TODO: Implement error recovery for cases like "a || || b" to match rustc style diagnostics.
+//!
+//! TODO: Support improvements for handling trailing operators such as "a ||" or "a &&"
+//!       by emitting specific diagnostics instead of delegating to next parse stage.
+//!
+//! TODO: Implement constant folding or operator simplification if your frontend performs
+//!       early expression normalization.
+//!
+//! TODO: Add parentheses based precedence tests to ensure logicalOr and logicalAnd
+//!       interact correctly with unary, comparison, and bitwise operators.
+//!
+//! TODO: If implementing full Rust grammar, ensure that logical operators are not parsed
+//!       inside position where patterns are expected (match arms, let patterns, if let).
+//!
+//! TODO: Ensure that short circuiting semantics are preserved in later lowering steps
+//!       such as MIR-like or IR generation.
+
 use diagnostic::DiagnosticEngine;
 use lexer::token::TokenKind;
 
@@ -5,19 +28,27 @@ use crate::ast::BinaryOp;
 use crate::{ast::Expr, Parser};
 
 impl Parser {
-  /* -------------------------------------------------------------------------------------------- */
-  /*                                     Logical Parsing                                           */
-  /* -------------------------------------------------------------------------------------------- */
-
-  /// Parses logical OR (`||`) with proper short-circuit order.
+  /// Parses logical OR expressions.
+  ///
+  /// Grammar:
+  /// logicalOr
+  ///     -> logicalAnd ( "||" logicalAnd )*
+  ///
+  /// Notes:
+  /// - "||" is left associative.
+  /// - Evaluation short circuits.
+  /// - Left operand is parsed using parse_logical_and.
+  ///
+  /// Example:
+  /// a || b || c
   pub(crate) fn parse_logical_or(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_logical_and(engine)?;
 
-    'logical_or_find: while !self.is_eof() {
+    loop {
       let token = self.current_token();
       match token.kind {
         TokenKind::OrOr => {
-          self.advance(engine); // consume the logical operator
+          self.advance(engine);
 
           let rhs = self.parse_logical_and(engine)?;
 
@@ -28,22 +59,34 @@ impl Parser {
             span: token.span,
           };
         },
-        _ => break 'logical_or_find,
+        _ => break,
       }
     }
 
     Ok(lhs)
   }
 
-  /// Parses logical AND (`&&`) with left associativity.
+  /// Parses logical AND expressions.
+  ///
+  /// Grammar:
+  /// logicalAnd
+  ///     -> comparison ( "&&" comparison )*
+  ///
+  /// Notes:
+  /// - "&&" is left associative.
+  /// - Evaluation short circuits.
+  /// - Left operand is parsed using parse_comparison.
+  ///
+  /// Example:
+  /// a && b && c
   pub(crate) fn parse_logical_and(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_comparison(engine)?;
 
-    'logical_and_find: while !self.is_eof() {
+    loop {
       let token = self.current_token();
       match token.kind {
         TokenKind::AndAnd => {
-          self.advance(engine); // consume the logical operator
+          self.advance(engine);
 
           let rhs = self.parse_comparison(engine)?;
 
@@ -54,7 +97,7 @@ impl Parser {
             span: token.span,
           };
         },
-        _ => break 'logical_and_find,
+        _ => break,
       }
     }
 

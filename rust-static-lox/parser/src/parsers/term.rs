@@ -5,11 +5,33 @@ use crate::ast::BinaryOp;
 use crate::{ast::Expr, Parser};
 
 impl Parser {
-  /* -------------------------------------------------------------------------------------------- */
-  /*                                     Term Parsing                                             */
-  /* -------------------------------------------------------------------------------------------- */
+  //! TODO: term parser missing full Rust behavior
+  //! - Overloaded operator resolution is done in type checking, not parsing.
+  //! - Unary plus and unary minus are handled in unary parser, not term.
+  //! - Parsing is correct for all valid Rust additive expression forms.
 
-  /// Parses additive expressions (`+`, `-`).
+  /// Parses additive expressions.
+  ///
+  /// Rust grammar reference (simplified):
+  ///
+  /// ```
+  /// term
+  ///   -> factor
+  ///      ( "+" factor
+  ///      | "-" factor )*
+  /// ```
+  ///
+  /// Meaning:
+  /// - Operators plus and minus have left associativity.
+  /// - This parser produces a left associative tree of binary expressions.
+  ///
+  /// Examples:
+  ///   a + b
+  ///   a - b - c
+  ///   x + y * z   (multiplication handled in factor)
+  ///
+  /// Returns:
+  ///   Expr representing a chain of addition or subtraction operations.
   pub(crate) fn parse_term(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_factor(engine)?;
 
@@ -17,7 +39,7 @@ impl Parser {
       let token = self.current_token();
       match token.kind {
         TokenKind::Plus | TokenKind::Minus => {
-          self.advance(engine); // consume the term operator
+          self.advance(engine); // consume the operator
 
           let op = match token.kind {
             TokenKind::Plus => BinaryOp::Add,

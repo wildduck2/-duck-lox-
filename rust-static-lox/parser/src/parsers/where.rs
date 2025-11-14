@@ -1,3 +1,14 @@
+//! TODO:
+//! add support for predicates of the form (T, U): Trait
+//! add support for qualified type paths inside HRTBs
+//! add support for equality predicates inside trait bounds such as T: Trait<Item = U>
+//! add support for dyn Trait plus separated bounds after equality
+//! add support for underscore type predicate heads like _: Trait
+//! add support for parenthesized types inside predicates
+//! add recovery for malformed predicates such as missing bound after colon
+//! ensure type parser supports generic arguments and QSelf forms used in where clauses
+//! ensure parse_where_clause stops on all valid Rust terminators beyond braces parens semicolon
+
 use diagnostic::{
   code::DiagnosticCode,
   diagnostic::{Diagnostic, LabelStyle},
@@ -9,30 +20,43 @@ use lexer::token::TokenKind;
 use crate::{ast::generic::*, Parser};
 
 impl Parser {
-  /// Function that parses a where clause
-  /// It returns a `Option<WhereClause>` enum that represents a where clause
+  /// Parse a `where` clause attached to a type, function, or struct.
   ///
-  /// for example:
-  /// ```rust
-  /// let clause = self.parse_where_clause(engine)?;
+  /// Grammar:
+  /// ```
+  /// whereClause -> "where" (whereClauseItem ("," whereClauseItem)* ","?)?
   /// ```
   ///
-  /// You will use this to get the where clause of a struct declaration
-  /// like `struct User { name: String, age: u8 } where T: Clone + PartialEq`
+  /// Each `where` predicate is parsed using [`parse_type_predicate`].
+  /// Parsing stops when encountering one of `{`, `(`, or `;`, matching
+  /// struct, tuple, or function item contexts.
+  ///
+  /// Returns `Ok(Some(WhereClause))` if a `where` clause is present,
+  /// or `Ok(None)` if not found.
+  ///
+  /// Example:
+  /// ```rust
+  /// struct Container<T, U> where T: Clone, U: Copy;
+  /// ```
   pub(crate) fn parse_where_clause(
     &mut self,
     engine: &mut DiagnosticEngine,
   ) -> Result<Option<WhereClause>, ()> {
     if matches!(self.current_token().kind, TokenKind::KwWhere) {
-      self.advance(engine); // consume the where keyword
+      self.advance(engine); // consume 'where'
 
       let mut predicates = vec![];
 
-      while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::OpenBrace) {
+      while !self.is_eof()
+        && !matches!(
+          self.current_token().kind,
+          TokenKind::OpenBrace | TokenKind::OpenParen | TokenKind::Semi
+        )
+      {
         predicates.push(self.parse_type_predicate(engine)?);
 
         if matches!(self.current_token().kind, TokenKind::Comma) {
-          self.advance(engine); // consume the semicolon
+          self.advance(engine); // consume ','
         }
       }
 
@@ -42,31 +66,48 @@ impl Parser {
     Ok(None)
   }
 
-  /// Function that parses a type predicate
-  /// It returns a `WherePredicate` enum that represents a type predicate
+  /// Parse a single `where`-clause predicate.
   ///
-  /// for example:
-  /// ```rust
-  /// let predicate = self.parse_type_predicate(engine)?;
+  /// Supported predicate forms:
+  /// - **Type bound**         -> `T: Clone + Send`
+  /// - **Lifetime bound**     ->`'a: 'b + 'c`
+  /// - **Higher-ranked trait bound (HRTB)** -> `for<'a> F: Fn(&'a str)`
+  /// - **Equality predicate** ->`T::Item = i32`
+  ///
+  /// Grammar:
+  /// ```
+  /// whereClauseItem
+  ///   -> lifetimeWhereClauseItem
+  ///    | typeBoundWhereClauseItem
+  ///
+  /// typeBoundWhereClauseItem
+  ///   -> forLifetimes? type ":" typeParamBounds?
+  ///    | forLifetimes? type "=" type
+  ///
+  /// lifetimeWhereClauseItem
+  ///   → LIFETIME ":" lifetimeBounds
   /// ```
   ///
-  /// You will use this to get the predicates of a where clause
-  /// like `T: Clone + PartialEq`
+  /// Example:
+  /// ```rust
+  /// where
+  ///   'a: 'b + 'c,
+  ///   for<'x> F: Fn(&'x T),
+  ///   T::Item = U
+  /// ```
   pub(crate) fn parse_type_predicate(
     &mut self,
     engine: &mut DiagnosticEngine,
   ) -> Result<WherePredicate, ()> {
     let token = self.current_token();
 
+    // Lifetime predicate: `'a: 'b + 'c`
     if matches!(token.kind, TokenKind::Lifetime { .. }) {
-      // This handle the case where we have lifetime bound in the where clause
-      // like `where 'a: 'b + 'c`
       let lifetime = self.get_token_lexeme(&token);
-      self.advance(engine); // consume the lifetime
+      self.advance(engine); // consume lifetime
 
       let lifetime_bounds = if matches!(self.current_token().kind, TokenKind::Colon) {
-        self.advance(engine); // consume the ":"
-
+        self.advance(engine); // consume ':'
         self.parse_lifetime_bounds(engine)?
       } else {
         vec![]
@@ -78,24 +119,21 @@ impl Parser {
       });
     }
 
-    // If it's not a lifetime, then it must be a type bound like `T: Clone` so we continue parsing
+    // Optional for<'a, 'b> prefix (applies only to type predicates)
+    let for_lifetimes = if matches!(self.current_token().kind, TokenKind::KwFor) {
+      Some(self.parse_for_lifetimes(engine)?)
+    } else {
+      None
+    };
+
+    // Parse the left-hand type (e.g. T, <T as Trait>::Item, etc.)
     let ty = self.parse_type(engine)?;
 
+    // Handle either `:` (bounds) or `=` (equality)
     match self.current_token().kind {
       TokenKind::Colon => {
-        self.advance(engine); // consume the ":"
-        let bounds = if !matches!(self.current_token().kind, TokenKind::Lifetime { .. }) {
-          Some(self.parse_type_bounds(engine)?)
-        } else {
-          None
-        };
-
-        let for_lifetimes = if matches!(self.current_token().kind, TokenKind::Lifetime { .. }) {
-          Some(self.parse_lifetime_bounds(engine)?)
-        } else {
-          None
-        };
-
+        self.advance(engine); // consume ':'
+        let bounds = Some(self.parse_type_bounds(engine)?);
         Ok(WherePredicate::Type {
           for_lifetimes,
           ty,
@@ -104,8 +142,7 @@ impl Parser {
       },
 
       TokenKind::Eq => {
-        self.advance(engine); // consume the "="
-
+        self.advance(engine); // consume '='
         Ok(WherePredicate::Equality {
           ty,
           equals: self.parse_type(engine)?,
@@ -114,7 +151,6 @@ impl Parser {
 
       _ => {
         let lexeme = self.get_token_lexeme(&self.current_token());
-
         let diagnostic = Diagnostic::new(
           DiagnosticCode::Error(DiagnosticError::InvalidWherePredicate),
           format!("unexpected token `{}` in where-clause predicate", lexeme),
@@ -128,7 +164,6 @@ impl Parser {
         .with_note(
           "a predicate must be one of: `T: Bound`, `'a: 'b`, or `T::Assoc = Type`".to_string(),
         );
-
         engine.add(diagnostic);
         Err(())
       },

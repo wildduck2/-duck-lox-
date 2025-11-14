@@ -1,3 +1,50 @@
+//! TODO: Literal parser missing features compared to full Rust grammar.
+//!
+//! Integer literals:
+//! - Validate suffix names (u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize).
+//! - Reject invalid or unknown suffixes.
+//! - Validate binary digits (only 0 and 1).
+//! - Validate octal digits (only 0 to 7).
+//! - Validate hex digits (0 to 9 and a to f).
+//! - Validate placement of underscores (no leading underscore, no trailing underscore,
+//!   no consecutive underscores, no underscore directly after prefix like 0x_).
+//!
+//! Float literals:
+//! - Support exponent syntax (1e10, 1.2e3, 5E-4).
+//! - Validate exponent digits.
+//! - Validate float suffixes (f32, f64).
+//! - Distinguish between integer followed by identifier and real float suffix.
+//! - Improve diagnostics for malformed floats (two dots, missing digits, bad exponent).
+//!
+//! String literals:
+//! - Validate escape sequences (\" \\n \\t \\r \\0 \\\\ \\xNN \\u{NNNN} etc).
+//! - Ensure byte strings (b"...") contain only ASCII after escape processing.
+//! - Ensure c strings do not contain interior null bytes.
+//! - Validate Unicode escapes inside normal strings.
+//!
+//! Raw strings:
+//! - Validate starting and ending hash counts match.
+//! - Validate that interior backslash escapes are not processed.
+//!
+//! Character literals:
+//! - Reject multi character literals like 'ab'.
+//! - Support escape sequences ('\\n', '\\t', '\\r', '\\0', '\\\\', '\\xNN', '\\u{NN}').
+//! - Validate that exactly one Unicode scalar value remains after escape processing.
+//!
+//! Byte literals:
+//! - Ensure final value is a single ASCII byte.
+//! - Support escape sequences (b'\\n', b'\\t', b'\\xNN', b'\\\\').
+//! - Reject any non ASCII code after escapes.
+//!
+//! General literal parsing:
+//! - Improve span merging for better diagnostics.
+//! - Add more specific errors for malformed prefixes (0b, 0o, 0x).
+//! - Add more specific errors for invalid raw string delimiters.
+//! - Provide suggestions when a float was intended but parsed as integer.
+//! - Provide suggestions when underscores appear in invalid places.
+//! - Ensure all literal errors point at the exact offending character.
+//
+
 use diagnostic::{
   code::DiagnosticCode,
   diagnostic::{Diagnostic, LabelStyle},
@@ -172,10 +219,12 @@ impl Parser {
           Some("Float literal is too large or malformed".to_string()),
           LabelStyle::Primary,
         )
-        .with_help("Float literals must be written in decimal form, e.g. `1.0` or `0.5`.".to_string());
-      engine.add(diagnostic);
-      return Err(());
-    },
+        .with_help(
+          "Float literals must be written in decimal form, e.g. `1.0` or `0.5`.".to_string(),
+        );
+        engine.add(diagnostic);
+        return Err(());
+      },
     };
 
     Ok(Expr::Float {
@@ -345,6 +394,22 @@ impl Parser {
       .as_bytes()[0];
 
     Ok(Expr::Byte {
+      value,
+      span: token.span,
+    })
+  }
+
+  /// Parses the `true`/`false` keywords into a boolean literal expression.
+  pub(crate) fn parser_bool(
+    &mut self,
+    token: &mut Token,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Expr, ()> {
+    let value = self.get_token_lexeme(token).parse::<bool>().unwrap();
+    self.advance(engine); // consume the identifier
+    token.span.merge(self.current_token().span);
+
+    Ok(Expr::Bool {
       value,
       span: token.span,
     })

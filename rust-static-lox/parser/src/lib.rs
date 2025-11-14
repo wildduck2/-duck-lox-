@@ -9,7 +9,6 @@ use lexer::token::{Token, TokenKind};
 use crate::ast::Item;
 
 pub mod ast;
-mod grammar;
 mod parser_utils;
 mod parsers;
 

@@ -11,14 +11,38 @@ use diagnostic::{
 use lexer::token::TokenKind;
 
 impl Parser {
-  /// Parses type names (primitive keywords, references, arrays, and basic paths).
-  /// This is intentionally limited until the full type grammar is implemented.
+  //! TODO:
+  //! extend type parsing to cover the full Rust type grammar:
+  //! - tuple types (T, U) and grouped types (T)
+  //! - slice types [T]
+  //! - never type !
+  //! - impl Trait and dyn Trait forms
+  //! - function pointer types fn(..) -> ..
+  //! - qualified paths in types like <T as Trait>::Item
+  //! - inferred type _
+  //! - parenthesized types inside more complex forms
+
+  /// Parses a type according to a small but Rust like subset of the type grammar.
+  ///
+  /// Grammar subset handled here:
+  ///
+  /// type
+  ///   -> ident_or_primitive                      // u32, i64, bool, user paths
+  ///    | path_type                               // Foo, crate::foo::Bar, with optional generics
+  ///    | "&" lifetime? "mut"? type               // references, for example &T or &'a mut U
+  ///    | "*" ("const" | "mut") type              // raw pointers like *const T or *mut U
+  ///    | "[" type ";" expression "]"             // array types like [T; N]
+  ///
+  /// Notes:
+  /// - tuple types (T, U), slices [T], impl Trait, dyn Trait,
+  ///   function pointer types and others are not yet implemented.
   pub(crate) fn parse_type(&mut self, engine: &mut DiagnosticEngine) -> Result<Type, ()> {
     let mut token = self.current_token();
     let lexeme = self.get_token_lexeme(&token);
-    self.advance(engine); // consume the identifier
+    self.advance(engine); // consume the first token of the type
 
     match token.kind {
+      // Primitive names and user defined paths
       TokenKind::Ident | TokenKind::KwCrate => match lexeme.as_str() {
         "u8" => Ok(Type::U8),
         "u16" => Ok(Type::U16),
@@ -43,30 +67,26 @@ impl Parser {
         "string" => Ok(Type::String),
 
         "bool" => Ok(Type::Bool),
-        // We allow parsing generic types like `Vec<T>` and `Option<T>`
+
+        // Fallback: treat as a path type, possibly with generic arguments
         _ => {
-          self.current -= 1; // This resests the current token to the last token
-                             // thence the parse_path function will consume the last token
+          // Reset position so parse_path can consume the ident or crate token
+          self.current -= 1;
           Ok(Type::Path(self.parse_path(true, engine)?))
         },
       },
 
+      // Tuple and parenthesized types are not implemented yet
       TokenKind::OpenParen => {
-        // TODO:
+        // Debug stub for now; full tuple and grouped type support is still missing.
         println!("debug tuple: {:?}", self.current_token().kind);
         Err(())
-        // let mut params = vec![];
-        // while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::CloseParen) {
-        //   params.push(self.parse_type(engine)?);
-        //   if matches!(self.current_token().kind, TokenKind::Comma) {
-        //     self.advance(engine); // consume the comma
-        //   }
-        // }
-        // self.expect(TokenKind::CloseParen, engine)?; // consume ')'
-        //
-        // Ok(Type::Tuple(params))
+        // Planned shape:
+        // parse ( T ) as a grouped type
+        // parse ( T , U , .. ) as a tuple type
       },
 
+      // Array type: [ T ; expr ]
       TokenKind::OpenBracket => {
         let element = self.parse_type(engine)?;
         self.expect(TokenKind::Semi, engine)?; // consume ';'
@@ -80,9 +100,10 @@ impl Parser {
         })
       },
 
+      // Raw pointer: *const T or *mut T
       TokenKind::Star => {
+        // If we see *T directly, this is missing the const or mut qualifier.
         if matches!(self.current_token().kind, TokenKind::Ident) {
-          // This handles the case where we have an incomplete raw pointer like `*T`
           let diagnostic = Diagnostic::new(
             DiagnosticCode::Error(DiagnosticError::InvalidPointerType),
             "Missing mutability qualifier for raw pointer type.".to_string(),
@@ -90,22 +111,24 @@ impl Parser {
           )
           .with_label(
             self.current_token().span,
-            Some("expected `const` or `mut` after `*`.".to_string()),
+            Some("expected const or mut after *.".to_string()),
             LabelStyle::Primary,
           )
           .with_note(
-            "Raw pointers in Rust must explicitly specify mutability — either `*const T` or `*mut T`."
+            "Raw pointers in Rust must explicitly specify mutability, either *const T or *mut T."
               .to_string(),
           )
           .with_help(
-            "Use `*const T` for an immutable raw pointer, or `*mut T` for a mutable one."
-              .to_string(),
+            "Use *const T for an immutable raw pointer, or *mut T for a mutable one.".to_string(),
           );
 
           engine.add(diagnostic);
           return Err(());
         }
 
+        // Reuse Mutability for pointer mutability:
+        // *const T  maps to Mutability::Immutable
+        // *mut T    maps to Mutability::Mutable
         let mutability = self.parse_mutability(engine)?;
 
         Ok(Type::RawPointer {
@@ -114,35 +137,33 @@ impl Parser {
         })
       },
 
+      // Reference types: &T, &'a T, &mut T, &'a mut T
       TokenKind::And => {
+        // Forbid patterns like &const T which are not valid reference types.
         if matches!(self.current_token().kind, TokenKind::KwConst) {
-          // This handles the case where we have a const keyword after a &
-          // like `&const T`
-          //        ^^^^^ Error here
           let diagnostic = Diagnostic::new(
             DiagnosticCode::Error(DiagnosticError::InvalidMutabilityInField),
-            "Invalid `const` specifier in struct field declaration.".to_string(),
+            "Invalid const specifier in reference type.".to_string(),
             self.source_file.path.clone(),
           )
           .with_label(
             self.current_token().span,
-            Some("`const` is not allowed after `&` or before a field type.".to_string()),
+            Some("const is not allowed after & in a reference type.".to_string()),
             LabelStyle::Primary,
           )
           .with_note(
-            "`const` does not apply to references. Only raw pointers support const qualifiers."
+            "const does not apply to references. Only raw pointers support const qualifiers."
               .to_string(),
           )
           .with_help(
-            "Use `*const T` for a raw const pointer, or `&T` for an immutable reference."
-              .to_string(),
+            "Use *const T for a raw const pointer, or &T for an immutable reference.".to_string(),
           );
 
           engine.add(diagnostic);
           return Err(());
         }
 
-        // This will handle the case where we have a &* like `&*const T` so a reference of a raw pointer
+        // Special case: &*const T or &*mut T
         if matches!(self.current_token().kind, TokenKind::Star) {
           return Ok(Type::Reference {
             lifetime: None,
@@ -151,7 +172,9 @@ impl Parser {
           });
         }
 
-        let lifetime = self.parse_lifetime(engine)?;
+        // Optional lifetime right after &
+        let lifetime = self.parse_type_lifetime(engine)?;
+        // Optional mut after lifetime: &mut T or &'a mut T
         let mutability = self.parse_mutability(engine)?;
 
         Ok(Type::Reference {
@@ -161,49 +184,52 @@ impl Parser {
         })
       },
 
+      // Reject bare mut or const at the start of a type
       _ if matches!(token.kind, TokenKind::KwMut | TokenKind::KwConst) => {
-        // This handles the case where we have a (const|mut) keyword before a type
-        // and it's not a reference or pointer
-        // like `const T` or `mut T`
         token.span.merge(self.current_token().span);
         let lexeme = self.get_token_lexeme(&token);
 
         let diagnostic = Diagnostic::new(
           DiagnosticCode::Error(DiagnosticError::InvalidMutabilityInField),
-          format!("Invalid `{:?}` specifier in struct field declaration.", lexeme),
+          format!("Invalid {} specifier in type position.", lexeme),
           self.source_file.path.clone(),
         )
         .with_label(
           token.span,
-          Some(format!("`{:?}` is not allowed before a field type.", lexeme)),
+          Some(format!("{} is not allowed before a bare type.", lexeme)),
           LabelStyle::Primary,
         )
-        .with_note("`mut` and `const` cannot modify field declarations directly.".to_string())
-        .with_help("Use `&mut T` or `*mut T` for references or pointers, or make the struct binding mutable.".to_string());
+        .with_note("mut and const cannot modify field or type declarations directly.".to_string())
+        .with_help(
+          "Use &mut T or *mut T for references or pointers, or make the binding itself mutable."
+            .to_string(),
+        );
 
         engine.add(diagnostic);
         Err(())
       },
 
+      // Fallback for unknown type starts
       _ => {
         token.span.merge(self.current_token().span);
         let lexeme = self.get_token_lexeme(&token);
 
         let diagnostic = Diagnostic::new(
           DiagnosticCode::Error(DiagnosticError::InvalidType),
-          format!("Unknown type or unexpected token `{:?}`", lexeme),
+          format!("Unknown type or unexpected token {}.", lexeme),
           self.source_file.path.clone(),
         )
         .with_label(
           token.span,
           Some(format!(
-            "Type `{:?}` is not recognized in this context",
+            "Type {} is not recognized in this position.",
             lexeme
           )),
           LabelStyle::Primary,
         )
         .with_help(format!(
-          "If `{lexeme}` is a custom type, declare it or bring it into scope before use."
+          "If {} is a custom type, declare it or bring it into scope before use.",
+          lexeme
         ));
 
         engine.add(diagnostic);
@@ -212,8 +238,17 @@ impl Parser {
     }
   }
 
-  /// Parses optional lifetimes that immediately follow `&`.
-  pub(crate) fn parse_lifetime(
+  /// Parses an optional lifetime that appears immediately after an ampersand in a reference type.
+  ///
+  /// Grammar subset:
+  ///
+  /// referenceType
+  ///   -> "&" LIFETIME? "mut"? type
+  ///
+  /// This helper only captures the LIFETIME part and returns:
+  /// - Some(name) if the current token is a lifetime and the previous token was '&'
+  /// - None otherwise
+  pub(crate) fn parse_type_lifetime(
     &mut self,
     engine: &mut DiagnosticEngine,
   ) -> Result<Option<String>, ()> {
@@ -221,7 +256,7 @@ impl Parser {
       && matches!(self.peek_prev(0).kind, TokenKind::And)
     {
       let token = self.current_token();
-      self.advance(engine); // consume the lifetime
+      self.advance(engine); // consume the lifetime token
       Ok(Some(self.get_token_lexeme(&token)))
     } else {
       Ok(None)
