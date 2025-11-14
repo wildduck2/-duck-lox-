@@ -27,7 +27,7 @@ impl Parser {
   /// `parse_item` to decide which constructs are supported.
   pub fn parse_program(&mut self, engine: &mut DiagnosticEngine) {
     while !self.is_eof() {
-      match self.parse_item(engine) {
+      match self.parse_expression(ExprContext::Default, engine) {
         // Returns Item, not Stmt
         Ok(item) => {
           item.print_tree("", true);

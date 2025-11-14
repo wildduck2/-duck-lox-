@@ -324,50 +324,76 @@ impl Expr {
         ty.print_tree(&format!("{}   ", new_prefix), true);
       },
 
-      Expr::Array {
+      
+      Expr::Array /*@_DONE_@*/ {
         elements, repeat, ..
       } => {
         println!("{}{} Array", prefix, connector);
-        let array_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
 
+        // Determine if we have children (elements block + optional repeat block)
         let has_elements = !elements.is_empty();
         let has_repeat = repeat.is_some();
+        let child_count = (has_elements as usize) + (has_repeat as usize);
 
-        // Empty array case
-        if !has_elements && !has_repeat {
-          println!("{}└─> <empty>", array_prefix);
+        // No children → empty array
+        if child_count == 0 {
+          let empty_connector = "└──";
+          let empty_prefix = format!("{}    ", prefix);
+          println!("{}{} <empty>", empty_prefix, empty_connector);
           return;
         }
 
-        // --- Elements block ---
-        if has_elements {
-          // Elements always come before repeat (if any)
-          let elem_hdr_conn = if has_repeat { "├─>" } else { "└─>" };
-          println!("{}{} Elements:", array_prefix, elem_hdr_conn);
+        // Build the prefix for children
+        let child_prefix = format!("{}{}   ", prefix, if is_last { " " } else { "│" });
 
-          // Carrier stays if we also have a repeat expression
-          let elems_carrier = format!("{}{}  ", array_prefix, if has_repeat { "│" } else { " " });
+        let mut child_index = 0;
+
+        // --------------------- ELEMENTS BLOCK ---------------------
+        if has_elements {
+          let is_last_child = child_index + 1 == child_count;
+          let elem_connector = if is_last_child {
+            "└──"
+          } else {
+            "├──"
+          };
+
+          println!("{}{} Elements", child_prefix, elem_connector);
+
+          // prefix for actual element expressions
+          let elem_child_prefix = format!(
+            "{}{}   ",
+            child_prefix,
+            if is_last_child { " " } else { "│" }
+          );
 
           for (i, expr) in elements.iter().enumerate() {
-            let is_last_elem = i + 1 == elements.len();
-            let elem_prefix = format!(
-              "{}{}  ",
-              elems_carrier,
-              if is_last_elem && !has_repeat {
-                " "
-              } else {
-                "│"
-              }
-            );
-            expr.print_tree(&elem_prefix, is_last_elem && !has_repeat);
+            let last_expr = i + 1 == elements.len();
+            let connector = if last_expr { "└──" } else { "├──" };
+
+            expr.print_tree(&elem_child_prefix, last_expr);
           }
+
+          child_index += 1;
         }
 
-        // --- Repeat block ---
+        // --------------------- REPEAT BLOCK -----------------------
         if let Some(repeat_expr) = repeat {
-          println!("{}└─> Repeat:", array_prefix);
-          let repeat_prefix = format!("{}   ", array_prefix);
-          repeat_expr.print_tree(&repeat_prefix, true);
+          let is_last_child = child_index + 1 == child_count;
+          let rep_connector = if is_last_child {
+            "└──"
+          } else {
+            "├──"
+          };
+
+          println!("{}{} Repeat", child_prefix, rep_connector);
+
+          let rep_child_prefix = format!(
+            "{}{}   ",
+            child_prefix,
+            if is_last_child { " " } else { "│" }
+          );
+
+          repeat_expr.print_tree(&rep_child_prefix, true);
         }
       },
 
