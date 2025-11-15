@@ -1,17 +1,8 @@
-//! Lexers for numeric and string literals.
-//!
-//! Handles:
-//! - Numeric literals: integers and floats in decimal, binary, octal, hexadecimal
-//! - String literals: regular, byte, C strings, and their raw variants
-//! - Character literals: regular and byte characters
-//!
-//! All literal lexers handle escape sequences and emit diagnostics for malformed literals.
-
 use diagnostic::{
   code::DiagnosticCode,
   diagnostic::{Diagnostic, LabelStyle},
   types::error::DiagnosticError,
-  DiagnosticEngine, Span,
+  DiagnosticEngine,
 };
 
 use crate::{
@@ -22,11 +13,15 @@ use crate::{
 impl Lexer {
   /// Lex a numeric literal starting at the current offset.
   ///
-  /// Detects base by prefix:
-  /// - `0b` binary, `0o` octal, `0x` hexadecimal, otherwise decimal
+  /// - Detects base by prefix:
+  ///   - `0b` -> binary
+  ///   - `0o` -> octal
+  ///   - `0x` -> hexadecimal
+  ///   - otherwise -> decimal
   ///
-  /// Delegates to base-specific lexers (including float handling) and
-  /// returns `TokenKind::Literal { kind, suffix_start }`.
+  /// - For decimal / hex, also detects floats (fraction + exponent).
+  /// - After lexing the numeric core, rejects leading/trailing `_` which
+  ///   are not allowed in Rust (underscores must be **between digits**).
   pub fn lex_number(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
     let kind = if self.get_current_lexeme() == "0" {
       if self.match_char('b') {
@@ -57,7 +52,7 @@ impl Lexer {
         LabelStyle::Primary,
       )
       .with_help(
-        "underscores may be used only **between digits**, never at the start or end".to_string(),
+        "underscores may be used only between digits, never at the start or end".to_string(),
       )
       .with_note("examples of valid literals: `1_000`, `0xFF_A0`, `123`".to_string())
       .with_note("examples of invalid literals: `_123`, `123_`, `0x_12`".to_string());
@@ -72,8 +67,7 @@ impl Lexer {
   /// Lex a binary integer: `0b[01_]+`.
   ///
   /// Accepts `_` separators (not doubled). Records `empty_int` if no
-  /// digits follow `0b`. Also probes for an optional integer suffix
-  /// (e.g. `u8`, `i32`) starting at `suffix_start`.
+  /// digits follow `0b`. Also probes for an optional integer suffix.
   fn lex_binary(&mut self, engine: &mut DiagnosticEngine) -> LiteralKind {
     let mut empty_int = false;
     let mut suffix_start = 0;
@@ -104,8 +98,7 @@ impl Lexer {
   /// Lex an octal integer: `0o[0-7_]+`.
   ///
   /// Accepts `_` separators (not doubled). Records `empty_int` if no
-  /// digits follow `0o`. Also probes for an optional integer suffix
-  /// (e.g. `u16`, `usize`) starting at `suffix_start`.
+  /// digits follow `0o`. Also probes for an optional integer suffix.
   fn lex_octal(&mut self, engine: &mut DiagnosticEngine) -> LiteralKind {
     let mut empty_int = false;
     let mut suffix_start = 0;
@@ -113,6 +106,9 @@ impl Lexer {
       if ('0'..='7').contains(&c) {
         self.advance();
         empty_int = true;
+      } else if c == '_' && self.peek_next(1) != Some('_') {
+        self.advance();
+        continue;
       } else {
         self.check_suffix_type(c, &mut suffix_start, false, engine);
         break;
@@ -133,14 +129,15 @@ impl Lexer {
   /// Lex a decimal number: integer or float.
   ///
   /// Integer: `[0-9][0-9_]*`
-  /// Float forms supported:
-  /// - fractional: `123.45`
-  /// - exponent: `1e10`, `2.5E-3` (with optional `+`/`-`)
   ///
-  /// Tracks `_` separators, flags missing exponent digits, and records
-  /// integer/float kind. Probes for suffixes:
-  /// - integer: `u8|u16|u32|u64|u128|usize|i8|i16|i32|i64|i128|isize`
-  /// - float: `f32|f64`
+  /// Float forms:
+  /// - `123.45`
+  /// - `1e10`, `2.5E-3`
+  /// - supports underscores in integer, fraction and exponent parts
+  ///   (`1_000.0`, `1.0_0`, `1e+_2`, etc.)
+  ///
+  /// Uses a lookahead around `.` so that `1.foo` / `1._foo` lex as
+  /// `1` `.` `foo` (not a float literal).
   fn lex_decimal(&mut self, engine: &mut DiagnosticEngine) -> LiteralKind {
     let mut has_dot = false;
     let mut has_exponent = false;
@@ -150,21 +147,33 @@ impl Lexer {
       if c.is_ascii_digit() {
         self.advance();
       } else if c == '_' && self.peek_next(1) != Some('_') {
+        // underscore separator in integer / fractional / exponent digits
         self.advance();
         continue;
       } else if c == '.' && !has_dot && !has_exponent {
-        // NOTE: only treat '.' as float part if it's NOT immediately followed by an identifier or '('
-        // and if the next char is a digit (i.e., part of a fractional number).
+        // Decide whether '.' starts a fractional part or belongs to the next token.
+        // Rust rule: treat it as fractional if there is a digit somewhere right after
+        // either directly, or after a single underscore:
+        //
+        //   1.0      -> float
+        //   1._0     -> float
+        //   1.foo    -> int + '.' + ident
+        //   1._foo   -> int + '.' + ident
         let next = self.peek_next(1);
-        if let Some(next_ch) = next {
-          if next_ch.is_ascii_digit() {
-            has_dot = true;
-            self.advance(); // consume '.'
-          } else {
-            break; // e.g., tuple.0 → stop number lexing, '.' belongs to field access
-          }
+        let lookahead_digit = match next {
+          Some(n) if n.is_ascii_digit() => true,
+          Some('_') => {
+            // Allow '.' '_' digit as fractional, but only if a digit follows.
+            matches!(self.peek_next(2), Some(d) if d.is_ascii_digit())
+          },
+          _ => false,
+        };
+
+        if lookahead_digit {
+          has_dot = true;
+          self.advance(); // consume '.'
         } else {
-          break;
+          break; // '.' belongs to the next token (field access, range, etc.)
         }
       } else if (c == 'e' || c == 'E') && !has_exponent {
         has_exponent = true;
@@ -177,15 +186,20 @@ impl Lexer {
           }
         }
 
-        // Exponent digits
+        // Exponent digits + underscores.
+        // We deliberately do *not* enforce "at least one digit" here:
+        // Rust allows the lexer to accept tokens like `1e` and leave
+        // the semantic error to later stages.
         while let Some(ec) = self.peek() {
           if ec.is_ascii_digit() {
             self.advance();
-          } else if ec == '_' && self.peek_next(1) != Some('_') {
-            self.advance();
-            continue;
           } else {
-            break;
+            match ec == '_' && self.peek_next(1) != Some('_') {
+              true => {
+                self.advance();
+              },
+              false => break,
+            }
           }
         }
       } else {
@@ -206,8 +220,7 @@ impl Lexer {
     } else {
       LiteralKind::Integer {
         base: Base::Decimal,
-        // NOTE:  all the decimal number are not empty
-        empty_int: false,
+        empty_int: false, // decimal integers are never "empty" once here
         suffix_start,
       }
     }
@@ -220,7 +233,7 @@ impl Lexer {
   /// - floats: `f32|f64` (only if `is_float == true`)
   ///
   /// Returns `true` if a valid suffix was fully consumed, `false` otherwise.
-  /// Emits a diagnostic on obviously invalid trailing characters.
+  /// Emits a diagnostic only when a *recognized* suffix (`u`/`i`) is malformed.
   fn check_suffix_type(
     &mut self,
     c: char,
@@ -229,36 +242,43 @@ impl Lexer {
     engine: &mut DiagnosticEngine,
   ) -> bool {
     *suffix_start = self.current;
+
+    // Float suffix: f32 / f64
     if c == 'f' && is_float {
-      self.advance(); // consume f
+      self.advance(); // consume 'f'
 
       if self.peek() == Some('3') {
         self.advance();
         if self.peek() == Some('2') {
           self.advance();
-          return true;
+          return true; // f32
         }
       } else if self.peek() == Some('6') {
         self.advance();
-
         if self.peek() == Some('4') {
           self.advance();
-          return true;
+          return true; // f64
         }
       }
+
+      // `f` that doesn't form `f32` or `f64` is simply not a valid suffix;
+      // we return false and let the caller treat it as the next token.
+      return false;
     }
 
+    // Integer suffix: u* / i*
     if c == 'u' || c == 'i' {
-      let value = self.inner_check_suffix_type(c, suffix_start, engine);
-      return value;
+      let ok = self.inner_check_suffix_type(c, suffix_start, engine);
+      return ok;
     }
 
+    // Not a suffix start: leave it to the parser / next token.
     false
   }
 
   /// Internal: helper used by `check_suffix_type` to parse concrete integer suffixes.
-  /// Consumes characters after the leading `u`/`i`. Returns `true` on success.
   ///
+  /// Consumes characters after the leading `u`/`i`. Returns `true` on success.
   /// On failure, emits a focused diagnostic pointing at the suffix span.
   fn inner_check_suffix_type(
     &mut self,
@@ -266,22 +286,29 @@ impl Lexer {
     suffix_start: &mut usize,
     engine: &mut DiagnosticEngine,
   ) -> bool {
+    // consume 'u' or 'i'
     self.advance();
+
     match self.peek() {
+      // u8 / i8
       Some('8') => {
         self.advance();
-        false
+        true
       },
+
+      // 16, 128
       Some('1') => {
         self.advance();
 
         if self.peek() == Some('6') {
+          // 16
           self.advance();
           return true;
         } else if self.peek() == Some('2') {
           self.advance();
 
           if self.peek() == Some('8') {
+            // 128
             self.advance();
             return true;
           }
@@ -289,6 +316,8 @@ impl Lexer {
 
         false
       },
+
+      // 32
       Some('3') => {
         self.advance();
 
@@ -299,6 +328,8 @@ impl Lexer {
 
         false
       },
+
+      // 64
       Some('6') => {
         self.advance();
 
@@ -309,6 +340,8 @@ impl Lexer {
 
         false
       },
+
+      // isize / usize
       Some('s') => {
         self.advance();
         if self.peek() == Some('i') {
@@ -326,18 +359,21 @@ impl Lexer {
 
         false
       },
+
       _ => {
+        // Only emit a diagnostic because we *know* we're in a `u`/`i` suffix;
+        // otherwise this would just be another token.
         let diagnostic = Diagnostic::new(
           DiagnosticCode::Error(DiagnosticError::InvalidCharacter),
-          format!("Invalid character: {}", c),
+          format!("Invalid character in numeric suffix after `{c}`"),
           self.source.path.to_string(),
         )
         .with_label(
           diagnostic::Span::new(*suffix_start, self.current),
-          Some("Invalid character here".to_string()),
+          Some("Invalid numeric suffix here".to_string()),
           LabelStyle::Primary,
         )
-        .with_help("Invalid character.".to_string());
+        .with_help("expected one of: 8, 16, 32, 64, 128, size".to_string());
 
         engine.add(diagnostic);
         false
@@ -348,12 +384,12 @@ impl Lexer {
   /// Lex a hexadecimal number (`0x`/`0X`), supporting **ints and hex floats**.
   ///
   /// Integer: `0x[0-9A-Fa-f_]+`
-  /// Hex-float (C/Rust-style): `0xA.BCp±E` where exponent is base-2 (`p`/`P`)
-  ///   - optional fraction after `.`
-  ///   - exponent requires at least one digit; optional `+`/`-`
   ///
-  /// Accepts `_` separators (not doubled). Probes for valid suffixes
-  /// after the numeric part. Emits diagnostics for malformed exponents.
+  /// Hex-float (C/Rust-style): `0xA.BCp±E`
+  /// - optional fraction after `.`
+  /// - exponent is base-2 (`p` / `P`)
+  /// - optional `+` / `-` sign
+  /// - underscores allowed inside digits
   fn lex_hexadecimal(&mut self, engine: &mut DiagnosticEngine) -> LiteralKind {
     let mut empty_int = false;
     let mut has_dot = false;
@@ -417,8 +453,7 @@ impl Lexer {
       self.check_suffix_type(c, &mut suffix_start, has_dot || has_exponent, engine);
     }
 
-    // if the suffix start is 0 we set to to the current position, hence this is the end of the
-    // actual value and if there's a suffix it will be parsed as a suffix
+    // if suffix_start is 0, set it to current: end of numeric core
     if suffix_start == 0 {
       suffix_start = self.current;
     }
