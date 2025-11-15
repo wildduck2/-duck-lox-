@@ -1,358 +1,187 @@
-// character literals
-//'a'
-//'🦀'
-//'\n'
-//'\u{1F980}'
-//'x
-
-// string literals
-"hello"
-"foo\nbar"
-"multi
-line"
-"unterminated
-
-
-// byte literal (single ascii byte)
-b'a'
-b'\n'
-b'\x7F'
-b' \t\n'
-
-// Valid ASCII byte literals
-b'a'
-b'Z'
-b'_'
-b' '
-b'0'
-
-// Escaped forms
-b'\n'
-b'\r'
-b'\t'
-b'\\'
-b'\''
-b'\"'
-b'\0'
-
-// Hexadecimal escapes
-b'\x00'
-b'\x41'
-b'\x7F'
-
-//// Invalid / malformed cases
-//b'a
-//b'\n
-//b'\x7F
-//b''
-//b'🦀'
-//b'\u{1F980}'
-//b'ab'
-
-// Basic ASCII
-b"hello"
-b"HELLO"
-b"12345"
-b"abc_def"
-b" "            // single space
-b"!@#$%^&*()"   // punctuation
-
-// With escapes
-b"\n"
-b"\t"
-b"\r"
-b"\\"
-b"\""
-b"\0"
-b"\x41\x42\x43"     // "ABC"
-
-// Multi-line (if supported)
-b"line1\nline2"
-
-// With underscores (allowed inside escapes)
-b"abc_\x41_123"
-
-// Long but valid
-b"The quick brown fox jumps over the lazy dog"
-
-// Empty
-b""
-
-// Invalid because contains non-ASCII
-// b"🦀"
-
-// Invalid escape
-// b"\xG1"
-
-// Incomplete hex escape
-// b"\x4"
-
-// Unterminated
-// b"hello
-// b"\x41
-
-// Invalid prefix (should be b" not just b)
-// b
-// b"
-
-// Missing closing quote
-// b"abc
-
-
+//
+// ========== NORMAL STRING LITERALS ==========
+//
 
-// =========================================
-// C String Literal Tests
-// =========================================
-
-// ✅ VALID C STRING LITERALS
-// Basic
-c"hello"
-c"HELLO_WORLD"
-c"12345"
-c"!@#$%^&*()"
-c"with spaces"
-c"trailing\0"      // explicit null
-c"contains\0nulls"
-c"multi_part_string"
-
-// Escapes
-c"\n"
-c"\t"
-c"\r"
-c"\\"
-c"\""
-c"\0"
-
-// With embedded sequences
-c"line1\nline2\r\n"
-c"path\\to\\file"
-c"quote:\"hello\""
-
-// Empty string
-c""
-
-// Explicit nulls at the end
-c"end\0"
-c"middle\0of\0string"
-
-// =========================================
-// ⚠️ INVALID / MALFORMED EXAMPLES
-// =========================================
-
-// Missing closing quote
-// c"unterminated
-
-// Invalid Unicode (C strings are ASCII / UTF-8, but may allow it depending on implementation)
-// c"🦀"
-
-// Newline inside literal (if not escaped)
-// c"this
-// string"
-
-// Unescaped backslash at end
-// c"ends with \
-
-// Explicitly missing null terminator (should still be valid, but check behavior)
-c"non_null_terminated"
-
-// Double quotes inside without escape
-// c"bad"quote"
-
-// =========================================
-// ✅ EDGE CASES
-// =========================================
-
-// Explicit double null
-c"\0\0"
-
-// String with mix of escaped + null
-c"ab\nc\0def"
-
-// Long string
-c"The quick brown fox jumps over the lazy dog"
-
-// Escapes mixed with punctuation
-c"hello\tworld!\n\\\"C\\\""
-
-// Explicit embedded nulls mid-string
-c"abc\0def\0ghi"
-
-// ✅ BASIC BYTE STRINGS
-b"abc"
-b"with spaces"
-b"with \\ escapes"
-b"with \"quote\" inside"
-b"multi\nline"      // should treat \n as escape, not literal newline
-
-// ✅ RAW BYTE STRINGS
-br"raw bytes"
-br#"with "quotes""#
-br##"multiple ## in text"##
-br###"even more ### freedom"###
-
-// ✅ EMPTY BYTE STRINGS
-b""
-br""
-br#""#
-br##""##
-
-// ✅ MULTI-LINE RAW BYTE STRINGS
-br"multi
-line raw bytes"
-br#"multi
-line "raw" bytes"#
-
-// ✅ BYTE STRINGS WITH SYMBOLS AND ESCAPES
-b"symbols !@#$%^&*()_+-=[]{};:',.<>/?"
-br#"raw symbols !@#$%^&*()_+-=[]{};:',.<>/?"#
-br##"contains "quote" and #"hashes"##
-
-// ✅ PATHS AND REGEXES
-b"C:\\Program Files\\MyApp\\data"
-br"regex: ^[a-zA-Z0-9_]+$"
-br#"C:\Users\wildduck\Documents\"#
-br##"r#"meta"#"##
-
-// ✅ UNTERMINATED BYTE STRINGS (should emit err = Some(Unterminated))
-b"unterminated
-br"also unterminated
-br#"missing end quote
-br##"wrong end"#          // opened with 2 hashes, closed with 1
-br###"wrong end"##        // opened with 3 hashes, closed with 2
-br####"still unterminated // missing close entirely
-
-// ✅ RAW BYTE STRING WITH QUOTES AND HASHES INSIDE
-br###"nested "raw" content with ### inside"###
-br####"hashes #### inside but closed properly"####
-
-// ✅ VALID RAW BYTE STRINGS WITH NEWLINES
-br#"this is
-a valid multi-line raw byte string"#
-
-// ✅ REALISTIC EXAMPLES
-b"GET /api/v1/users HTTP/1.1\r\nHost: example.com\r\n"
-br#"{"json": "no escapes"}"#
-br##"C:\Program Files\MyApp\config.bin"##
-br##"r#"meta"#"##
-
-// ✅ EDGE CASES
-br"\\no escape interpretation"
-b"\\yes this escape becomes \\"
-br#"raw with # and "mixed" quotes"#
-
-// ✅ TESTING MIXED HASHES
-br#""#
-br##""##
-br###""###
-
-// ✅ INVALID EDGE CASES
-//br####"unterminated"###   // less closing hashes
-//br"unterminated literal
-
-
-// ===============================================
-// ✅ NORMAL STRINGS
-// ===============================================
-"hello"
-"with escapes: \\n \\t \\r \\\""
-"multi-line\nstring"
-"escaped quote: \"inside\""
-"unicode: 😊 and 🚀"
-""
-
-
-
-// ===============================================
-// ✅ RAW STRINGS
-// ===============================================
-r"no escapes here"
-r#"with "quotes""#
-r##"multi ## level"##
-r###"C:\\Program Files\\MyApp"###
-r####"json: {\"key\": \"value\"}"####
-r#"this
-is
-multi-line
-raw
-string"#
-
-// ❌ unterminated
-//r"unterminated
-//r#"missing end quote
-//r##"wrong end"#
-
-
-// ===============================================
-// ✅ BYTE STRINGS
-// ===============================================
-b"bytes"
-b"with escapes: \\n \\t \\r \\\""
-b"binary data: \x41\x42\x43"    // ABC
-//b"unterminated
-//b"weird \\xGZ bad escape"       // should emit InvalidEscape
-b""
-
-
-
- // ===============================================
- // ✅ RAW BYTE STRINGS
- // ===============================================
-br"raw bytes"
-br#"with "quotes""#
-br##"C:\\Program Files\\Data"##
-br###"multi-line
-raw bytes"###
-//br####"unterminated
-/br#"bad end"##
-br####"json: {\"x\": 1, \"y\": 2}"####
-
-
-
-// ===============================================
-// ✅ C STRINGS (new in Rust 1.77)
-// ===============================================
-c"simple c string"
-c"with escapes: \\n \\r \\t \\\""
-//c"unterminated
-//c"bad escape \\xG1"
-c""
-
-
-
-// ===============================================
-// ✅ RAW C STRINGS
-// ===============================================
-cr"raw c string"
-cr#"with "quotes""#
-cr##"C:\\Program Files\\MyApp"##
-cr###"multi
-line
-raw c string"###
-//cr####"unterminated
-//cr#"bad closing"##
-
-
-
-// ===============================================
-// ✅ CHARACTER LITERALS
-// ===============================================
-'a'
-'\\n'
-'\\x41'    // 'A'
-'\\u{1F980}' // 🦀
-//'too long'     // should error
-//'unterminated
-
-
-
-// ===============================================
-// ✅ BYTE CHARACTER LITERALS
-// ===============================================
-b'a'
-b'\\x41'  // 'A'
-b'\\n'
-//b'too long'
-//b'unterminated
+"simple string"                      // ✔ basic
+"with spaces 123 !"                  // ✔
 
+"escaped quote: \""                  // ✔ simple escape
+"backslash: \\\\"                    // ✔ simple escape
 
+"\n\r\t\0"                           // ✔ builtin escapes
+"line1\nline2\nline3"                // ✔ newline escape
+
+"\x41"                               // ✔ hex escape -> 'A'
+"\x7F"                               // ✔ highest 7-bit allowed
+
+"\u{0}"                              // ✔ unicode scalar
+"\u{7}"                              // ✔ BEL
+"\u{10FFFF}"                         // ✔ max valid unicode
+"\u{1f980}"                          // ✔ crab emoji
+
+"line continuation: \
+    continued \
+        again"                        // ✔ continuation escape (`\` + LF + whitespace)
+
+"LF allowed
+inside string"                       // ✔ LF allowed
+
+// ----------------- INVALID normal strings -------------------
+
+"\x"                                 // ✘ invalid `\x` (0 digits)
+"\x4"                                // ✘ invalid `\x` (1 digit)
+"\xGG"                               // ✘ invalid hex
+
+"\u"                                 // ✘ incomplete unicode escape
+"\u{"                                // ✘ missing digits + brace
+"\u{110000}"                         // ✘ above unicode range
+"\u{D800}"                           // ✘ surrogate range
+
+"\q"                                 // ✘ unknown escape
+"\_"                                 // ✘ unknown escape
+"\9"                                 // ✘ unknown escape
+
+"unterminated                        // ✘ missing closing quote
+"abc                                 // ✘ missing quote
+
+"bad CR \r in string"                // ✘ bare CR not allowed
+"also \r illegal"                    // ✘
+
+//
+// ========== RAW STRING LITERALS ==========
+//
+
+r"raw string"                        // ✔
+r"can contain \n, \t, \u{abc}, etc"  // ✔ escapes are literal
+r#"multi " quotes"#                  // ✔
+r##"raw ## with # in body"##         // ✔
+
+r#"
+multi-line raw
+with "quotes"
+and stuff
+"#                                   // ✔ multiline raw
+
+// -------- INVALID raw strings --------------
+
+r"unclosed                           // ✘ missing closing "
+r#"mismatch"#                        // ✘ open fence 1 hash, close = 0
+r###"wrong close"##                  // ✘ open = 3, close = 2
+
+//
+// ========== BYTE STRING LITERALS (ASCII only) ==========
+//
+
+b"Hi"                                // ✔
+b"\x41"                              // ✔ 'A'
+b"\n\t\r\0\\\""                      // ✔ escapes
+b"ASCII only !"                      // ✔ ascii OK
+
+// ------- INVALID byte strings ---------
+
+b"é"                                 // ✘ non-ascii
+b"\u{41}"                            // ✘ unicode escape not allowed
+b"\x4"                               // ✘ invalid hex escape
+b"\xGG"                              // ✘ invalid hex
+b"\q"                                // ✘ unknown escape
+
+b"unterminated                       // ✘
+
+//
+// ========== RAW BYTE STRINGS ==========
+//
+
+br"raw byte"                         // ✔
+br#"raw byte with #"#                // ✔
+br##"raw byte ## string"##           // ✔
+
+// ----- invalid raw byte ---------
+
+br"unterminated                     // ✘
+br#"bad end"##                      // ✘ fence mismatch
+
+//
+// ========== C STRINGS ("c"...") ==========
+//
+
+c"hello"                             // ✔
+c"\n\r\t\0\\\""                      // ✔ simple escapes
+c"\x41"                              // ✔ hex
+c"\u{7}"                             // ✔ unicode
+c"line continuation: \
+    ok"                               // ✔ continuation escape
+
+// ----- invalid C strings -----
+
+c"\x"                                // ✘ invalid hex
+c"\u"                                // ✘ bad unicode
+c"\u{110000}"                        // ✘ invalid scalar
+c"unterminated                       // ✘
+
+//
+// ========== RAW C STRINGS ("cr"...") ==========
+//
+
+cr"raw c string"                     // ✔
+cr#"raw c with #"#                   // ✔
+cr##"raw ### with ##"##              // ✔
+
+// --- invalid raw C strings ----
+
+cr"unclosed                         // ✘
+cr#"wrong close"##                  // ✘
+
+//
+// ========== CHAR LITERALS ==========
+//
+
+'a'                                  // ✔
+' '                                  // ✔ space char
+'\n'                                 // ✔
+'\t'                                 // ✔
+'\''                                 // ✔ escaped quote
+'\\'                                 // ✔ backslash
+'\x41'                               // ✔ 'A'
+'\u{1F600}'                          // ✔ 😀
+'\u{7}'                              // ✔ BEL
+
+// ---- INVALID chars -----
+
+''                                   // ✘ empty char
+'ab'                                 // ✘ multiple chars
+'\x4'                                // ✘ invalid hex
+'\xGG'                               // ✘ invalid hex
+'\u'                                 // ✘ incomplete unicode
+'\u{'                                // ✘ missing digits
+'\u{110000}'                         // ✘ too large
+'\q'                                 // ✘ unknown escape
+'unterminated                        // ✘
+
+//
+// ========== BYTE CHARS: b'...' ==========
+//
+
+b'A'                                 // ✔
+b'\n'                                // ✔
+b'\x41'                              // ✔
+b'\''                                // ✔
+b'\\'                                // ✔
+
+// ---- INVALID byte chars -----
+
+b'é'                                 // ✘ non-ascii
+b'\u{41}'                            // ✘ unicode escape not allowed
+b'ab'                                // ✘ multi-char
+b'\x4'                               // ✘ invalid hex
+b'\xGG'                              // ✘ invalid hex
+b'\q'                                // ✘ unknown escape
+b'unterminated                       // ✘
+
+//
+// ========== LIFETIME FALLBACK ==========
+//
+
+'a                                   // ✔ lifetime, not a char
+'static                              // ✔ lifetime
+'_'                                  // ✔ lifetime
 

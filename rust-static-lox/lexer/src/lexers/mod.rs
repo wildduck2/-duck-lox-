@@ -4,6 +4,7 @@ mod bitwise_and_logical;
 mod comment;
 mod keywords;
 mod lifetimes;
-mod literal;
+mod number;
 mod punctuation_and_delimiters;
 mod shebang;
+mod string;

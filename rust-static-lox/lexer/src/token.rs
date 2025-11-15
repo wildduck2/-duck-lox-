@@ -36,12 +36,12 @@ pub enum DocStyle {
 ///
 /// Rust supports four numeric bases, indicated by prefixes:
 ///
-/// | Base | Prefix | Example | Digits |
-/// |------|--------|---------|--------|
-/// | Binary | `0b` | `0b1010` | 0-1 |
-/// | Octal | `0o` | `0o755` | 0-7 |
-/// | Decimal | _(none)_ | `42` | 0-9 |
-/// | Hexadecimal | `0x` | `0xDEADBEEF` | 0-9, a-f, A-F |
+/// | Base        | Prefix | Example    | Digits         |
+/// |-------------|--------|------------|----------------|
+/// | Binary      | `0b`   | `0b1010`   | 0-1            |
+/// | Octal       | `0o`   | `0o755`    | 0-7            |
+/// | Decimal     | _(none)_ | `42`    | 0-9            |
+/// | Hexadecimal | `0x`   | `0xDEAD`   | 0-9, a-f, A-F  |
 ///
 /// # Examples
 /// ```rust
@@ -65,14 +65,14 @@ pub enum Base {
 /// The kind of literal token
 ///
 /// Rust supports various literal types for numbers, characters, and strings.
-/// Each variant includes metadata about malformed literals (e.g., unterminated
-/// strings, empty exponents) to enable better error reporting.
+/// Some variants carry extra metadata about malformed literals (for example,
+/// `empty_int` on integers) to enable better error reporting.
 ///
 /// # Examples
 /// ```rust
-/// 42              // Int { base: Decimal, empty_int: false }
-/// 0xFF            // Int { base: Hexadecimal, empty_int: false }
-/// 3.14            // Float { base: Decimal, empty_exponent: false }
+/// 42              // Integer { base: Decimal, empty_int: false, .. }
+/// 0xFF            // Integer { base: Hexadecimal, empty_int: false, .. }
+/// 3.14            // Float { base: Decimal, .. }
 /// 'x'             // Char
 /// "hello"         // Str
 /// r#"raw"#        // RawStr { n_hashes: 1 }
@@ -107,12 +107,17 @@ pub enum LiteralKind {
   /// 1e10            // exponential notation
   /// 2.5E-3          // exponential with sign
   /// 1.0f32          // with type suffix
-  /// 1e_             // empty_exponent = true (malformed)
+  /// 1e_             // malformed (empty exponent)
   /// ```
   ///
-  /// **NOTE**: `1f32` is lexed as `Int` with suffix "f32", not `Float`
+  /// **NOTE**: In Rust source code, floating-point literals are written in
+  /// decimal form. Non-decimal bases are not accepted and should be rejected
+  /// (or only used for diagnostics).
   Float {
-    /// The numeric base (usually Decimal, but hex floats exist in some contexts)
+    /// The numeric base of the literal.
+    ///
+    /// For valid Rust code this will effectively be `Base::Decimal`; other
+    /// bases may be produced internally only for diagnostic purposes.
     base: Base,
     /// The start of the suffix (e.g., `f32`, `f64`)
     suffix_start: usize,
@@ -136,10 +141,9 @@ pub enum LiteralKind {
   /// b'a'            // ASCII byte
   /// b'\n'           // escape sequence
   /// b'\x7F'         // hex escape
-  /// b'              // terminated = false (malformed)
   /// ```
   ///
-  /// **NOTE**: Byte literals must contain only ASCII characters (0-127)
+  /// **NOTE**: Byte literals must contain only ASCII characters (0–127).
   Byte,
 
   /// String literal with escape sequences
@@ -149,7 +153,7 @@ pub enum LiteralKind {
   /// "hello"         // basic string
   /// "foo\nbar"      // with escape
   /// "multi
-  /// line"           // multiline (valid)
+  /// line"           // multiline with an embedded newline (valid)
   /// "unterminated   // (malformed)
   /// ```
   Str,
@@ -342,11 +346,11 @@ pub enum TokenKind {
   ///
   /// # Examples
   /// ```rust
-  /// 42          // Int literal
+  /// 42          // Integer literal
   /// 3.14        // Float literal
   /// 'x'         // Char literal
   /// "hello"     // Str literal
-  /// 100_u32     // Int with suffix (suffix_start points to 'u')
+  /// 100_u32     // Int with suffix
   /// ```
   Literal {
     /// The specific kind of literal
@@ -408,9 +412,9 @@ pub enum TokenKind {
   KwConst,   // const
   KwStatic,  // static
   KwExtern,  // extern
-  KwMacro,   // macro (2.0)
-  KwAuto,    // auto
-  KwDefault, // default
+  KwMacro,   // macro (2.0 / reserved)
+  KwAuto,    // auto (contextual in real Rust; treated as keyword here)
+  KwDefault, // default (contextual in real Rust; treated as keyword here)
 
   // Modifier Keywords
   KwPub,    // pub
@@ -444,7 +448,7 @@ pub enum TokenKind {
   KwDo,       // do
   KwFinal,    // final
   KwOverride, // override
-  //KwPriv,     // priv
+  //KwPriv,   // priv
   KwTry,     // try
   KwTypeof,  // typeof
   KwUnsized, // unsized
@@ -532,6 +536,58 @@ pub enum TokenKind {
 // ============================================================================
 
 impl TokenKind {
+  /// Returns true if this token can start an expression.
+  ///
+  /// This is essentially the same as [`can_start_expr`], but used where
+  /// the longer name reads better.
+  pub fn can_start_expression(&self) -> bool {
+    matches!(
+      self,
+      TokenKind::Ident
+        | TokenKind::RawIdent
+        | TokenKind::Literal { .. }
+        | TokenKind::OpenParen      // tuple, grouped expr
+        | TokenKind::OpenBracket    // array literal
+        | TokenKind::OpenBrace      // struct literal, block
+        | TokenKind::Or             // closure: |x| x + 1
+        | TokenKind::OrOr           // closure: || 42
+        | TokenKind::Minus          // unary negation
+        | TokenKind::Star           // dereference
+        | TokenKind::Bang           // logical not
+        | TokenKind::And            // borrow
+        | TokenKind::KwMove         // move closure
+        | TokenKind::KwIf
+        | TokenKind::KwMatch
+        | TokenKind::KwWhile
+        | TokenKind::KwLoop
+        | TokenKind::KwFor
+        | TokenKind::KwReturn
+        | TokenKind::KwBreak
+        | TokenKind::KwContinue
+        | TokenKind::KwAsync
+        | TokenKind::KwUnsafe
+    )
+  }
+  pub fn can_start_expression_and_not(&self, and: TokenKind) -> bool {
+    self.can_start_expression() && !matches!(self, and)
+  }
+
+  pub fn can_start_expression_or(&self, or: TokenKind) -> bool {
+    self.can_start_expression() || matches!(self, or)
+  }
+
+  pub fn is_binary_operator(&self) -> bool {
+    matches!(
+      self,
+      TokenKind::EqEq
+        | TokenKind::Ne
+        | TokenKind::Lt
+        | TokenKind::Le
+        | TokenKind::Gt
+        | TokenKind::Ge
+    )
+  }
+
   /// Returns true if this token is trivia (whitespace or comment)
   ///
   /// Trivia tokens are typically skipped during parsing but preserved
@@ -558,7 +614,16 @@ impl TokenKind {
   /// # Examples
   /// ```rust
   /// assert!(TokenKind::Ident.can_start_expr());
-  /// assert!(TokenKind::Literal { kind: LiteralKind::Int { base: Base::Decimal, empty_int: false }, suffix_start: 0 }.can_start_expr());
+  /// assert!(
+  ///   TokenKind::Literal {
+  ///     kind: LiteralKind::Integer {
+  ///       base: Base::Decimal,
+  ///       empty_int: false,
+  ///       suffix_start: 0,
+  ///     },
+  ///   }
+  ///   .can_start_expr()
+  /// );
   /// assert!(TokenKind::OpenParen.can_start_expr());  // tuple or grouping
   /// assert!(!TokenKind::Semi.can_start_expr());
   /// ```
@@ -595,7 +660,16 @@ impl TokenKind {
   ///
   /// # Examples
   /// ```rust
-  /// assert!(TokenKind::Literal { kind: LiteralKind::Int { base: Base::Decimal, empty_int: false }, suffix_start: 0 }.is_literal());
+  /// assert!(
+  ///   TokenKind::Literal {
+  ///     kind: LiteralKind::Integer {
+  ///       base: Base::Decimal,
+  ///       empty_int: false,
+  ///       suffix_start: 0,
+  ///     },
+  ///   }
+  ///   .is_literal()
+  /// );
   /// assert!(!TokenKind::Ident.is_literal());
   /// ```
   pub fn is_literal(&self) -> bool {
@@ -697,9 +771,16 @@ impl LiteralKind {
   ///
   /// # Examples
   /// ```rust
-  /// assert!(LiteralKind::Str { terminated: true }.is_string_like());
-  /// assert!(LiteralKind::RawStr { n_hashes: 1, err: None }.is_string_like());
-  /// assert!(!LiteralKind::Int { base: Base::Decimal, empty_int: false }.is_string_like());
+  /// assert!(LiteralKind::Str.is_string_like());
+  /// assert!(LiteralKind::RawStr { n_hashes: 1 }.is_string_like());
+  /// assert!(
+  ///   !LiteralKind::Integer {
+  ///     base: Base::Decimal,
+  ///     empty_int: false,
+  ///     suffix_start: 0,
+  ///   }
+  ///   .is_string_like()
+  /// );
   /// ```
   pub fn is_string_like(&self) -> bool {
     matches!(
@@ -717,9 +798,22 @@ impl LiteralKind {
   ///
   /// # Examples
   /// ```rust
-  /// assert!(LiteralKind::Int { base: Base::Decimal, empty_int: false }.is_numeric());
-  /// assert!(LiteralKind::Float { base: Base::Decimal, empty_exponent: false }.is_numeric());
-  /// assert!(!LiteralKind::Char { terminated: true }.is_numeric());
+  /// assert!(
+  ///   LiteralKind::Integer {
+  ///     base: Base::Decimal,
+  ///     empty_int: false,
+  ///     suffix_start: 0,
+  ///   }
+  ///   .is_numeric()
+  /// );
+  /// assert!(
+  ///   LiteralKind::Float {
+  ///     base: Base::Decimal,
+  ///     suffix_start: 0,
+  ///   }
+  ///   .is_numeric()
+  /// );
+  /// assert!(!LiteralKind::Char.is_numeric());
   /// ```
   pub fn is_numeric(&self) -> bool {
     matches!(
@@ -732,9 +826,9 @@ impl LiteralKind {
   ///
   /// # Examples
   /// ```rust
-  /// assert!(LiteralKind::Char { terminated: true }.is_char_like());
-  /// assert!(LiteralKind::Byte { terminated: true }.is_char_like());
-  /// assert!(!LiteralKind::Str { terminated: true }.is_char_like());
+  /// assert!(LiteralKind::Char.is_char_like());
+  /// assert!(LiteralKind::Byte.is_char_like());
+  /// assert!(!LiteralKind::Str.is_char_like());
   /// ```
   pub fn is_char_like(&self) -> bool {
     matches!(self, LiteralKind::Char | LiteralKind::Byte)

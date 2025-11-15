@@ -1,0 +1,1257 @@
+//! # String, Raw String, Byte String, C-String, and Char Literal Rules
+//!
+//! This lexer implements literal syntax following Rust's rules
+//! (plus optional language extensions noted where present).
+//!
+//! ## 1. Normal Strings: `"..."`
+//! - Content is UTF-8 text.
+//! - Allowed escapes:
+//!   - Simple: `\\`, `\"`, `\n`, `\r`, `\t`, `\0`
+//!   - Hex byte: `\xNN` (exactly 2 hex digits, value ≤ 0x7F)
+//!   - Unicode: `\u{H…H}` (1–6 hex digits, valid scalar ≤ `0x10FFFF` and not a surrogate)
+//! - **Line continuation**: `\<LF><WS*>` is removed (produces no characters).
+//! - **LF allowed**, **bare CR forbidden** except in continuation.
+//! - Terminates only on unescaped `"`. Multi-line allowed.
+//!
+//! ## 2. Raw Strings: `r"..."`, `r#"..."#`, `r##"..."##`, …
+//! - Prefix: `r` + zero or more `#` characters.
+//! - Must have opening `"` immediately after the `#` run.
+//! - No escapes are processed—content is literal bytes/UTF-8 text.
+//! - Closing delimiter is `"` followed by exactly the same number of `#`.
+//! - Any characters allowed inside, including newlines and CR.
+//!
+//! ## 3. Byte Strings: `b"..."`
+//! - Content must be **ASCII only** (0x00–0x7F), except via escapes.
+//! - Allowed escapes:
+//!   - Simple: `\\`, `\"`, `\n`, `\r`, `\t`, `\0`
+//!   - Hex: `\xNN` (two hex digits, produces one byte)
+//! - **Unicode escapes (`\u{}`) are forbidden.**
+//! - **Line continuation**: same as normal strings (`\<LF><WS*>`).
+//! - **LF allowed**, **bare CR forbidden** except in continuation.
+//!
+//! ## 4. Raw Byte Strings: `br"..."`, `br#"..."#`, …
+//! - Same rules as raw strings (`r#"... "#`), but produces a byte slice.
+//! - No escapes; interior bytes must be valid ASCII (Rust requires ASCII-only).
+//!
+//! ## 5. C Strings: `c"..."`
+//! - Behaves like a normal string literal but intended to map to C string data.
+//! - Same escapes as normal `"..."` literals (`\n`, `\t`, `\xNN`, `\u{}`).
+//! - **Line continuation** supported (`\<LF><WS*>`).
+//! - **LF allowed**, **bare CR forbidden** except in continuation.
+//! - Semantic note (not enforced purely lexically): interior `\0` is usually undesirable.
+//!
+//! ## 6. Raw C Strings: `cr"..."`, `cr#"..."#`, …
+//! - Same as raw strings, no escapes.
+//! - Closing delimiter uses same `#` count.
+//!
+//! ## 7. Char Literals: `'x'`, `'\n'`, `'\xNN'`, `'\u{1F980}'`
+//! - Must represent exactly **one Unicode scalar value**.
+//! - Allowed escapes: same as normal strings (except continuation).
+//!   - `\\`, `\'`, `\n`, `\r`, `\t`, `\0`, `\xNN`, `\u{H…}`
+//! - Cannot contain newlines; literal must close on next `'`.
+//! - Otherwise interpreted as a **lifetime** (e.g. `'a`, `'static`).
+//!
+//! ## 8. Byte Char Literals: `b'X'`, `b'\n'`, `b'\xNN'`
+//! - Must encode exactly **one byte** (ASCII).
+//! - Allowed escapes:
+//!   - `\\`, `\'`, `\n`, `\r`, `\t`, `\0`, `\xNN`
+//! - **Unicode escapes forbidden.**
+//! - No continuation escapes.
+//!
+//! ## 9. Literal Suffixes
+//! - Rust's lexer accepts identifier-like suffixes on all literals
+//!   (e.g. `"foo"bar`, `b"data"_tag`).
+//! - This lexer may optionally reject or ignore suffixes depending on language design.
+//!
+//! ## 10. Prefix Recognition
+//! - Valid literal prefixes: `"`, `r`, `b`, `br`, `c`, `cr`.
+//! - Unknown/reserved prefixes (`f`, `cf`, `rf`, etc.) may produce lexer diagnostics
+//!   in this implementation (extension). Rust would treat them as identifiers.
+//!
+
+use diagnostic::{
+  code::DiagnosticCode,
+  diagnostic::{Diagnostic, LabelStyle},
+  types::error::DiagnosticError,
+  DiagnosticEngine, Span,
+};
+
+use crate::{
+  token::{LiteralKind, TokenKind},
+  Lexer,
+};
+
+impl Lexer {
+  /// Dispatch string-like and character-like literals based on the current prefix.
+  ///
+  /// Routes (roughly matching Rust):
+  /// - `"`          -> normal string        (`"..."`)
+  /// - `b"` / `br`  -> byte / raw byte str  (`b"..."`, `br#"..."#`)
+  /// - `c"` / `cr`  -> C / raw C string     (`c"..."`, `cr#"..."#`)
+  /// - `r` + `#*`   -> raw string           (`r"..."`, `r#"..."#`)
+  /// - `'`          -> character / lifetime (delegates to `lex_char`)
+  ///
+  /// For prefixes like `f`, `cf`, `rf`, we emit “reserved / unknown prefix”
+  /// diagnostics (this is a language extension; Rust itself would just lex
+  /// identifiers in those cases).
+  pub fn lex_string(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
+    let first = self.get_current_lexeme(); // e.g. "b", "c", "r", "\"", or "'"
+    let second = self.peek(); // next char, e.g. 'r', '"', etc.
+
+    // Character / lifetime literals are handled separately.
+    if first == "'" {
+      return self.lex_char(engine);
+    }
+
+    // Combine prefix (1–2 chars, e.g. "b", "br", "c", "cr").
+    let mut prefix = first.to_string();
+    if let Some(ch) = second {
+      if ch.is_ascii_alphabetic() {
+        prefix.push(ch);
+      }
+    }
+
+    // Language-level prefixes we recognize.
+    const VALID_PREFIXES: &[&str] = &["b", "br", "c", "cr", "r", "\""];
+    const RESERVED_PREFIXES: &[&str] = &["f", "cf", "rf"];
+
+    // Prefix validation only for potentially prefixed literals (`b`, `c`, `r`, etc.).
+    if first != "\"" {
+      if RESERVED_PREFIXES.contains(&prefix.as_str()) {
+        let diag = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::ReservedPrefix),
+          format!("'{}' is a reserved prefix for string literals", prefix),
+          self.source.path.to_string(),
+        )
+        .with_label(
+          diagnostic::Span::new(self.start, self.current),
+          Some("Reserved literal prefix".to_string()),
+          LabelStyle::Primary,
+        )
+        .with_help("This prefix is reserved for future use.".to_string());
+        engine.add(diag);
+        return Some(TokenKind::ReservedPrefix);
+      }
+
+      if !VALID_PREFIXES.contains(&prefix.as_str()) {
+        let diag = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::UnknownPrefix),
+          format!("Unknown literal prefix '{}'", prefix),
+          self.source.path.to_string(),
+        )
+        .with_label(
+          diagnostic::Span::new(self.start, self.current),
+          Some("Unrecognized literal prefix".to_string()),
+          LabelStyle::Primary,
+        )
+        .with_help("Valid prefixes: b, br, c, cr, r.".to_string());
+        engine.add(diag);
+        return Some(TokenKind::UnknownPrefix);
+      }
+    }
+
+    // Dispatch to the right literal lexer. At this point:
+    // - `self.current` is just after the first char of the prefix (`b`, `c`, `r`, or `"`),
+    // - `second` is the next character.
+    match (first, second) {
+      ("b", Some('"')) => self.lex_bstr(engine),     // b"..."
+      ("b", Some('r')) => self.lex_bstr(engine),     // br"..."
+      ("b", Some('\'')) => self.lex_bchar(engine),   // b'X'
+      ("c", Some('"')) => self.lex_cstr(engine),     // c"..."
+      ("c", Some('r')) => self.lex_craw_str(engine), // cr"..."
+      ("r", Some('"')) | ("r", Some('#')) => self.lex_raw_str(engine), // r"..." or r#"..."#
+      ("\"", _) => self.lex_str(engine),             // "..."
+      _ => Some(TokenKind::Unknown),
+    }
+  }
+
+  /// Lex a **raw C string**: `cr"..."`, `cr#"...\"..."#`, etc.
+  ///
+  /// Counts `#` fences, requires an opening `"`, then scans until a matching
+  /// closing `"###…###`. No escapes are processed.
+  fn lex_craw_str(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
+    // The 'c' prefix has been consumed; we're currently at 'r'.
+    self.advance(); // consume 'r'
+
+    const MAX_HASHES: u16 = 255;
+
+    // We're now at the first `#` or `"` character.
+    let mut n_hashes: u16 = 0;
+    while self.peek() == Some('#') {
+      n_hashes = n_hashes.saturating_add(1);
+      self.advance();
+    }
+
+    if n_hashes > MAX_HASHES {
+      let diag = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::TooManyRawStrHashes),
+        format!(
+          "Raw C string uses {} hashes; maximum is {}.",
+          n_hashes, MAX_HASHES
+        ),
+        self.source.path.to_string(),
+      )
+      .with_label(
+        diagnostic::Span::new(self.start, self.current),
+        Some("Too many '#' characters here".to_string()),
+        LabelStyle::Primary,
+      );
+      engine.add(diag);
+      n_hashes = MAX_HASHES;
+    }
+
+    // Expect opening quote after `cr###`.
+    if self.peek() != Some('"') {
+      let diag = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::UnterminatedString),
+        format!(
+          "Expected '\"' after 'cr{}' in raw C string literal",
+          "#".repeat(n_hashes as usize)
+        ),
+        self.source.path.to_string(),
+      )
+      .with_label(
+        diagnostic::Span::new(self.start, self.current),
+        Some("Expected opening quote here".to_string()),
+        LabelStyle::Primary,
+      )
+      .with_help("Raw C strings must start with cr\"...\", cr#\"...\"#, etc.".to_string());
+      engine.add(diag);
+
+      return Some(TokenKind::Literal {
+        kind: LiteralKind::RawCStr { n_hashes },
+      });
+    }
+
+    // Consume opening quote.
+    self.advance();
+
+    let mut found_end = false;
+
+    // Scan until we see a closing `"` followed by exactly `n_hashes` `#`.
+    'outer: while let Some(c) = self.peek() {
+      if c == '"' {
+        let saved = self.current;
+        self.advance(); // consume quote
+
+        let mut matched = 0u16;
+        while matched < n_hashes && self.peek() == Some('#') {
+          matched += 1;
+          self.advance();
+        }
+        if matched == n_hashes {
+          found_end = true;
+          break 'outer;
+        } else {
+          // Not a real closing delimiter; reset to one past the quote.
+          self.current = saved + 1;
+        }
+      } else {
+        self.advance();
+      }
+    }
+
+    if !found_end {
+      let diag = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::UnterminatedString),
+        format!(
+          "Unterminated raw C string literal: expected closing '\"{}'",
+          "#".repeat(n_hashes as usize)
+        ),
+        self.source.path.to_string(),
+      )
+      .with_label(
+        diagnostic::Span::new(self.start, self.current),
+        Some("This raw C string literal is not terminated".to_string()),
+        LabelStyle::Primary,
+      )
+      .with_help(format!(
+        "Raw C strings must end with \"{h}\" (e.g., cr{h}\"...\"{h}).",
+        h = "#".repeat(n_hashes as usize),
+      ));
+      engine.add(diag);
+    }
+
+    Some(TokenKind::Literal {
+      kind: LiteralKind::RawCStr { n_hashes },
+    })
+  }
+
+  /// Lex a **raw string**: `r"..."`, `r#"...\"..."#`, multi-line allowed.
+  ///
+  /// Counts `#` fences, requires an opening `"`, then scans until a matching
+  /// closing `"###…###`. Escapes are not processed.
+  fn lex_raw_str(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
+    const MAX_HASHES: u16 = 255;
+
+    // We're just after the 'r' and at zero or more '#'.
+    let mut n_hashes: u16 = 0;
+    while self.peek() == Some('#') {
+      n_hashes = n_hashes.saturating_add(1);
+      self.advance();
+    }
+
+    if n_hashes > MAX_HASHES {
+      let diag = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::TooManyRawStrHashes),
+        format!(
+          "Raw string uses {} hashes; maximum is {}.",
+          n_hashes, MAX_HASHES
+        ),
+        self.source.path.to_string(),
+      )
+      .with_label(
+        diagnostic::Span::new(self.start, self.current),
+        Some("Too many '#' characters here".to_string()),
+        LabelStyle::Primary,
+      );
+      engine.add(diag);
+      n_hashes = MAX_HASHES;
+    }
+
+    // Expect opening quote `"` after `r###`.
+    if self.peek() != Some('"') {
+      let diag = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::UnterminatedString),
+        format!(
+          "Expected '\"' after 'r{}' in raw string literal",
+          "#".repeat(n_hashes as usize)
+        ),
+        self.source.path.to_string(),
+      )
+      .with_label(
+        diagnostic::Span::new(self.start, self.current),
+        Some("Expected opening quote here".to_string()),
+        LabelStyle::Primary,
+      )
+      .with_help(
+        "Raw strings must start with r\"...\", r#\"...\"#, r##\"...\"##, etc.".to_string(),
+      );
+      engine.add(diag);
+
+      return Some(TokenKind::Literal {
+        kind: LiteralKind::RawStr { n_hashes },
+      });
+    }
+
+    // Consume opening quote.
+    self.advance();
+    let mut found_end = false;
+
+    // Scan until we find the closing delimiter: '"' + n_hashes of '#'.
+    'outer: while let Some(c) = self.peek() {
+      // Lookahead for probable next-line raw prefix to improve recovery
+      // (this is a non-Rust extension for nicer diagnostics).
+      if c == '\n' {
+        let saved = self.current;
+
+        self.advance(); // consume '\n'
+
+        while matches!(self.peek(), Some(' ' | '\t')) {
+          self.advance();
+        }
+
+        let mut looks_like_raw_prefix = false;
+        if self.peek() == Some('r') {
+          self.advance(); // consume 'r'
+          while self.peek() == Some('#') {
+            self.advance();
+          }
+          looks_like_raw_prefix = self.peek() == Some('"');
+        }
+
+        self.current = saved;
+
+        if looks_like_raw_prefix {
+          break 'outer;
+        } else {
+          self.advance(); // consume '\n'
+          continue;
+        }
+      }
+
+      if c == '"' {
+        let saved = self.current;
+        self.advance(); // consume '"'
+
+        let mut matched: u16 = 0;
+        while matched < n_hashes && self.peek() == Some('#') {
+          matched += 1;
+          self.advance();
+        }
+
+        if matched == n_hashes {
+          found_end = true;
+          break 'outer;
+        } else {
+          self.current = saved + 1;
+        }
+      } else {
+        self.advance();
+      }
+    }
+
+    if !found_end {
+      let diag = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::UnterminatedString),
+        format!(
+          "Unterminated raw string literal: expected closing '\"{}'",
+          "#".repeat(n_hashes as usize)
+        ),
+        self.source.path.to_string(),
+      )
+      .with_label(
+        diagnostic::Span::new(self.start, self.current),
+        Some("This raw string literal is not terminated".to_string()),
+        LabelStyle::Primary,
+      )
+      .with_help(format!(
+        "Raw strings must end with \"{h}\" (e.g., r{h}\"...\"{h}).",
+        h = "#".repeat(n_hashes as usize),
+      ));
+      engine.add(diag);
+
+      // Basic recovery.
+      if self.peek() == Some('\n') {
+        self.advance();
+      }
+    }
+
+    Some(TokenKind::Literal {
+      kind: LiteralKind::RawStr { n_hashes },
+    })
+  }
+
+  /// Lex a **C string**: `c"..."`.
+  ///
+  /// Semantics mirror Rust's non-raw strings:
+  /// - Supports `\\`, `\"`, `\n`, `\r`, `\t`, `\0`, `\xNN` (ASCII), `\u{...}`.
+  /// - Supports line-continuation escapes: `\` + LF + following whitespace.
+  /// - Allows LF inside the literal, but rejects bare CR outside continuation.
+  fn lex_cstr(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
+    // The 'c' prefix has been consumed; we're at the opening '"'.
+    self.advance(); // consume '"'
+
+    let terminated = self.scan_string_body(engine, "C string");
+
+    if !terminated {
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::UnterminatedString),
+        format!("Unterminated string literal: {}", self.get_current_lexeme()),
+        self.source.path.to_string(),
+      )
+      .with_label(
+        diagnostic::Span::new(self.start, self.current),
+        Some("This string literal is not terminated".to_string()),
+        LabelStyle::Primary,
+      )
+      .with_help("C strings must end with a closing '\"'.".to_string());
+      engine.add(diagnostic);
+    }
+
+    Some(TokenKind::Literal {
+      kind: LiteralKind::CStr,
+    })
+  }
+
+  /// Lex a byte string: `b"..."` or raw byte string: `br#"..."#`.
+  ///
+  /// For `b"..."`:
+  /// - Only ASCII bytes are allowed.
+  /// - Escapes: `\\`, `\"`, `\n`, `\r`, `\t`, `\0`, `\xNN` (any byte).
+  /// - Line continuation: `\` + LF + following whitespace is removed.
+  ///
+  /// For `br...`:
+  /// - Acts like a raw string; bytes are taken verbatim.
+  fn lex_bstr(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
+    // The 'b' prefix has already been consumed.
+    if self.peek() == Some('r') {
+      // --- RAW BYTE STRING: br"..." or br#"..."# ---
+      self.advance(); // consume 'r'
+
+      let mut n_hashes: u16 = 0;
+      while self.peek() == Some('#') {
+        n_hashes = n_hashes.saturating_add(1);
+        self.advance();
+      }
+
+      if self.peek() != Some('"') {
+        let diag = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::UnterminatedString),
+          format!(
+            "Expected '\"' after 'br{}' in raw byte string literal",
+            "#".repeat(n_hashes as usize)
+          ),
+          self.source.path.to_string(),
+        )
+        .with_label(
+          diagnostic::Span::new(self.start, self.current),
+          Some("Expected opening quote here".to_string()),
+          LabelStyle::Primary,
+        )
+        .with_help("Raw byte strings must start with br\"...\", br#\"...\"#, etc.".to_string());
+        engine.add(diag);
+        return Some(TokenKind::Literal {
+          kind: LiteralKind::RawByteStr { n_hashes },
+        });
+      }
+
+      self.advance(); // consume opening quote
+
+      let mut found_end = false;
+      'outer: while let Some(c) = self.peek() {
+        if c == '"' {
+          let saved = self.current;
+          self.advance();
+          let mut matched = 0u16;
+          while matched < n_hashes && self.peek() == Some('#') {
+            matched += 1;
+            self.advance();
+          }
+          if matched == n_hashes {
+            found_end = true;
+            break 'outer;
+          } else {
+            self.current = saved + 1;
+          }
+        } else {
+          self.advance();
+        }
+      }
+
+      if !found_end {
+        let diag = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::UnterminatedString),
+          format!(
+            "Unterminated raw byte string literal: expected closing '\"{}'",
+            "#".repeat(n_hashes as usize)
+          ),
+          self.source.path.to_string(),
+        )
+        .with_label(
+          diagnostic::Span::new(self.start, self.current),
+          Some("This raw byte string literal is not terminated".to_string()),
+          LabelStyle::Primary,
+        )
+        .with_help(format!(
+          "Raw byte strings must end with \"{h}\" (e.g., br{h}\"...\"{h}).",
+          h = "#".repeat(n_hashes as usize)
+        ));
+        engine.add(diag);
+      }
+
+      return Some(TokenKind::Literal {
+        kind: LiteralKind::RawByteStr { n_hashes },
+      });
+    }
+
+    // --- NORMAL BYTE STRING: b"..." ---
+    if self.peek() != Some('"') {
+      let diag = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::InvalidStringStart),
+        "Expected '\"' after 'b' in byte string literal".to_string(),
+        self.source.path.to_string(),
+      )
+      .with_label(
+        diagnostic::Span::new(self.start, self.current),
+        Some("Expected opening quote here".to_string()),
+        LabelStyle::Primary,
+      )
+      .with_help("Byte strings must start with b\"...\" or br\"...\".".to_string());
+      engine.add(diag);
+      return Some(TokenKind::Unknown);
+    }
+
+    self.advance(); // consume opening quote
+    let mut terminated = false;
+
+    while let Some(c) = self.peek() {
+      self.advance();
+
+      match c {
+        '\\' => {
+          // Escapes inside b"..."
+          match self.peek() {
+            // Line continuation: remove backslash + LF + following whitespace.
+            Some('\n') => {
+              self.advance(); // consume newline
+              while matches!(self.peek(), Some(' ' | '\t' | '\n' | '\r')) {
+                self.advance();
+              }
+            },
+            Some('n') | Some('r') | Some('t') | Some('\\') | Some('"') | Some('0') => {
+              self.advance(); // simple escape
+            },
+            Some('x') => {
+              self.advance(); // consume 'x'
+              let mut count = 0;
+              while count < 2
+                && self
+                  .peek()
+                  .map(|ch| ch.is_ascii_hexdigit())
+                  .unwrap_or(false)
+              {
+                self.advance();
+                count += 1;
+              }
+              if count < 2 {
+                let diag = Diagnostic::new(
+                  DiagnosticCode::Error(DiagnosticError::InvalidEscape),
+                  "Invalid \\x escape: needs two hex digits".to_string(),
+                  self.source.path.to_string(),
+                );
+                engine.add(diag);
+              }
+            },
+            Some('u') if self.peek_next(1) == Some('{') => {
+              // Unicode escapes are not allowed in byte strings.
+              let diag = Diagnostic::new(
+                DiagnosticCode::Error(DiagnosticError::InvalidEscape),
+                "Unicode escapes (\\u{...}) are not allowed in byte strings".to_string(),
+                self.source.path.to_string(),
+              );
+              engine.add(diag);
+              // Best-effort recovery: consume up to the closing '}' if present.
+              self.advance(); // 'u'
+              self.advance(); // '{'
+              while let Some(ch) = self.peek() {
+                self.advance();
+                if ch == '}' {
+                  break;
+                }
+              }
+            },
+            _ => {
+              // Invalid escape.
+              let diag = Diagnostic::new(
+                DiagnosticCode::Error(DiagnosticError::InvalidEscape),
+                "Invalid escape sequence in byte string".to_string(),
+                self.source.path.to_string(),
+              )
+              .with_label(
+                diagnostic::Span::new(self.current - 1, self.current),
+                Some("Unknown escape".to_string()),
+                LabelStyle::Primary,
+              );
+              engine.add(diag);
+              if self.peek().is_some() {
+                self.advance();
+              }
+            },
+          }
+        },
+        '"' => {
+          terminated = true;
+          break;
+        },
+        '\r' => {
+          // Bare CR is not allowed in non-raw string/byte literals.
+          let diag = Diagnostic::new(
+            DiagnosticCode::Error(DiagnosticError::InvalidEscape),
+            "Carriage return (CR) is not allowed in byte string literals".to_string(),
+            self.source.path.to_string(),
+          )
+          .with_label(
+            diagnostic::Span::new(self.start, self.current),
+            Some("Remove this '\\r'".to_string()),
+            LabelStyle::Primary,
+          );
+          engine.add(diag);
+        },
+        _ => {
+          // Plain content must be ASCII.
+          if !c.is_ascii() {
+            let diag = Diagnostic::new(
+              DiagnosticCode::Error(DiagnosticError::InvalidEscape),
+              "Byte strings must contain only ASCII characters (use \\xNN escapes otherwise)"
+                .to_string(),
+              self.source.path.to_string(),
+            );
+            engine.add(diag);
+          }
+        },
+      }
+    }
+
+    if !terminated {
+      let diag = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::UnterminatedString),
+        format!(
+          "Unterminated byte string literal starting at {}",
+          self.start
+        ),
+        self.source.path.to_string(),
+      )
+      .with_label(
+        diagnostic::Span::new(self.start, self.current),
+        Some("This byte string literal is not terminated".to_string()),
+        LabelStyle::Primary,
+      )
+      .with_help("Byte strings must end with a closing '\"'.".to_string());
+      engine.add(diag);
+      return Some(TokenKind::Unknown);
+    }
+
+    Some(TokenKind::Literal {
+      kind: LiteralKind::ByteStr,
+    })
+  }
+
+  /// Lex a **byte character**: `b'X'` or escaped (`b'\xNN'`).
+  ///
+  /// - Must encode exactly one byte.
+  /// - Content must be ASCII.
+  /// - Allowed escapes: `\\`, `\'`, `\n`, `\r`, `\t`, `\0`, `\xNN`.
+  fn lex_bchar(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
+    // We are just after 'b'; expect opening `'`.
+    if self.peek() != Some('\'') {
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::InvalidStringStart),
+        "Expected \"'\" after 'b' in byte char literal".to_string(),
+        self.source.path.to_string(),
+      )
+      .with_label(
+        diagnostic::Span::new(self.start, self.current),
+        Some("Expected opening quote here".to_string()),
+        LabelStyle::Primary,
+      );
+      engine.add(diagnostic);
+      return Some(TokenKind::Unknown);
+    }
+
+    self.advance(); // consume opening '\''
+
+    let mut terminated = false;
+    let mut produced_bytes: u8 = 0;
+
+    while let Some(c) = self.peek() {
+      match c {
+        '\'' => {
+          self.advance();
+          terminated = true;
+          break;
+        },
+        '\\' => {
+          self.advance(); // consume '\'
+          match self.peek() {
+            Some('n' | 'r' | 't' | '\\' | '\'' | '0') => {
+              self.advance();
+              produced_bytes = produced_bytes.saturating_add(1);
+            },
+            Some('x') => {
+              self.advance(); // consume 'x'
+              let mut count = 0;
+              while count < 2
+                && self
+                  .peek()
+                  .map(|ch| ch.is_ascii_hexdigit())
+                  .unwrap_or(false)
+              {
+                self.advance();
+                count += 1;
+              }
+              if count < 2 {
+                let diag = Diagnostic::new(
+                  DiagnosticCode::Error(DiagnosticError::InvalidEscape),
+                  "Invalid \\x escape in byte char literal: needs two hex digits".to_string(),
+                  self.source.path.to_string(),
+                );
+                engine.add(diag);
+              } else {
+                produced_bytes = produced_bytes.saturating_add(1);
+              }
+            },
+            Some('u') if self.peek_next(1) == Some('{') => {
+              let diag = Diagnostic::new(
+                DiagnosticCode::Error(DiagnosticError::InvalidEscape),
+                "Unicode escapes (\\u{...}) are not allowed in byte char literals".to_string(),
+                self.source.path.to_string(),
+              );
+              engine.add(diag);
+
+              // Recovery: consume until '}' or newline.
+              self.advance(); // 'u'
+              self.advance(); // '{'
+              while let Some(ch) = self.peek() {
+                self.advance();
+                if ch == '}' || ch == '\n' {
+                  break;
+                }
+              }
+            },
+            Some('\n') => {
+              // We choose not to support continuation in byte chars; treat as error.
+              let diag = Diagnostic::new(
+                DiagnosticCode::Error(DiagnosticError::InvalidEscape),
+                "Line continuation escapes are not supported in byte char literals".to_string(),
+                self.source.path.to_string(),
+              );
+              engine.add(diag);
+              self.advance();
+            },
+            _ => {
+              let diag = Diagnostic::new(
+                DiagnosticCode::Error(DiagnosticError::InvalidEscape),
+                "Unknown escape sequence in byte char literal".to_string(),
+                self.source.path.to_string(),
+              )
+              .with_label(
+                diagnostic::Span::new(self.current - 1, self.current),
+                Some("Unknown escape".to_string()),
+                LabelStyle::Primary,
+              );
+              engine.add(diag);
+              if self.peek().is_some() {
+                self.advance();
+              }
+            },
+          }
+        },
+        '\n' | '\r' => {
+          // Unterminated literal.
+          break;
+        },
+        _ => {
+          if !c.is_ascii() {
+            let diag = Diagnostic::new(
+              DiagnosticCode::Error(DiagnosticError::InvalidEscape),
+              "Byte char literals must be ASCII.".to_string(),
+              self.source.path.to_string(),
+            );
+            engine.add(diag);
+          }
+          self.advance();
+          produced_bytes = produced_bytes.saturating_add(1);
+        },
+      }
+    }
+
+    if !self.get_current_lexeme().ends_with('\'') || !terminated {
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::UnterminatedString),
+        format!(
+          "Unterminated byte char literal: {}",
+          self.get_current_lexeme()
+        ),
+        self.source.path.to_string(),
+      )
+      .with_label(
+        diagnostic::Span::new(self.start, self.current),
+        Some("This byte char literal is not terminated".to_string()),
+        LabelStyle::Primary,
+      )
+      .with_help("Byte char literals must look like b'X' or b'\\xNN'.".to_string());
+      engine.add(diagnostic);
+
+      return Some(TokenKind::Unknown);
+    }
+
+    if produced_bytes == 0 {
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::EmptyChar),
+        "Empty byte char literal".to_string(),
+        self.source.path.to_string(),
+      )
+      .with_label(
+        diagnostic::Span::new(self.start, self.current),
+        Some("This is an empty byte char literal".to_string()),
+        LabelStyle::Primary,
+      )
+      .with_help("Byte char literals must encode exactly one ASCII byte.".to_string());
+      engine.add(diagnostic);
+
+      return Some(TokenKind::Unknown);
+    }
+
+    if produced_bytes > 1 {
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::UnterminatedString),
+        format!(
+          "Too many characters in byte char literal: {}",
+          self.get_current_lexeme()
+        ),
+        self.source.path.to_string(),
+      )
+      .with_label(
+        diagnostic::Span::new(self.start, self.current),
+        Some("This byte char literal is too long".to_string()),
+        LabelStyle::Primary,
+      )
+      .with_help("Byte char literals may only encode a single byte.".to_string());
+      engine.add(diagnostic);
+
+      return Some(TokenKind::Unknown);
+    }
+
+    Some(TokenKind::Literal {
+      kind: LiteralKind::Byte,
+    })
+  }
+
+  /// Lex a **character literal**: `'x'`, `'\n'`, `'\x7F'`, `'\u{1F980}'`.
+  ///
+  /// - Validates escapes and reports errors for unterminated forms or bad escapes.
+  /// - If no closing `'` is found, falls back to `lex_lifetime` (`'a`, `'static`, etc.).
+  /// - Ensures there is at most one Unicode scalar value (or a single escape).
+  fn lex_char(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
+    let mut terminated = false;
+
+    // The opening `'` has already been consumed by the caller (`lex_string`),
+    // so we start at the first character *after* the quote.
+    while let Some(c) = self.peek() {
+      match c {
+        '\'' => {
+          self.advance();
+          terminated = true;
+          break;
+        },
+        '\\' => {
+          self.advance(); // consume '\'
+          match self.peek() {
+            Some('n' | 'r' | 't' | '\\' | '\'' | '0') => {
+              self.advance();
+            },
+            Some('x') => {
+              // Hex escape: \xNN (two hex digits).
+              self.advance();
+              let mut count = 0;
+              while count < 2
+                && self
+                  .peek()
+                  .map(|ch| ch.is_ascii_hexdigit())
+                  .unwrap_or(false)
+              {
+                self.advance();
+                count += 1;
+              }
+              if count < 2 {
+                let diag = Diagnostic::new(
+                  DiagnosticCode::Error(DiagnosticError::InvalidEscape),
+                  "Invalid \\x escape: needs two hex digits".to_string(),
+                  self.source.path.to_string(),
+                );
+                engine.add(diag);
+              }
+            },
+            Some('u') if self.peek_next(1) == Some('{') => {
+              // Unicode escape: \u{...}, 1–6 hex digits, valid scalar.
+              self.advance(); // 'u'
+              self.advance(); // '{'
+              let mut digits = 0;
+              let mut value: u32 = 0;
+              while let Some(ch) = self.peek() {
+                if ch == '}' {
+                  break;
+                }
+                match ch.to_digit(16) {
+                  Some(d) => {
+                    if digits < 6 {
+                      value = (value << 4) | d;
+                    }
+                    digits += 1;
+                    self.advance();
+                  },
+                  None => {
+                    let diag = Diagnostic::new(
+                      DiagnosticCode::Error(DiagnosticError::InvalidEscape),
+                      "Invalid Unicode escape: non-hex digit".to_string(),
+                      self.source.path.to_string(),
+                    );
+                    engine.add(diag);
+                    self.advance();
+                    break;
+                  },
+                }
+              }
+              if self.peek() == Some('}') {
+                self.advance(); // consume '}'
+                if digits == 0
+                  || digits > 6
+                  || value > 0x10FFFF
+                  || (0xD800..=0xDFFF).contains(&value)
+                {
+                  let diag = Diagnostic::new(
+                    DiagnosticCode::Error(DiagnosticError::InvalidEscape),
+                    "Invalid Unicode escape code point".to_string(),
+                    self.source.path.to_string(),
+                  );
+                  engine.add(diag);
+                }
+              } else {
+                let diag = Diagnostic::new(
+                  DiagnosticCode::Error(DiagnosticError::UnterminatedString),
+                  "Unterminated Unicode escape, missing '}'".to_string(),
+                  self.source.path.to_string(),
+                );
+                engine.add(diag);
+              }
+            },
+            _ => {
+              let diag = Diagnostic::new(
+                DiagnosticCode::Error(DiagnosticError::InvalidEscape),
+                "Unknown escape sequence in char literal".to_string(),
+                self.source.path.to_string(),
+              );
+              engine.add(diag);
+              if self.peek().is_some() {
+                self.advance();
+              }
+            },
+          }
+        },
+        '\n' | ':' | ',' => {
+          // Likely a lifetime or unterminated literal.
+          break;
+        },
+        _ => {
+          // Plain Unicode scalar.
+          self.advance();
+        },
+      }
+    }
+
+    let lexeme = self.get_current_lexeme();
+
+    // Empty: "''"
+    if lexeme == "''" {
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::EmptyChar),
+        "Empty character literal".to_string(),
+        self.source.path.to_string(),
+      )
+      .with_label(
+        Span::new(self.current - 2, self.current),
+        Some("This is an empty character literal".to_string()),
+        LabelStyle::Primary,
+      )
+      .with_help("Character literals must be a single Unicode scalar value.".to_string());
+      engine.add(diagnostic);
+
+      return Some(TokenKind::Literal {
+        kind: LiteralKind::Char,
+      });
+    }
+
+    if !terminated {
+      // Treat as a lifetime token (`'a`, `'static`, etc.).
+      return self.lex_lifetime(engine);
+    }
+
+    // Ensure at most one scalar (or a single escape) between the quotes.
+    if let Some(inner) = lexeme.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')) {
+      // If it doesn't start with an escape, it must be exactly one scalar.
+      if !inner.starts_with('\\') && inner.chars().count() != 1 {
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::UnterminatedString),
+          format!("Too many characters in character literal: {}", lexeme),
+          self.source.path.to_string(),
+        )
+        .with_label(
+          diagnostic::Span::new(self.start, self.current),
+          Some("This character literal is too long".to_string()),
+          LabelStyle::Primary,
+        )
+        .with_help(
+          "Character literals must be a single Unicode scalar or a single escape.".to_string(),
+        );
+        engine.add(diagnostic);
+      }
+    }
+
+    Some(TokenKind::Literal {
+      kind: LiteralKind::Char,
+    })
+  }
+
+  /// Lex a **normal string**: `"..."`.
+  ///
+  /// Matches Rust's non-raw string rules:
+  /// - Supports the usual escapes plus `\xNN` (ASCII) and `\u{...}`.
+  /// - Supports line-continuation escapes (`\` + LF + following whitespace).
+  /// - Allows LF, forbids bare CR.
+  fn lex_str(&mut self, engine: &mut DiagnosticEngine) -> Option<TokenKind> {
+    let terminated = self.scan_string_body(engine, "string");
+
+    if !terminated {
+      let diagnostic = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::UnterminatedString),
+        format!("Unterminated string literal: {}", self.get_current_lexeme()),
+        self.source.path.to_string(),
+      )
+      .with_label(
+        diagnostic::Span::new(self.start, self.current),
+        Some("This string literal is not terminated".to_string()),
+        LabelStyle::Primary,
+      )
+      .with_help("String literals must end with a closing '\"'.".to_string());
+      engine.add(diagnostic);
+    }
+
+    Some(TokenKind::Literal {
+      kind: LiteralKind::Str,
+    })
+  }
+
+  /// Helper that checks if the next two characters form a string prefix.
+  ///
+  /// Returns `true` if the current character plus lookahead are a string prefix.
+  pub(crate) fn is_string_prefix(&mut self, first: char) -> bool {
+    let next = self.peek();
+    let next2 = self.peek_next(1);
+
+    match first {
+      // b" or b' or br" or br#"
+      'b' => {
+        matches!(next, Some('"') | Some('\''))
+          || (matches!(next, Some('r')) && matches!(next2, Some('"') | Some('#')))
+      },
+
+      // c" or cr" or cr#" (C strings)
+      'c' => {
+        matches!(next, Some('"'))
+          || (matches!(next, Some('r')) && matches!(next2, Some('"') | Some('#')))
+      },
+
+      // r" or r#" (raw strings)
+      'r' => matches!(next, Some('"') | Some('#')),
+
+      _ => false,
+    }
+  }
+
+  /// Shared implementation for non-raw `"..."` and `c"..."` bodies.
+  ///
+  /// Returns `true` if a closing `"` was found, `false` on EOF.
+  fn scan_string_body(&mut self, engine: &mut DiagnosticEngine, context: &str) -> bool {
+    let mut terminated = false;
+
+    while let Some(c) = self.peek() {
+      match c {
+        '"' => {
+          self.advance();
+          terminated = true;
+          break;
+        },
+        '\\' => {
+          self.advance(); // consume '\'
+          match self.peek() {
+            // Line continuation: `\` + LF + trailing whitespace.
+            Some('\n') => {
+              self.advance(); // consume newline
+              while matches!(self.peek(), Some(' ' | '\t' | '\n' | '\r')) {
+                self.advance();
+              }
+            },
+            Some('n' | 'r' | 't' | '\\' | '"' | '0') => {
+              self.advance();
+            },
+            Some('x') => {
+              self.advance(); // consume 'x'
+              let mut count = 0;
+              let mut value: u32 = 0;
+              while count < 2 {
+                match self.peek().and_then(|ch| ch.to_digit(16)) {
+                  Some(d) => {
+                    value = (value << 4) | d;
+                    self.advance();
+                    count += 1;
+                  },
+                  None => break,
+                }
+              }
+              if count < 2 || value > 0x7F {
+                let diag = Diagnostic::new(
+                  DiagnosticCode::Error(DiagnosticError::InvalidEscape),
+                  format!("Invalid \\x escape in {} literal", context),
+                  self.source.path.to_string(),
+                );
+                engine.add(diag);
+              }
+            },
+            Some('u') if self.peek_next(1) == Some('{') => {
+              self.advance(); // 'u'
+              self.advance(); // '{'
+              let mut digits = 0;
+              let mut value: u32 = 0;
+              while let Some(ch) = self.peek() {
+                if ch == '}' {
+                  break;
+                }
+                match ch.to_digit(16) {
+                  Some(d) => {
+                    if digits < 6 {
+                      value = (value << 4) | d;
+                    }
+                    digits += 1;
+                    self.advance();
+                  },
+                  None => {
+                    let diag = Diagnostic::new(
+                      DiagnosticCode::Error(DiagnosticError::InvalidEscape),
+                      format!("Invalid Unicode escape in {} literal", context),
+                      self.source.path.to_string(),
+                    );
+                    engine.add(diag);
+                    self.advance();
+                    break;
+                  },
+                }
+              }
+              if self.peek() != Some('}') {
+                let diag = Diagnostic::new(
+                  DiagnosticCode::Error(DiagnosticError::UnterminatedString),
+                  "Unterminated Unicode escape, missing '}'".to_string(),
+                  self.source.path.to_string(),
+                );
+                engine.add(diag);
+              } else {
+                self.advance(); // consume '}'
+                if digits == 0
+                  || digits > 6
+                  || value > 0x10FFFF
+                  || (0xD800..=0xDFFF).contains(&value)
+                {
+                  let diag = Diagnostic::new(
+                    DiagnosticCode::Error(DiagnosticError::InvalidEscape),
+                    "Invalid Unicode escape code point".to_string(),
+                    self.source.path.to_string(),
+                  );
+                  engine.add(diag);
+                }
+              }
+            },
+            _ => {
+              let diag = Diagnostic::new(
+                DiagnosticCode::Error(DiagnosticError::InvalidEscape),
+                format!("Unknown escape sequence in {} literal", context),
+                self.source.path.to_string(),
+              );
+              engine.add(diag);
+              if self.peek().is_some() {
+                self.advance();
+              }
+            },
+          }
+        },
+        '\r' => {
+          // Bare CR is forbidden; only allowed as part of a continuation sequence.
+          let diag = Diagnostic::new(
+            DiagnosticCode::Error(DiagnosticError::InvalidEscape),
+            format!(
+              "Carriage return (CR) is not allowed in {} literals; use \\n or a line continuation",
+              context
+            ),
+            self.source.path.to_string(),
+          );
+          engine.add(diag);
+          self.advance();
+        },
+        _ => {
+          self.advance();
+        },
+      }
+    }
+
+    terminated
+  }
+}
