@@ -4,11 +4,13 @@
 
 pub(crate) mod generic;
 pub(crate) mod path;
+pub(crate) mod pattern;
 pub(crate) mod print;
 pub(crate) mod r#struct;
 use diagnostic::Span;
 use generic::*;
 use path::*;
+use pattern::*;
 use r#struct::*;
 
 // ----------------------------------------------------------------------------
@@ -646,109 +648,6 @@ pub(crate) enum Stmt {
   },
   Item(Box<Item>),
   Empty,
-}
-
-// ----------------------------------------------------------------------------
-// Patterns
-// ----------------------------------------------------------------------------
-
-/// Every supported pattern form (used in `let`, `match`, etc.).
-#[derive(Debug, Clone)]
-pub(crate) enum Pattern {
-  Wildcard {
-    span: Span,
-  },
-  Rest {
-    span: Span,
-  },
-
-  Literal {
-    expr: Box<Expr>,
-    span: Span,
-  },
-
-  Ident {
-    reference: Option<Mutability>,
-    mutability: Mutability,
-    name: String,
-    subpattern: Option<Box<Pattern>>,
-    span: Span,
-  },
-
-  Path {
-    qself: Option<Box<Type>>,
-    path: Path,
-    span: Span,
-  },
-
-  Tuple {
-    attributes: Vec<Attribute>,
-    patterns: Vec<Pattern>,
-    span: Span,
-  },
-
-  Slice {
-    before: Vec<Pattern>,
-    middle: Option<Box<Pattern>>,
-    after: Vec<Pattern>,
-    span: Span,
-  },
-
-  Struct {
-    qself: Option<Box<Type>>,
-    path: Path,
-    fields: Vec<FieldPattern>,
-    has_rest: bool,
-    span: Span,
-  },
-
-  TupleStruct {
-    qself: Option<Box<Type>>,
-    path: Path,
-    patterns: Vec<Pattern>,
-    span: Span,
-  },
-
-  Or {
-    patterns: Vec<Pattern>,
-    span: Span,
-  },
-
-  Range {
-    start: Option<Box<Expr>>,
-    end: Option<Box<Expr>>,
-    kind: RangeKind,
-    span: Span,
-  },
-
-  Reference {
-    mutability: Mutability,
-    pattern: Box<Pattern>,
-    span: Span,
-  },
-
-  Box {
-    pattern: Box<Pattern>,
-    span: Span,
-  },
-
-  Macro {
-    mac: MacroInvocation,
-  },
-
-  Paren {
-    pattern: Box<Pattern>,
-    span: Span,
-  },
-}
-
-/// A field binding inside a struct pattern.
-#[derive(Debug, Clone)]
-pub(crate) struct FieldPattern {
-  pub attributes: Vec<Attribute>,
-  pub name: String,
-  pub pattern: Option<Pattern>,
-  pub is_shorthand: bool,
 }
 
 // ----------------------------------------------------------------------------

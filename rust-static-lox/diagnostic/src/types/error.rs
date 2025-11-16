@@ -17,6 +17,7 @@ pub enum DiagnosticError {
   UnknownPrefix,
   ReservedPrefix,
   InvalidLifetime,
+  InvalidInteger,
 
   // parser
   UnexpectedToken,
@@ -38,6 +39,7 @@ impl DiagnosticError {
     match self {
       Self::CodeNotFound => "E0001",
       Self::InvalidArguments => "E0002",
+
       Self::InvalidShebang => "E0003",
       Self::InvalidCharacter => "E0004",
       Self::UnterminatedString => "E0005",
@@ -47,18 +49,20 @@ impl DiagnosticError {
       Self::UnknownPrefix => "E0009",
       Self::ReservedPrefix => "E0010",
       Self::InvalidLifetime => "E0011",
-      Self::UnexpectedToken => "E0012",
-      Self::InvalidLiteral => "E0013",
-      Self::EmptyChar => "E0014",
-      Self::MissingClosingBracket => "E0015",
-      Self::InvalidVisibilityRestriction => "E0016",
-      Self::InvalidNameIdentifier => "E0017",
-      Self::UnexpectedLifetime => "E0018",
-      Self::InvalidType => "E0019",
-      Self::InvalidMutabilityInField => "E0020",
-      Self::InvalidPointerType => "E0021",
-      Self::InvalidWherePredicate => "E0022",
-      Self::InvalidMutability => "E0023",
+      Self::InvalidInteger => "E0012",
+
+      Self::UnexpectedToken => "E0013",
+      Self::InvalidLiteral => "E0014",
+      Self::EmptyChar => "E0015",
+      Self::MissingClosingBracket => "E0016",
+      Self::InvalidVisibilityRestriction => "E0017",
+      Self::InvalidNameIdentifier => "E0018",
+      Self::UnexpectedLifetime => "E0019",
+      Self::InvalidType => "E0020",
+      Self::InvalidMutabilityInField => "E0021",
+      Self::InvalidPointerType => "E0022",
+      Self::InvalidWherePredicate => "E0023",
+      Self::InvalidMutability => "E0024",
     }
   }
 
