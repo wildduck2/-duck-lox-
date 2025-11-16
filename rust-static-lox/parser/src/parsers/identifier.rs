@@ -4,18 +4,20 @@ use lexer::token::Token;
 use crate::{ast::Expr, Parser};
 
 impl Parser {
-  /// Parses a normal identifier expression.
+  /// Parses a standard identifier expression.
   ///
   /// Grammar:
-  /// identExpr
-  ///     -> IDENT
   ///
-  /// Examples:
-  /// foo
-  /// variable_name
+  ///   identExpr ::= IDENT
   ///
-  /// This handles regular identifiers only. Contextual
-  /// keywords like self or super are handled by parse_keyword_ident.
+  /// This rule covers ordinary identifiers such as:
+  ///   foo
+  ///   variable_name
+  ///
+  /// Notes:
+  /// - This function handles normal identifiers only.
+  /// - Contextual identifiers such as self, super, crate, and Self
+  ///   are parsed by parse_keyword_ident.
   pub(crate) fn parser_ident(
     &mut self,
     token: &mut Token,
@@ -38,18 +40,19 @@ impl Parser {
     })
   }
 
-  /// Parses contextual keywords as identifier expressions.
+  /// Parses contextual keyword identifiers.
   ///
   /// Grammar:
-  /// keywordIdentExpr
-  ///     -> "self"
-  ///     |  "super"
-  ///     |  "crate"
-  ///     |  "Self"
+  ///
+  ///   keywordIdentExpr ::= "self"
+  ///                      | "super"
+  ///                      | "crate"
+  ///                      | "Self"
   ///
   /// Notes:
-  /// These tokens behave like identifiers inside expressions.
-  /// They do not begin type paths or module paths here.
+  /// - These keywords behave like identifiers in expression position.
+  /// - They do not initiate type paths or module paths when used here.
+  /// - The returned expression is always Expr::Ident.
   pub(crate) fn parse_keyword_ident(
     &mut self,
     token: &mut Token,

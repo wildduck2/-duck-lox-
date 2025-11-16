@@ -1,37 +1,36 @@
-//!~TODO:
-//! MISSING BEHAVIOR (added):
-//! - Must check for trailing comma to distinguish `(x,)` from `(x)`
-//!   → `(x,)` is a tuple; `(x)` is a grouping.
 use diagnostic::DiagnosticEngine;
 use lexer::token::{Token, TokenKind};
 
 use crate::{ast::Expr, parser_utils::ExprContext, Parser};
 
 impl Parser {
-  /// Parses parenthesized expressions and distinguishes between:
-  /// - unit expressions: "()"
-  /// - grouped expressions: "(expr)"
-  /// - tuple expressions: "(a, b, c)" or "(expr,)"  // one-element tuple
+  /// Parses parenthesized expressions and determines whether the result is:
   ///
-  /// Full Rust-like grammar:
+  /// - a unit expression: "()"
+  /// - a grouped expression: "(expr)"
+  /// - a tuple expression: "(a, b, c)" or "(expr,)" for a one-element tuple
   ///
-  /// ```
-  /// groupedExpr
-  ///     : "(" ")"
-  ///     | "(" inner ")"
+  /// Grammar (simplified):
   ///
-  /// inner
-  ///     : expr                           // grouping
-  ///     | expr ","                       // one-element tuple
-  ///     | expr "," exprList              // multi-element tuple
+  ///   groupedExpr ::= "(" ")"
+  ///                 | "(" inner ")"
   ///
-  /// exprList
-  ///     : expr ("," expr)* (",")?
-  /// ```
+  ///   inner ::= expr
+  ///           | expr ","
+  ///           | expr "," exprList
+  ///
+  ///   exprList ::= expr ("," expr)* (",")?
+  ///
+  /// Rules:
+  /// - A trailing comma after a single element creates a tuple: (x,)
+  /// - No trailing comma means it is a grouped expression: (x)
+  /// - Multiple elements always form a tuple.
   ///
   /// Notes:
-  /// - A trailing comma forces tuple construction.
-  /// - Attributes inside parentheses are allowed only in your language extension.
+  /// - Attributes inside parentheses (#[] ...) are supported only in this
+  ///   implementation and are not in standard Rust.
+  /// - Unit expressions are recognized early: the parser checks for ")" after "(".
+  ///
   pub(crate) fn parse_grouped_expr(
     &mut self,
     token: &mut Token,
@@ -57,7 +56,7 @@ impl Parser {
       vec![]
     };
 
-    // Track if a trailing comma is present
+    // Track whether a trailing comma appears
     let mut trailing_comma = false;
 
     // Parse expressions until ")"
@@ -84,7 +83,7 @@ impl Parser {
     self.expect(TokenKind::CloseParen, engine)?;
     token.span.merge(self.current_token().span);
 
-    // Decide between group or tuple
+    // Distinguish grouped vs tuple vs unit
     match elements.len() {
       0 => unreachable!("zero elements already handled as unit"),
 
@@ -97,7 +96,7 @@ impl Parser {
             span: token.span,
           })
         } else {
-          // (x) is a grouping
+          // (x) is a grouping expression
           Ok(Expr::Group {
             attributes,
             expr: Box::new(elements[0].clone()),
@@ -106,11 +105,14 @@ impl Parser {
         }
       },
 
-      _ => Ok(Expr::Tuple {
-        attributes,
-        elements,
-        span: token.span,
-      }),
+      _ => {
+        // Multiple elements always form a tuple
+        Ok(Expr::Tuple {
+          attributes,
+          elements,
+          span: token.span,
+        })
+      },
     }
   }
 }
