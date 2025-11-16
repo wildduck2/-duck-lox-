@@ -12,6 +12,8 @@ pub mod ast;
 mod parser_utils;
 mod parsers;
 
+mod macros;
+
 /// Recursive-descent parser that transforms tokens into an AST while reporting diagnostics.
 pub struct Parser {
   pub tokens: Vec<Token>,

@@ -27,7 +27,7 @@ impl Parser {
   /// `parse_item` to decide which constructs are supported.
   pub fn parse_program(&mut self, engine: &mut DiagnosticEngine) {
     while !self.is_eof() {
-      match self.parse_expression(ExprContext::Default, engine) {
+      match self.parse_stmt(engine) {
         // Returns Item, not Stmt
         Ok(item) => {
           item.print_tree("", true);
@@ -71,12 +71,10 @@ impl Parser {
   /// Parses a single statement node (stubbed for future grammar branches).
   /// Currently supports empty statements and expression statements.
   fn parse_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+    let attributes = self.parse_attributes(engine)?;
+
     match self.current_token().kind {
-      // TokenKind::Let => {
-      //   // Parse let statement
-      //   // Returns: Stmt::Let { attributes, pattern, ty, init, else_block, span }
-      //   self.parse_let_statement(engine)
-      // },
+      TokenKind::KwLet => self.parse_let_statement(attributes, engine),
       TokenKind::Semi => {
         // Empty statement: just a semicolon
         self.advance(engine);

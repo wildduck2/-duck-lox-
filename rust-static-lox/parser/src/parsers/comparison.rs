@@ -1,51 +1,6 @@
-//! TODO: / Missing items for full Rust-accurate comparison parsing:
-//!
-//! - **Do not allow chained comparisons semantically**
-//!   Rust parses `a < b < c` as `(a < b) < c`, which is almost always
-//!   a logic bug. Rust itself emits a warning (`non-minimal boolean expressions`),
-//!   but this parser currently produces no diagnostic.
-//!
-//!   Example that should warn:
-//!   a < b < c   // parsed as (a < b) < c
-//!
-//! - **Context-sensitive restrictions in patterns**
-//!   Comparison operators are not always valid inside pattern contexts
-//!   (`match`, `let PATTERN =`). Full Rust performs contextual validation
-//!   after parsing. This parser accepts comparisons everywhere.
-//!
-//! - **Operator span merging improvements**
-//!   Resulting `span` currently only covers the operator token.  
-//!   Full Rust merges the left operand, operator, and right operand into a
-//!   single combined span for better diagnostics.
-//!
-//! - **No constant evaluation or overflow behavior**
-//!   If you later add constant folding, comparisons have special rules:
-//!   `NaN == NaN` is always false, integer comparisons do not overflow,
-//!   and Rust’s const-eval engine emits diagnostics for invalid constant
-//!   expressions. This parser only builds the AST.
-//!
-//! - **No handling of type-ascription vs `<` ambiguity**
-//!   In Rust, `<` after an expression may be a type ascription operator
-//!   (deprecated), a turbofish, or the start of a generic argument list.
-//!   Real Rust uses complex disambiguation. This parser treats `<` only
-//!   as a comparison operator here.
-//!
-//! - **No recovery for malformed RHS**
-//!   If `rhs` cannot be parsed, parsing aborts. A production-grade parser
-//!   should attempt recovery after diagnostics.
-//!
-//! Grammar reminder:
-//! ```text
-//! comparison → bitwiseOr ( compOp bitwiseOr )*
-//! compOp     → "==" | "!=" | "<" | "<=" | ">" | ">="
-//! ```
-//!
-//! Notes:
-//! - Operators are **left-associative**.
-//! - The parser mirrors Rust by allowing syntactic chains like `a < b < c`,
-//!   even though they are semantically meaningless.
-//! - Precedence is handled by delegating to `parse_bitwise_or`.
-
+use diagnostic::code::DiagnosticCode;
+use diagnostic::diagnostic::{Diagnostic, LabelStyle};
+use diagnostic::types::error::DiagnosticError;
 use diagnostic::DiagnosticEngine;
 use lexer::token::TokenKind;
 
@@ -53,21 +8,34 @@ use crate::ast::BinaryOp;
 use crate::{ast::Expr, Parser};
 
 impl Parser {
-  /// Parses comparison expressions that use operators such as
-  /// eqeq, ne, lt, le, gt, ge.
+  /// Parses comparison expressions using the standard comparison operators.
   ///
-  /// Grammar (simplified):
+  /// Grammar:
   ///
-  /// comparison
-  ///     -> bitwiseOr ( compOp bitwiseOr )*
+  ///   comparison ::= bitwiseOr ( compOp bitwiseOr )*
   ///
-  /// compOp
-  ///     -> "==" | "!=" | "<" | "<=" | ">" | ">="
+  ///   compOp ::= "==" | "!=" | "<" | "<=" | ">" | ">="
   ///
-  /// Notes:
-  /// - Comparison operators are left associative.
-  /// - This matches Rust style: a < b < c is parsed as (a < b) < c.
-  /// - Each operand is parsed using parse_bitwise_or, which has higher precedence.
+  /// Description:
+  /// - A comparison expression consists of a left operand and zero or more
+  ///   comparison operator + operand pairs.
+  /// - Each operand is parsed using `parse_bitwise_or`, which has higher
+  ///   precedence than comparison operators.
+  ///
+  /// Associativity:
+  /// - Comparison operators associate from left to right.
+  ///   Example: a < b < c parses as (a < b) < c.
+  ///
+  /// Error Handling:
+  /// - If the right side of a comparison operator does not begin a valid
+  ///   expression, an UnexpectedToken diagnostic is emitted.
+  ///
+  /// Examples:
+  ///   x == y
+  ///   a != b
+  ///   count < limit
+  ///   low <= mid <= high   (parsed as left associative)
+  ///
   pub(crate) fn parse_comparison(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     // first parse the next higher precedence level
     let mut lhs = self.parse_bitwise_or(engine)?;
@@ -89,6 +57,32 @@ impl Parser {
 
       // parse the right side with the same precedence level beneath comparison
       let rhs = self.parse_bitwise_or(engine)?;
+
+      if !self.current_token().kind.can_start_expression() {
+        let bad = self.current_token();
+        let lexeme = self.get_token_lexeme(&bad);
+
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+          "invalid right-hand side of comparison expression".to_string(),
+          self.source_file.path.clone(),
+        )
+        .with_label(
+          bad.span,
+          Some(format!(
+            "expected an expression after the comparison operator, found `{lexeme}`"
+          )),
+          LabelStyle::Primary,
+        )
+        .with_help("comparison operators must be followed by a valid expression".to_string())
+        .with_note("examples: `x == y`, `x != y`, `x < y`, `x <= y`, `x > y`, `x >= y`".to_string())
+        .with_note(
+          "Rust parses `a < b < c` as `(a < b) < c`, which is almost always incorrect".to_string(),
+        );
+
+        engine.add(diagnostic);
+        return Err(());
+      }
 
       lhs = Expr::Binary {
         op,

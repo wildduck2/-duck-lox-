@@ -1,65 +1,69 @@
-//! TODO: Bitwise operator parsing is incomplete compared to full Rust grammar.
-//!
-//! Missing or incomplete features:
-//!
-//! - **Operator precedence validation**  
-//!   Current implementation relies on the surrounding parser structure.  
-//!   Once all operator levels are implemented, confirm that precedence  
-//!   matches Rust exactly (`&` > `^` > `|`).
-//!
-//! - **Diagnostics for misplaced operators**  
-//!   Sequences like `a | | b`, `a ^ ^ b`, or lone operators such as  
-//!   `&x` in expression position should emit errors rather than  
-//!   allowing obscure parser failures later.
-//!
-//! - **Span merging improvements**  
-//!   The produced `Expr::Binary` span currently uses only the operator’s  
-//!   span. For better error messages, merge spans from left operand  
-//!   through right operand.
-//!
-//! - **Short-circuit vs non-short-circuit clarity**  
-//!   Ensure that `||` (logical OR) is not accepted here, and that bitwise  
-//!   OR (`|`) is never confused with logical OR. Same for `&&` vs `&`.
-//!
-//! - **Contextual disambiguation for patterns**  
-//!   Rust uses `|` in `match` patterns and or-patterns (`A | B`).  
-//!   Expression-context `|` must not be parsed while in pattern context.  
-//!   This parser currently assumes expression-only context.
-//!
-//! - **Support for assignment operators**  
-//!   Rust supports `|=`, `^=`, and `&=`. These belong to the assignment  
-//!   parsing level and should not be consumed here, but the parser  
-//!   should detect and forward them to the assignment expression parser.
-//!
-//! - **Error recovery**  
-//!   When parsing `a | b &`, the parser should produce a diagnostic and  
-//!   skip tokens gracefully rather than propagating an opaque error upward.
-//!
-//! Grammar reminder (simplified):
-//! ```text
-//! bitwiseOr      → bitwiseXor ( "|"  bitwiseXor )*
-//! bitwiseXor     → bitwiseAnd ( "^"  bitwiseAnd )*
-//! bitwiseAnd     → shift       ( "&"  shift      )*
-//! ```
-//!
-//! All operators in this group are **left-associative**.
-
 use crate::{ast::Expr, Parser};
-use diagnostic::DiagnosticEngine;
+use diagnostic::{
+  code::DiagnosticCode,
+  diagnostic::{Diagnostic, LabelStyle},
+  types::error::DiagnosticError,
+  DiagnosticEngine,
+};
 
 use crate::ast::BinaryOp;
 use lexer::token::TokenKind;
-
 impl Parser {
-  /// Parses chained bitwise OR expressions (`expr | expr`).
+  /// Parses bitwise OR expressions.
+  ///
+  /// Grammar:
+  ///
+  ///   bitwise_or ::= bitwise_xor ( "|" bitwise_xor )*
+  ///
+  /// This level implements the lowest-precedence bitwise operator.
+  ///
+  /// Behavior:
+  /// - Left associative
+  /// - Accepts chained operations: a | b | c
+  /// - Correctly interacts with higher-precedence operators: a | b ^ c & d
+  ///
+  /// Notes:
+  /// - This parses only the expression-level "|" operator.
+  /// - Pattern and closure "|" are not handled here.
   pub(crate) fn parse_bitwise_or(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_bitwise_xor(engine)?;
 
-    'bitwise_or_find: while !self.is_eof() {
+    while !self.is_eof() {
       let token = self.current_token();
+
       match token.kind {
         TokenKind::Or => {
-          self.advance(engine); // consume the bitwise operator
+          self.advance(engine);
+
+          if !self
+            .current_token()
+            .kind
+            .can_start_expression_and_not(TokenKind::Or)
+          {
+            let bad = self.current_token();
+            let lexeme = self.get_token_lexeme(&bad);
+
+            let diagnostic = Diagnostic::new(
+              DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+              "invalid right-hand side of bitwise OR expression".to_string(),
+              self.source_file.path.clone(),
+            )
+            .with_label(
+              bad.span,
+              Some(format!(
+                "expected an expression after `|`, found `{}`",
+                lexeme
+              )),
+              LabelStyle::Primary,
+            )
+            .with_help(
+              "bitwise OR requires a left and a right expression, for example: a | b".to_string(),
+            )
+            .with_note("examples: x | y, flags | MASK, (a & b) | c".to_string());
+
+            engine.add(diagnostic);
+            return Err(());
+          }
 
           let rhs = self.parse_bitwise_xor(engine)?;
 
@@ -70,22 +74,68 @@ impl Parser {
             span: token.span,
           };
         },
-        _ => break 'bitwise_or_find,
+
+        _ => break,
       }
     }
 
     Ok(lhs)
   }
 
-  /// Parses chained bitwise XOR expressions (`expr ^ expr`).
+  /// Parses bitwise XOR expressions.
+  ///
+  /// Grammar:
+  ///
+  ///   bitwise_xor ::= bitwise_and ( "^" bitwise_and )*
+  ///
+  /// This is the middle-precedence bitwise operator.
+  ///
+  /// Behavior:
+  /// - Left associative
+  /// - Allows chains like: a ^ b ^ c
+  /// - Interacts correctly with bitwise AND, which has higher precedence
+  ///
+  /// Notes:
+  /// - Only the expression-level "^" operator is handled here.
   pub(crate) fn parse_bitwise_xor(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_bitwise_and(engine)?;
 
-    'bitwise_xor_find: while !self.is_eof() {
+    while !self.is_eof() {
       let token = self.current_token();
+
       match token.kind {
         TokenKind::Caret => {
-          self.advance(engine); // consume the bitwise operator
+          self.advance(engine);
+
+          if !self
+            .current_token()
+            .kind
+            .can_start_expression_and_not(TokenKind::Caret)
+          {
+            let bad = self.current_token();
+            let lexeme = self.get_token_lexeme(&bad);
+
+            let diagnostic = Diagnostic::new(
+              DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+              "invalid right-hand side of bitwise XOR expression".to_string(),
+              self.source_file.path.clone(),
+            )
+            .with_label(
+              bad.span,
+              Some(format!(
+                "expected an expression after `^`, found `{}`",
+                lexeme
+              )),
+              LabelStyle::Primary,
+            )
+            .with_help(
+              "bitwise XOR requires a left and a right expression, for example: a ^ b".to_string(),
+            )
+            .with_note("examples: x ^ y, flags ^ MASK, (a & b) ^ c".to_string());
+
+            engine.add(diagnostic);
+            return Err(());
+          }
 
           let rhs = self.parse_bitwise_and(engine)?;
 
@@ -96,22 +146,68 @@ impl Parser {
             span: token.span,
           };
         },
-        _ => break 'bitwise_xor_find,
+
+        _ => break,
       }
     }
 
     Ok(lhs)
   }
 
-  /// Parses chained bitwise AND expressions (`expr & expr`).
+  /// Parses bitwise AND expressions.
+  ///
+  /// Grammar:
+  ///
+  ///   bitwise_and ::= shift ( "&" shift )*
+  ///
+  /// This is the highest-precedence bitwise operator.
+  ///
+  /// Behavior:
+  /// - Left associative
+  /// - Supports chains like: a & b & c
+  ///
+  /// Notes:
+  /// - This function handles only the binary "&" operator.
+  /// - Unary "&" (reference) is parsed in the unary expression level.
   pub(crate) fn parse_bitwise_and(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_shift(engine)?;
 
-    'bitwise_and_find: while !self.is_eof() {
+    while !self.is_eof() {
       let token = self.current_token();
+
       match token.kind {
         TokenKind::And => {
-          self.advance(engine); // consume the bitwise operator
+          self.advance(engine);
+
+          if !self
+            .current_token()
+            .kind
+            .can_start_expression_and_not(TokenKind::And)
+          {
+            let bad = self.current_token();
+            let lexeme = self.get_token_lexeme(&bad);
+
+            let diagnostic = Diagnostic::new(
+              DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+              "invalid right-hand side of bitwise AND expression".to_string(),
+              self.source_file.path.clone(),
+            )
+            .with_label(
+              bad.span,
+              Some(format!(
+                "expected an expression after `&`, found `{}`",
+                lexeme
+              )),
+              LabelStyle::Primary,
+            )
+            .with_help(
+              "bitwise AND requires a left and a right expression, for example: a & b".to_string(),
+            )
+            .with_note("examples: x & y, flags & MASK, (a | b) & c".to_string());
+
+            engine.add(diagnostic);
+            return Err(());
+          }
 
           let rhs = self.parse_shift(engine)?;
 
@@ -122,7 +218,8 @@ impl Parser {
             span: token.span,
           };
         },
-        _ => break 'bitwise_and_find,
+
+        _ => break,
       }
     }
 
