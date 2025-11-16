@@ -12,6 +12,7 @@ use diagnostic::DiagnosticEngine;
 use lexer::token::TokenKind;
 
 use crate::ast::UnaryOp;
+use crate::match_and_consume;
 use crate::{ast::Expr, Parser};
 
 impl Parser {
@@ -55,12 +56,7 @@ impl Parser {
         self.advance(engine); // consume the unary operator
 
         // Optional "mut" after & or &&
-        let mutable = if self.current_token().kind == TokenKind::KwMut {
-          self.advance(engine);
-          true
-        } else {
-          false
-        };
+        let mutable = match_and_consume!(self, engine, TokenKind::KwMut)?;
 
         let op = match token.kind {
           TokenKind::Minus => UnaryOp::Neg,

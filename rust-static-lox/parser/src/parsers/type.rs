@@ -64,7 +64,7 @@ impl Parser {
 
         "char" => Ok(Type::Char),
         "str" => Ok(Type::Str),
-        "string" => Ok(Type::String),
+        "String" => Ok(Type::String),
 
         "bool" => Ok(Type::Bool),
 

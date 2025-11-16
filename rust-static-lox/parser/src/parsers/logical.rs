@@ -1,26 +1,6 @@
-//! TODO: Implement support for non short circuit boolean operators if your language adds them.
-//!
-//! TODO: Integrate parse_range_expr before parse_logical_or if your grammar supports ranges
-//!       with lower precedence than logical or. In real Rust range expressions bind tighter
-//!       than comparisons but looser than assignments and do not interfere with || and &&.
-//!
-//! TODO: Implement error recovery for cases like "a || || b" to match rustc style diagnostics.
-//!
-//! TODO: Support improvements for handling trailing operators such as "a ||" or "a &&"
-//!       by emitting specific diagnostics instead of delegating to next parse stage.
-//!
-//! TODO: Implement constant folding or operator simplification if your frontend performs
-//!       early expression normalization.
-//!
-//! TODO: Add parentheses based precedence tests to ensure logicalOr and logicalAnd
-//!       interact correctly with unary, comparison, and bitwise operators.
-//!
-//! TODO: If implementing full Rust grammar, ensure that logical operators are not parsed
-//!       inside position where patterns are expected (match arms, let patterns, if let).
-//!
-//! TODO: Ensure that short circuiting semantics are preserved in later lowering steps
-//!       such as MIR-like or IR generation.
-
+use diagnostic::code::DiagnosticCode;
+use diagnostic::diagnostic::{Diagnostic, LabelStyle};
+use diagnostic::types::error::DiagnosticError;
 use diagnostic::DiagnosticEngine;
 use lexer::token::TokenKind;
 
@@ -31,16 +11,16 @@ impl Parser {
   /// Parses logical OR expressions.
   ///
   /// Grammar:
-  /// logicalOr
-  ///     -> logicalAnd ( "||" logicalAnd )*
   ///
-  /// Notes:
-  /// - "||" is left associative.
-  /// - Evaluation short circuits.
-  /// - Left operand is parsed using parse_logical_and.
+  ///   logicalOr ::= logicalAnd ( "||" logicalAnd )*
+  ///
+  /// Properties:
+  /// - Left associative.
+  /// - Short-circuiting semantics.
+  /// - Left operand is parsed using `parse_logical_and()`.
   ///
   /// Example:
-  /// a || b || c
+  ///   a || b || c
   pub(crate) fn parse_logical_or(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_logical_and(engine)?;
 
@@ -49,6 +29,35 @@ impl Parser {
       match token.kind {
         TokenKind::OrOr => {
           self.advance(engine);
+
+          if self
+            .current_token()
+            .kind
+            .can_start_expression_and_not(TokenKind::OrOr)
+          {
+            let bad = self.current_token();
+            let lexeme = self.get_token_lexeme(&bad);
+
+            let diagnostic = Diagnostic::new(
+              DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+              "invalid right-hand side of logical OR expression".to_string(),
+              self.source_file.path.clone(),
+            )
+            .with_label(
+              bad.span,
+              Some(format!(
+                "expected an expression after `||`, found `{lexeme}`"
+              )),
+              LabelStyle::Primary,
+            )
+            .with_help(
+              "logical OR requires a left and a right expression, for example: a || b".to_string(),
+            )
+            .with_note("examples: x || y, flags || MASK, (a && b) || c".to_string());
+
+            engine.add(diagnostic);
+            return Err(());
+          }
 
           let rhs = self.parse_logical_and(engine)?;
 
@@ -69,16 +78,16 @@ impl Parser {
   /// Parses logical AND expressions.
   ///
   /// Grammar:
-  /// logicalAnd
-  ///     -> comparison ( "&&" comparison )*
   ///
-  /// Notes:
-  /// - "&&" is left associative.
-  /// - Evaluation short circuits.
-  /// - Left operand is parsed using parse_comparison.
+  ///   logicalAnd ::= comparison ( "&&" comparison )*
+  ///
+  /// Properties:
+  /// - Left associative.
+  /// - Short-circuiting semantics.
+  /// - Left operand is parsed using `parse_comparison()`.
   ///
   /// Example:
-  /// a && b && c
+  ///   a && b && c
   pub(crate) fn parse_logical_and(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_comparison(engine)?;
 
@@ -87,6 +96,35 @@ impl Parser {
       match token.kind {
         TokenKind::AndAnd => {
           self.advance(engine);
+
+          if self
+            .current_token()
+            .kind
+            .can_start_expression_and_not(TokenKind::AndAnd)
+          {
+            let bad = self.current_token();
+            let lexeme = self.get_token_lexeme(&bad);
+
+            let diagnostic = Diagnostic::new(
+              DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+              "invalid right-hand side of logical AND expression".to_string(),
+              self.source_file.path.clone(),
+            )
+            .with_label(
+              bad.span,
+              Some(format!(
+                "expected an expression after `&&`, found `{lexeme}`"
+              )),
+              LabelStyle::Primary,
+            )
+            .with_help(
+              "logical AND requires a left and a right expression, for example: a && b".to_string(),
+            )
+            .with_note("examples: x && y, flags && MASK, (a || b) && c".to_string());
+
+            engine.add(diagnostic);
+            return Err(());
+          }
 
           let rhs = self.parse_comparison(engine)?;
 

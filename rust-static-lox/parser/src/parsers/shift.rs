@@ -1,3 +1,6 @@
+use diagnostic::code::DiagnosticCode;
+use diagnostic::diagnostic::{Diagnostic, LabelStyle};
+use diagnostic::types::error::DiagnosticError;
 use diagnostic::DiagnosticEngine;
 use lexer::token::TokenKind;
 
@@ -5,27 +8,35 @@ use crate::ast::{BinaryOp, Expr};
 use crate::Parser;
 
 impl Parser {
-  //! TODO: Disallow interpreting >> as a shift operator inside type or generic argument contexts.
-  //!       Rust lexes >> and >>> as separate > tokens inside generics, not as shift operators.
-  //!       Example: Vec<Vec<u8>> should parse as Vec < Vec < u8 > >, not as a shift.
-
-  /// Parses left (`<<`) and right (`>>`) bitwise shift expressions.
+  /// Parses bitwise shift expressions.
   ///
   /// Grammar:
   /// ```
-  /// shiftExpr → term (("<<" | ">>") term)*
+  /// shiftExpr ::= term (("<<" | ">>") term)*
   /// ```
   ///
-  /// Example:
-  /// ```rust
-  /// a << 1
-  /// b >> 2 << 3
-  /// ```
+  /// Supported operators:
+  /// - `<<` - left shift
+  /// - `>>` - right shift
   ///
   /// Notes:
-  /// - Delegates operand parsing to [`parse_term`].
-  /// - Stops when no further shift operators are present.
-  /// - Does *not* consume single `<` or `>` tokens; those are handled by comparison parsing.
+  /// - This rule only handles **double-character** shift operators.
+  /// - Single `<` or `>` tokens are *not* processed here; they belong to
+  ///   the comparison operator grammar layer.
+  /// - Operands are parsed using [`parse_term`].
+  /// - Shifts are left-associative, matching Rust:
+  ///   `(a << b) << c`
+  ///
+  /// Examples:
+  /// ```rust
+  /// a << 1
+  /// value >> 3
+  /// x >> 2 << 1
+  /// ```
+  ///
+  /// Errors:
+  /// - If a range operator (`..` or `..=`) appears immediately after a shift,
+  ///   a diagnostic is emitted because range expressions cannot chain.
   pub(crate) fn parse_shift(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut lhs = self.parse_term(engine)?;
 
@@ -33,22 +44,49 @@ impl Parser {
       let token = self.current_token();
       let next = self.peek(1);
 
+      // Detect shift operator pairs
       let op = match (token.kind, next.kind) {
         (TokenKind::Lt, TokenKind::Lt) => Some(BinaryOp::Shl),
         (TokenKind::Gt, TokenKind::Gt) => Some(BinaryOp::Shr),
         _ => None,
       };
 
-      // Not a shift pair → stop parsing
+      // Stop if not a shift operator
       if op.is_none() {
         break;
       }
 
-      // Consume both symbols of the operator
+      // Consume both characters (`<<` or `>>`)
       self.advance(engine);
       self.advance(engine);
 
       let rhs = self.parse_term(engine)?;
+
+      // Reject invalid chaining with range operators after shifting
+      if matches!(
+        self.current_token().kind,
+        TokenKind::DotDot | TokenKind::DotDotEq
+      ) {
+        let bad = self.current_token();
+        let lexeme = self.get_token_lexeme(&bad);
+
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::UnexpectedToken),
+          "chained range expressions are not allowed".to_string(),
+          self.source_file.path.clone(),
+        )
+        .with_label(
+          bad.span,
+          Some(format!("found `{lexeme}` after a range expression")),
+          LabelStyle::Primary,
+        )
+        .with_help("only one `..` or `..=` may appear in a range expression".to_string())
+        .with_note("`a..b..c` is invalid; use `(a..b)` or `(b..c)` instead".to_string());
+
+        engine.add(diagnostic);
+        return Err(());
+      }
+
       lhs = Expr::Binary {
         op: op.unwrap(),
         left: Box::new(lhs),
