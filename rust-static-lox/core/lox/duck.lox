@@ -1,1 +1,123 @@
-let ref mut x @ y: i32 = 1;
+//let ref mut x @ _: i32 = 1;
+//let ref mut _ @ _: i32 = 1;
+//let ref mut _ @ x: i32 = 1;
+//let a @ ref b = x;
+//let a @ ref mut b = x;
+//let ref a @ ref b = x;
+//let (ref x) @ (ref y) = t;
+
+//let [] = v;
+//
+//let [a] = v;
+//let [a, b] = v;
+//let [a, b, c] = v;
+//
+//let [a, ..] = v;
+//let [a, b, ..] = v;
+//
+//let [..] = v;
+//let [.., a] = v;
+//let [.., a, b] = v;
+//
+//let [a, .., b] = v;
+//let [a, .., b, c] = v;
+//
+//let [a, ..rest] = v;
+//let [a, b, ..rest] = v;
+//
+//let [..rest] = v;
+//let [..rest, a] = v;
+//let [..rest, a, b] = v;
+//
+//let [a, ..rest, b] = v;
+//let [a, ..rest, b, c] = v;
+//
+//let [Some(a), ..] = v;
+//let [Some::HELL(a), ..] = v;
+//let [<T>::Some(a), ..] = v;
+//let [<TYPE as ::path::Trait>::Item(x, y), ..] = v;
+//let [ <T as ::path::Trait>::Some { #[some_attribute] name: Some(x), .. }, ..] = v;
+//let (x, y) = v;
+//let [(y, x), ..rest] = v;
+//let [(a, b), .., (c, d)] = v;
+//let [ref a, .., ref mut b] = v;
+//let [x @ Some(_), ..rest] = v;
+
+//referencePattern  -> ("&" | "&&") "mut"? patternWithoutRange ;
+//match x {
+//  // true => 0,
+//  // ref mut x @ _ => 0,
+//  // _ => 0,
+//  // .. => 0,
+//  // &x => 0,
+//  // &&x => 0,
+//}
+
+
+match value {
+    // --- simple named-field structs ---
+
+   Point { x, y } => 0,
+   Point { x: a, y: b } => 1,
+   Point { x: 0, y } => 2,
+   Point { x, y: _ } => 3,
+
+    // --- using `..` rest ---
+
+    Point { x, .. } => 4,
+    Point { .. } => 5,
+
+    // --- mix of explicit + rest ---
+
+    Point { x: 10, .. } => 6,
+    Point { y, .. } => 7,
+
+
+   // // --- ref / ref mut on fields (shorthand) ---
+  
+   Point { .. } => 10,
+   Point { ref x } => 10,
+   Point { ref mut x } => 10,
+   Point { ref x, ref y } => 10,
+   Point { ref mut x, y } => 11,
+   Point { ref x, ref mut y } => 12,
+
+   // // --- ref / ref mut with explicit field names ---
+
+   Point { x: ref xr, y: ref yr } => 13,
+   Point { x: ref mut xr, y } => 14,
+   Point { x, y: ref mut yr } => 15,
+
+   // // --- nested struct patterns ---
+
+   Rect {
+       top_left: Point { x: 0, y },
+       bottom_right: Point { x: bx, y: by },
+   } => 16,
+
+   Rect {
+       top_left: Point { x, y },
+       bottom_right,
+   } => 17,
+
+   // // --- nested + rest ---
+
+   Rect {
+       top_left: Point { x, .. },
+       ..
+   } => 18,
+
+   // // --- attribute on a struct field in pattern ---
+
+   S {
+       #[cfg(test)]
+       x,
+       y,
+   } => 19,
+
+   // // --- wildcard fallback ---
+
+    _ => 100,
+}
+
+

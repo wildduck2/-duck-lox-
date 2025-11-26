@@ -1,89 +1,73 @@
 use crate::ast::*;
 use diagnostic::Span;
 
-/// A complete representation of all pattern forms supported by the language.
+/// Binding mode for identifier patterns.
 ///
-/// Patterns are used in:
-/// - let bindings
-/// - match arms
-/// - function parameters
-/// - for loops
+/// This models:
+/// - `x`         => ByValue(Immutable)
+/// - `mut x`     => ByValue(Mutable)
+/// - `ref x`     => ByRef(Immutable)
+/// - `ref mut x` => ByRef(Mutable)
+#[derive(Debug, Clone, PartialEq)]
+pub enum BindingMode {
+  ByValue(Mutability),
+  ByRef(Mutability),
+}
+
+/// All pattern forms supported by the language.
 ///
-/// This mirrors Rusts pattern grammar and unifies all allowed pattern constructs
-/// into a single enum that can be structurally matched or transformed.
+/// Patterns appear in let bindings, match arms, and destructuring.
+/// They follow Rust-style semantics with a few extensions.
 ///
-/// Examples:
-/// ```rust
-/// let (x, y) = point;
-/// let [a, .., b] = slice;
-/// match value {
-///     Some(v) => ...
-///     None => ...
-/// }
-/// ref mut x
-/// x @ Some(y)
-/// ```
-///
+/// Core categories:
+/// - Wildcards (`_`)
+/// - Bindings (`x`, `ref x`, `mut x`, `x @ pat`)
+/// - Destructuring (tuple, slice, struct, tuple-struct)
+/// - Literals and constants
+/// - Rest patterns (`..`, `..name`)
+/// - Ranges (`1..5`, `a..=z`)
+/// - OR patterns (`p1 | p2`)
+/// - Reference and deref patterns (`&p`, `*p`)
+/// - Parenthesized patterns
 #[derive(Debug, Clone)]
 pub(crate) enum Pattern {
-  /// Wildcard pattern `_` that matches any value and binds nothing.
+  /// `_` matches anything and binds nothing.
   Wildcard { span: Span },
 
-  /// Rest pattern `..` used in slice and struct patterns.
-  Rest { span: Span },
+  /// `..` or `..name` rest (spread) pattern for slices.
+  Rest { name: Option<String>, span: Span },
 
-  /// Literal pattern such as numbers, strings, booleans, or chars.
+  /// Pure literal pattern: number, string, bool, or char.
   Literal { expr: Box<Expr>, span: Span },
 
-  /// Identifier binding pattern.
-  ///
-  /// This form covers all binding kinds:
-  /// - `x`
-  /// - `mut x`
-  /// - `ref x`
-  /// - `ref mut x`
-  /// - `x @ subpattern`
-  ///
-  /// `reference` represents `ref` or `ref mut`, while `mutability`
-  /// represents the mutability of the binding itself.
+  /// Compile-time constant pattern (consts, enum variants, and paths).
+  Const { expr: Box<Expr>, span: Span },
+
+  /// Binding pattern: `x`, `mut x`, `ref x`, `x @ pat`.
   Ident {
-    reference: bool,
-    mutability: Mutability,
+    binding: BindingMode,
     name: String,
     subpattern: Option<Box<Pattern>>,
     span: Span,
   },
 
-  /// Path pattern selecting a type or enum variant.
-  ///
-  /// Examples:
-  /// ```rust
-  /// None
-  /// Some
-  /// module::Variant
-  /// crate::Type
-  /// ```
+  /// Path pattern: enum variants, type constructors, namespaces.
   Path {
     qself: Option<Box<Type>>,
     path: Path,
     span: Span,
   },
 
-  /// Tuple pattern such as `(a, b, c)`.
-  ///
-  /// Attributes apply to inner elements.
+  /// Tuple pattern: `(a, b, c)`.
   Tuple {
     attributes: Vec<Attribute>,
     patterns: Vec<Pattern>,
     span: Span,
   },
 
-  /// Slice pattern `[before..., middle?, after...]` supporting Rust-like forms:
+  /// Slice pattern `[before..., ..middle?, after...]`.
   ///
-  /// - `[a, b, c]`
-  /// - `[x, ..]`
-  /// - `[a, .., b]`
-  /// - `[x, y, ..rest]`
+  /// Examples: `[a, b]`, `[a, ..]`, `[a, ..rest, b]`
   Slice {
     before: Vec<Pattern>,
     middle: Option<Box<Pattern>>,
@@ -91,14 +75,7 @@ pub(crate) enum Pattern {
     span: Span,
   },
 
-  /// Struct pattern binding specific fields.
-  ///
-  /// Examples:
-  /// ```rust
-  /// Point { x, y }
-  /// Point { x: a, y: b }
-  /// Point { x, .. }
-  /// ```
+  /// Struct pattern: `Point { x, y }`, `Point { x: a, .. }`.
   Struct {
     qself: Option<Box<Type>>,
     path: Path,
@@ -107,7 +84,7 @@ pub(crate) enum Pattern {
     span: Span,
   },
 
-  /// Tuple-struct patterns like `Some(x)` or `Color(r, g, b)`.
+  /// Tuple-struct pattern: `Some(x)`, `Color(r, g, b)`.
   TupleStruct {
     qself: Option<Box<Type>>,
     path: Path,
@@ -115,10 +92,10 @@ pub(crate) enum Pattern {
     span: Span,
   },
 
-  /// Logical OR pattern `p1 | p2 | p3`.
+  /// OR pattern: `p1 | p2 | p3`.
   Or { patterns: Vec<Pattern>, span: Span },
 
-  /// Range pattern such as `1..5`, `a..=z`, `..end`, or `start..`.
+  /// Range pattern: `a..b`, `a..=b`, `..b`, `a..`.
   Range {
     start: Option<Box<Expr>>,
     end: Option<Box<Expr>>,
@@ -128,19 +105,26 @@ pub(crate) enum Pattern {
 
   /// Reference pattern: `&p` or `&mut p`.
   Reference {
+    depth: usize,
     mutability: Mutability,
     pattern: Box<Pattern>,
     span: Span,
   },
 
-  /// Box pattern: `box pat`.
+  /// Dereference pattern: `*p`.
+  Deref { pattern: Box<Pattern>, span: Span },
+
+  /// Box pattern: `box p`.
   Box { pattern: Box<Pattern>, span: Span },
 
-  /// Macro invocation inside patterns (e.g. `m!(...)`).
+  /// Macro pattern: `m!(...)`.
   Macro { mac: MacroInvocation },
 
-  /// Parenthesized pattern `(pat)` used for grouping.
+  /// Parenthesized pattern `(p)`.
   Paren { pattern: Box<Pattern>, span: Span },
+
+  /// Never pattern `!` which matches no value.
+  Never { span: Span },
 }
 
 /// A single field inside a struct pattern.

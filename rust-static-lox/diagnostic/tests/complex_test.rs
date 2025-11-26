@@ -169,6 +169,7 @@ pub fn another_function() {
     source_map.add_file("test_sources/calculator.rs", &calculator_rs);
     source_map.add_file("test_sources/collections.rs", &collections_rs);
     source_map.add_file("test_sources/example.rs", &example_rs);
+    println!("{:#?}", source_map);
 
     let diagnostic1 = Diagnostic::new(
       DiagnosticCode::Error(DiagnosticError::UndefinedVariable),

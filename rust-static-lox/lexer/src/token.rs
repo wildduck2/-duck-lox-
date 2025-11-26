@@ -495,12 +495,10 @@ pub enum TokenKind {
   Percent, // %
 
   // Bitwise & Logical
-  And,    // &
-  Or,     // |
-  Caret,  // ^
-  Bang,   // !
-  AndAnd, // &&
-  OrOr,   // ||
+  And,   // &
+  Or,    // |
+  Caret, // ^
+  Bang,  // !
 
   // Compound Assignment
   PlusEq,       // +=
@@ -550,7 +548,6 @@ impl TokenKind {
         | TokenKind::OpenBracket    // array literal
         | TokenKind::OpenBrace      // struct literal, block
         | TokenKind::Or             // closure: |x| x + 1
-        | TokenKind::OrOr           // closure: || 42
         | TokenKind::Minus          // unary negation
         | TokenKind::Star           // dereference
         | TokenKind::Bang           // logical not
@@ -637,7 +634,6 @@ impl TokenKind {
         | TokenKind::OpenBracket    // array literal
         | TokenKind::OpenBrace      // struct literal, block
         | TokenKind::Or             // closure: |x| x + 1
-        | TokenKind::OrOr           // closure: || 42
         | TokenKind::Minus          // unary negation
         | TokenKind::Star           // dereference
         | TokenKind::Bang           // logical not
@@ -674,6 +670,13 @@ impl TokenKind {
   /// ```
   pub fn is_literal(&self) -> bool {
     matches!(self, TokenKind::Literal { .. })
+  }
+
+  pub fn can_be_literal(&self) -> bool {
+    matches!(
+      self,
+      TokenKind::Literal { .. } | TokenKind::KwTrue | TokenKind::KwFalse
+    )
   }
 
   /// Returns true if this token represents an error

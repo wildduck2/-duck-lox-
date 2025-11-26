@@ -518,6 +518,13 @@ pub enum Visibility {
 // Type System
 // ----------------------------------------------------------------------------
 
+/// Represents the `<Self>` or `<Self as Trait>` syntax in a type path.
+#[derive(Debug, Clone)]
+pub(crate) struct QSelfHeader {
+  pub self_ty: Box<Type>,
+  pub trait_ref: Option<Path>,
+}
+
 /// Master enum representing every syntactic type form the parser supports.
 #[derive(Debug, Clone)]
 pub(crate) enum Type {
@@ -661,7 +668,6 @@ pub(crate) struct MatchArm {
   pub pattern: Pattern,
   pub guard: Option<Expr>,
   pub body: Expr,
-  pub comma: bool,
   pub span: Span,
 }
 
@@ -817,7 +823,7 @@ pub(crate) enum Expr {
   },
 
   Match {
-    expr: Box<Expr>,
+    scrutinee: Box<Expr>,
     arms: Vec<MatchArm>,
     span: Span,
   },
@@ -882,7 +888,6 @@ pub(crate) enum Expr {
   },
 
   Block {
-    attributes: Vec<Attribute>,
     stmts: Vec<Stmt>,
     label: Option<String>,
     is_unsafe: bool,

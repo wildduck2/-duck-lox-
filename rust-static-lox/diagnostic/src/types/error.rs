@@ -32,6 +32,10 @@ pub enum DiagnosticError {
   InvalidPointerType,
   InvalidWherePredicate,
   InvalidMutability,
+  UndefinedVariable,
+  MismatchedTypes,
+  TraitNotSatisfied,
+  BorrowCheckerViolation,
 }
 
 impl DiagnosticError {
@@ -63,6 +67,11 @@ impl DiagnosticError {
       Self::InvalidPointerType => "E0022",
       Self::InvalidWherePredicate => "E0023",
       Self::InvalidMutability => "E0024",
+
+      Self::UndefinedVariable => "E0025",
+      Self::MismatchedTypes => "E0026",
+      Self::TraitNotSatisfied => "E0027",
+      Self::BorrowCheckerViolation => "E0028",
     }
   }
 

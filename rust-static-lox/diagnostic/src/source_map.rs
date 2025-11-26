@@ -11,9 +11,10 @@ impl Span {
     Self { start, end }
   }
 
-  pub fn merge(&mut self, other: Self) {
+  pub fn merge(&mut self, other: Self) -> &mut Self {
     self.start = self.start.min(other.start);
     self.end = self.end.max(other.end);
+    self
   }
 
   pub fn len(&self) -> usize {
