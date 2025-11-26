@@ -52,7 +52,7 @@ impl Parser {
     let mut token = self.current_token();
 
     match token.kind {
-      TokenKind::Minus | TokenKind::Bang | TokenKind::Star | TokenKind::And | TokenKind::AndAnd => {
+      TokenKind::Minus | TokenKind::Bang | TokenKind::Star | TokenKind::And => {
         self.advance(engine); // consume the unary operator
 
         // Optional "mut" after & or &&
@@ -62,8 +62,16 @@ impl Parser {
           TokenKind::Minus => UnaryOp::Neg,
           TokenKind::Bang => UnaryOp::Not,
           TokenKind::Star => UnaryOp::Deref,
-          TokenKind::And => UnaryOp::Ref { mutable, depth: 1 },
-          TokenKind::AndAnd => UnaryOp::Ref { mutable, depth: 2 },
+          TokenKind::And => {
+            if match_and_consume!(self, engine, TokenKind::And)? {
+              UnaryOp::Ref { mutable, depth: 2 }
+            } else {
+              UnaryOp::Ref {
+                mutable: true,
+                depth: 1,
+              }
+            }
+          },
           _ => unreachable!(),
         };
 

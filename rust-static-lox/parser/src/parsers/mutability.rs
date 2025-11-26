@@ -69,6 +69,8 @@ impl Parser {
       return Ok(Mutability::Mutable);
     }
 
+    Ok(Mutability::Immutable)
+    /*
     // These tokens can legally start a pattern or binding where mutability is optional.
     // Examples:
     //   x          -> Ident
@@ -76,6 +78,7 @@ impl Parser {
     //   (a, b)     -> OpenParen
     //   &x         -> And
     //   'a x       -> Lifetime
+    //   ..         -> DotDot
     //
     // The keyword const is allowed to appear here but does not indicate mutability.
     if matches!(
@@ -86,6 +89,8 @@ impl Parser {
         | TokenKind::Lifetime { .. }
         | TokenKind::And
         | TokenKind::KwConst
+        | TokenKind::DotDot
+        | TokenKind::Lt
     ) {
       return Ok(Mutability::Immutable);
     }
@@ -111,5 +116,6 @@ impl Parser {
 
     engine.add(diagnostic);
     Err(())
+    */
   }
 }

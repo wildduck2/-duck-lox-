@@ -1,5 +1,6 @@
 use crate::{
-  ast::{Mutability, Type},
+  ast::{path::Path, Mutability, QSelfHeader, Type},
+  match_and_consume,
   parser_utils::ExprContext,
   DiagnosticEngine, Parser,
 };
@@ -42,6 +43,24 @@ impl Parser {
     self.advance(engine); // consume the first token of the type
 
     match token.kind {
+      TokenKind::Lt => {
+        // we unwrap here because we know we have a `<` token
+        let QSelfHeader { self_ty, trait_ref } = self.parse_qself_header(engine)?.unwrap();
+        let name = self.parse_name_identifier(engine)?;
+        let generics = if matches!(self.current_token().kind, TokenKind::Lt) {
+          self.parse_path_generic_args(engine)?
+        } else {
+          None
+        };
+
+        Ok(Type::QPath {
+          self_ty,
+          trait_ref,
+          name,
+          generics: generics.map(Box::new),
+        })
+      },
+
       // Primitive names and user defined paths
       TokenKind::Ident | TokenKind::KwCrate => match lexeme.as_str() {
         "u8" => Ok(Type::U8),
@@ -261,5 +280,29 @@ impl Parser {
     } else {
       Ok(None)
     }
+  }
+
+  pub(crate) fn parse_qself_header(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Option<QSelfHeader>, ()> {
+    if !matches!(self.current_token().kind, TokenKind::Lt) {
+      return Ok(None);
+    }
+
+    // assumes current token is `<`
+    self.expect(TokenKind::Lt, engine)?;
+    let self_ty = Box::new(self.parse_type(engine)?);
+
+    let trait_ref = if match_and_consume!(self, engine, TokenKind::KwAs)? {
+      Some(self.parse_path(true, engine)?)
+    } else {
+      None
+    };
+
+    self.expect(TokenKind::Gt, engine)?;
+    self.expect(TokenKind::ColonColon, engine)?;
+
+    Ok(Some(QSelfHeader { self_ty, trait_ref }))
   }
 }

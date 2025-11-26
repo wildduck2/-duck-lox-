@@ -98,11 +98,13 @@ impl Parser {
           | TokenKind::Lt
           | TokenKind::Eq
           | TokenKind::OpenParen
+          | TokenKind::OpenBrace
           | TokenKind::CloseParen
           | TokenKind::Comma
           | TokenKind::Gt
           | TokenKind::Plus
           | TokenKind::Colon
+          | TokenKind::KwAs
       )
     {
       self.expect(TokenKind::ColonColon, engine)?; // require '::' separator
