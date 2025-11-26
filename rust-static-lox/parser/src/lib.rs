@@ -12,6 +12,7 @@ pub mod ast;
 mod parser_utils;
 mod parsers;
 
+#[macro_use]
 mod macros;
 
 /// Recursive-descent parser that transforms tokens into an AST while reporting diagnostics.

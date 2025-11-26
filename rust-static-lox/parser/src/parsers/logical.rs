@@ -27,13 +27,13 @@ impl Parser {
     loop {
       let token = self.current_token();
       match token.kind {
-        TokenKind::OrOr => {
+        TokenKind::Or if self.peek(1).kind == TokenKind::Or => {
           self.advance(engine);
 
           if self
             .current_token()
             .kind
-            .can_start_expression_and_not(TokenKind::OrOr)
+            .can_start_expression_and_not(TokenKind::Or)
           {
             let bad = self.current_token();
             let lexeme = self.get_token_lexeme(&bad);
@@ -94,13 +94,14 @@ impl Parser {
     loop {
       let token = self.current_token();
       match token.kind {
-        TokenKind::AndAnd => {
+        TokenKind::And if self.peek(1).kind == TokenKind::And => {
+          self.advance(engine);
           self.advance(engine);
 
           if self
             .current_token()
             .kind
-            .can_start_expression_and_not(TokenKind::AndAnd)
+            .can_start_expression_and_not(TokenKind::And)
           {
             let bad = self.current_token();
             let lexeme = self.get_token_lexeme(&bad);

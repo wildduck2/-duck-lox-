@@ -122,13 +122,13 @@ impl Parser {
     let src = &self.source_file.src;
 
     let suffix = Some(src[suffix_start..token.span.end].to_string());
-    let value_str = &src[token.span.start..suffix_start];
+    let value_str = &src[token.span.start..suffix_start].replace('_', "");
 
     let parsed = match base {
       lexer::token::Base::Binary => i128::from_str_radix(&value_str[2..], 2),
       lexer::token::Base::Octal => i128::from_str_radix(&value_str[2..], 8),
       lexer::token::Base::Hexadecimal => i128::from_str_radix(&value_str[2..], 16),
-      lexer::token::Base::Decimal => value_str.replace('_', "").parse::<i128>(),
+      lexer::token::Base::Decimal => value_str.parse::<i128>(),
     };
 
     let value = match parsed {

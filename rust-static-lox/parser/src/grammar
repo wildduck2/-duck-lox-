@@ -1,5 +1,6 @@
 /*
  * Complete Rust Grammar - Recursive Descent Parsing Style (ASCII only)
+ * Models rustc behavior modulo macro expansion and semantic checks.
  */
 
 program           -> shebang? innerAttr* item* EOF ;
@@ -585,8 +586,22 @@ scrutinee         -> expression ;
 ifExpr            -> "if" expression blockExpr ("else" (blockExpr | ifExpr | ifLetExpr))? ;
 ifLetExpr         -> "if" "let" pattern "=" scrutinee blockExpr ("else" (blockExpr | ifExpr | ifLetExpr))? ;
 
-matchExpr         -> "match" scrutinee "{" innerAttr* matchArms? "}" ;
-matchArms         -> (matchArm "=>" (expressionWithoutBlock "," | expressionWithBlock ","?))* matchArm "=>" expression ","? ;
+/* ------------------------------------------------------------------------- */
+/* Match expressions (with inner + outer attributes)                         */
+/* ------------------------------------------------------------------------- */
+
+matchExpr         -> "match" scrutinee "{" matchArms? "}" ;
+
+
+/*
+   For each non-final arm:
+     - if body is ExpressionWithBlock: trailing comma is optional
+     - if body is ExpressionWithoutBlock: trailing comma is required
+   For final arm:
+     - body may be ExpressionWithBlock or ExpressionWithoutBlock
+     - trailing comma is optional
+*/
+matchArms         -> (matchArm "=>" ((expressionWithBlock | expressionWithoutBlock) ",")*
 matchArm          -> outerAttr* pattern matchArmGuard? ;
 matchArmGuard     -> "if" expression ;
 
@@ -595,25 +610,79 @@ breakExpr         -> "break" LIFETIME? expression? ;
 returnExpr        -> "return" expression? ;
 underscoreExpr    -> "_" ;
 
-expressionWithoutBlock -> outerAttr* expressionKind ;
-expressionWithBlock -> outerAttr* expressionKindWithBlock ;
+/* ------------------------------------------------------------------------- */
+/* ExpressionWithoutBlock / ExpressionWithBlock                              */
+/* (mirroring the main expression grammar but restricting block forms)       */
+/* ------------------------------------------------------------------------- */
 
-expressionKind    -> literalExpr
+/* Without-block expressions reuse the same precedence structure as `expression`,
+ * but are built on a restricted `primaryWithoutBlock` that excludes
+ * plain blocks, unsafe blocks, loops, if/if let, and match. Async blocks
+ * (`asyncBlockExpr`) are included here.
+ */
+
+expressionWithoutBlock
+                  -> outerAttr* assignmentWithoutBlock ;
+
+assignmentWithoutBlock
+                  -> (rangeExprWithoutBlock assignOp)* rangeExprWithoutBlock ;
+
+rangeExprWithoutBlock
+                  -> logicalOrWithoutBlock (rangeOp logicalOrWithoutBlock?)? ;
+
+logicalOrWithoutBlock
+                  -> logicalAndWithoutBlock ("||" logicalAndWithoutBlock)* ;
+
+logicalAndWithoutBlock
+                  -> comparisonWithoutBlock ("&&" comparisonWithoutBlock)* ;
+
+comparisonWithoutBlock
+                  -> bitwiseOrWithoutBlock (comparisonOp bitwiseOrWithoutBlock)* ;
+
+bitwiseOrWithoutBlock
+                  -> bitwiseXorWithoutBlock ("|" bitwiseXorWithoutBlock)* ;
+
+bitwiseXorWithoutBlock
+                  -> bitwiseAndWithoutBlock ("^" bitwiseAndWithoutBlock)* ;
+
+bitwiseAndWithoutBlock
+                  -> shiftWithoutBlock ("&" shiftWithoutBlock)* ;
+
+shiftWithoutBlock -> termWithoutBlock (shiftOp termWithoutBlock)* ;
+termWithoutBlock  -> factorWithoutBlock (termOp factorWithoutBlock)* ;
+
+factorWithoutBlock
+                  -> castWithoutBlock (factorOp castWithoutBlock)* ;
+
+castWithoutBlock  -> unaryWithoutBlock ("as" typeNoBounds)* ;
+
+unaryWithoutBlock -> unaryOp* postfixWithoutBlock ;
+
+postfixWithoutBlock
+                  -> primaryWithoutBlock postfixOp* ;
+
+primaryWithoutBlock
+                  -> literalExpr
                    | pathExpr
                    | groupedExpr
                    | arrayExpr
                    | tupleExpr
                    | structExpr
                    | closureExpr
+                   | asyncBlockExpr
                    | continueExpr
                    | breakExpr
                    | returnExpr
                    | underscoreExpr
                    | macroInvocation ;
 
+/* With-block expressions at the outermost level */
+
+expressionWithBlock
+                  -> outerAttr* expressionKindWithBlock ;
+
 expressionKindWithBlock
                   -> blockExpr
-                   | asyncBlockExpr
                    | unsafeBlockExpr
                    | loopExpr
                    | ifExpr
@@ -637,12 +706,18 @@ tokenTree         -> tokenExceptDelims
 tupleIndex        -> INTEGER ;
 
 /* ------------------------------------------------------------------------- */
-/* Notes (semantic constraints not expressible in pure context-free form)     */
+/* Notes (semantic / disambiguation rules beyond pure CFG)                    */
 /* - associatedConstItem: '=' is required in impls, optional in traits.       */
-/* - constrainedTypeParam in genericArgs is only accepted in bound contexts   */
-/*   (e.g., impl Trait / dyn Trait), not arbitrary type paths.                */
-/* - const args must be const-evaluable; grammar accepts 'expression' but     */
-/*   the evaluator enforces the subset.                                       */
-/* - turbofish '::<' is for expressions; types do not use it.                 */
+/* - structExpr vs blockExpr are disambiguated by looking ahead after the     */
+/*   path: if it can start a struct literal, parse structExpr; otherwise      */
+/*   parse blockExpr.                                                         */
+/* - turbofish '::<' is only allowed in expression position; type paths       */
+/*   do not use it.                                                           */
+/* - genericArgs with constrainedTypeParam are only accepted in bound         */
+/*   contexts (e.g., impl Trait / dyn Trait), not arbitrary type paths.       */
+/* - const generic arguments must be const-evaluable; grammar accepts         */
+/*   'expression' but the evaluator/enforcer restricts it.                    */
+/* - macroInvocation, macroRules, and fragment kinds are additionally         */
+/*   constrained by macro expansion context and fragment spec.                */
 /* ------------------------------------------------------------------------- */
 

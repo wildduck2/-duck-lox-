@@ -11,6 +11,7 @@ mod identifier;
 mod lifetime;
 mod literal;
 mod logical;
+mod r#match;
 mod mutability;
 mod path;
 mod pattern;

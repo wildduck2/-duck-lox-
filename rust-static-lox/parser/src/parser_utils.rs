@@ -6,7 +6,7 @@ use diagnostic::{
 };
 use lexer::token::{Token, TokenKind};
 
-use crate::{ast::*, Parser};
+use crate::{ast::*, match_and_consume, Parser};
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -16,7 +16,7 @@ pub(crate) enum ExprContext {
   /// Parsing the condition of an `if` or `if let`.
   IfCondition,
   /// Parsing the scrutinee of a `match`.
-  MatchDiscriminant,
+  Match,
   /// Parsing the predicate portion of a `while`.
   WhileCondition,
 }
@@ -104,10 +104,51 @@ impl Parser {
     context: ExprContext,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
-    // NOTE: `context` will become relevant once we differentiate diagnostics
-    // based on expression position (e.g., `if` guards). For now it is carried
-    // through so callers already provide intent.
-    self.parse_assignment_expr(engine)
+    let is_unsafe = match_and_consume!(self, engine, TokenKind::KwUnsafe)?;
+    let label = self.parse_label(engine)?;
+
+    match self.current_token().kind {
+      TokenKind::KwMatch => self.parse_match_expression(ExprContext::Match, engine),
+      TokenKind::OpenBrace => self.parse_block_expression(is_unsafe, label, engine),
+      _ => self.parse_assignment_expr(engine),
+    }
+  }
+
+  fn parse_label(&mut self, engine: &mut DiagnosticEngine) -> Result<Option<String>, ()> {
+    let token = self.current_token();
+    if match_and_consume!(self, engine, TokenKind::Lifetime { .. })? {
+      self.expect(TokenKind::Colon, engine)?;
+      return Ok(Some(self.get_token_lexeme(&token)));
+    }
+    Ok(None)
+  }
+
+  fn parse_block_expression(
+    &mut self,
+    is_unsafe: bool,
+    label: Option<String>,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Expr, ()> {
+    let mut token = self.current_token();
+    if is_unsafe {
+      self.expect(TokenKind::KwUnsafe, engine)?;
+    }
+    self.advance(engine); // consume the "{"
+
+    let mut stmts = vec![];
+    while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::CloseBrace) {
+      stmts.push(self.parse_stmt(engine)?);
+      match_and_consume!(self, engine, TokenKind::Semi)?;
+    }
+    self.expect(TokenKind::CloseBrace, engine)?;
+
+    token.span.merge(self.current_token().span);
+    Ok(Expr::Block {
+      stmts,
+      label,
+      is_unsafe,
+      span: token.span,
+    })
   }
 
   /// Parses assignment expressions (including compound assignments) with right associativity.
@@ -179,13 +220,14 @@ impl Parser {
     match token.kind {
       TokenKind::Literal { kind } => self.parser_literal(&token, kind, engine),
       TokenKind::Ident => {
-        if matches!(
-          self.peek(1).kind,
-          TokenKind::OpenBrace | TokenKind::OpenParen | TokenKind::ColonColon
-        ) {
-          println!("debug: {:?}", self.peek(1).kind);
-          // return self.parse_struct_expr(&mut token, engine);
-        }
+        // FIX: this will use the context to determine whether to parse a struct expr or ident
+        // if matches!(
+        //   self.peek(1).kind,
+        //   TokenKind::OpenBrace | TokenKind::OpenParen | TokenKind::ColonColon
+        // ) {
+        //   println!("debug: {:?}", self.peek(1).kind);
+        //   // return self.parse_struct_expr(&mut token, engine);
+        // }
 
         self.parser_ident(&mut token, engine)
       },
