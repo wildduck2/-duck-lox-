@@ -29,7 +29,7 @@ impl Parser {
       TokenKind::And => self.parse_reference_pattern(engine),
 
       // parse (Identifier | Path | TupleStruct | Struct) pattern
-      TokenKind::Ident | TokenKind::Lt => {
+      TokenKind::Ident | TokenKind::KwCrate | TokenKind::Lt => {
         if matches!(
           self.current_token().kind,
           TokenKind::ColonColon | TokenKind::Lt
@@ -77,6 +77,7 @@ impl Parser {
               if matches!(self.current_token().kind, TokenKind::DotDot) {
                 has_rest = true;
                 fields.push(self.parse_field_pattern(engine)?);
+                match_and_consume!(self, engine, TokenKind::Comma)?;
                 break;
               }
 
@@ -223,13 +224,7 @@ impl Parser {
     let mut seen_middle = false;
 
     while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::CloseBracket) {
-      match_and_consume!(self, engine, TokenKind::Comma)?;
-
-      if !seen_middle {
-        before.push(self.parse_pattern(engine)?);
-
-        continue;
-      }
+      println!("debug: {:#?}", self.current_token().kind);
 
       if self.current_token().kind == TokenKind::DotDot {
         if seen_middle {
@@ -243,7 +238,13 @@ impl Parser {
         continue;
       }
 
-      after.push(self.parse_pattern(engine)?);
+      if !seen_middle {
+        before.push(self.parse_pattern(engine)?);
+      } else {
+        after.push(self.parse_pattern(engine)?);
+      }
+
+      match_and_consume!(self, engine, TokenKind::Comma)?;
 
       if self.current_token().kind == TokenKind::CloseBracket {
         break;

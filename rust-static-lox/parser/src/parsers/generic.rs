@@ -424,6 +424,10 @@ impl Parser {
 
     while !self.is_eof() && self.current_token().kind != TokenKind::Gt {
       args.push(self.parse_generic_arg(engine)?);
+      println!(
+        "--debug: {:#?}",
+        self.get_token_lexeme(&self.current_token())
+      );
 
       if matches!(self.current_token().kind, TokenKind::Comma) {
         self.advance(engine); // consume the comma
@@ -455,7 +459,6 @@ impl Parser {
     let mut token = self.current_token();
     let name = self.get_token_lexeme(&token);
 
-    println!("debug: {:?}", self.peek(1).kind);
     match token.kind {
       TokenKind::Lifetime { .. } => {
         self.advance(engine); // consume the lifetime
@@ -483,9 +486,7 @@ impl Parser {
       },
 
       TokenKind::Ident => {
-        let lookahead = self.peek(1).kind;
-
-        match lookahead {
+        match self.peek(1).kind {
           TokenKind::Eq | TokenKind::Lt => {
             // Associated type binding or constraint
             self.advance(engine);
@@ -505,7 +506,9 @@ impl Parser {
           },
 
           TokenKind::Comma
-          | TokenKind::Gt
+          // FIX: this doe snot work with the <Vec<T> as SliceExt>::slice_pattern
+          // in the struct pattern
+          // | TokenKind::Gt
           | TokenKind::CloseParen
           | TokenKind::Plus
           | TokenKind::Minus
@@ -513,6 +516,10 @@ impl Parser {
           | TokenKind::Slash
           | TokenKind::OpenBrace => {
             let expr = self.parse_expression(ExprContext::Default, engine)?;
+            println!(
+              "--debug: {:#?}",
+              self.get_token_lexeme(&self.current_token())
+            );
             Ok(GenericArg::Const(expr))
           },
 

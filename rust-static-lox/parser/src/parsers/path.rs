@@ -88,6 +88,7 @@ impl Parser {
 
     // Parse the first segment
     let (first_segment, has_dollar_crate) = self.parse_path_segment(with_args, engine)?;
+    println!("debug: {:#?}", first_segment);
     let mut segments = vec![first_segment];
 
     // Parse additional `::`-separated segments
@@ -105,6 +106,7 @@ impl Parser {
           | TokenKind::Plus
           | TokenKind::Colon
           | TokenKind::KwAs
+          | TokenKind::FatArrow
       )
     {
       self.expect(TokenKind::ColonColon, engine)?; // require '::' separator
@@ -161,6 +163,11 @@ impl Parser {
 
     // Optional generic arguments
     let args = if with_args && matches!(self.current_token().kind, TokenKind::Lt) {
+      self.parse_path_generic_args(engine)?
+    } else if matches!(self.current_token().kind, TokenKind::ColonColon)
+      && matches!(self.peek(1).kind, TokenKind::Lt)
+    {
+      self.advance(engine);
       self.parse_path_generic_args(engine)?
     } else {
       None

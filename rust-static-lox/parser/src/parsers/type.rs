@@ -203,6 +203,8 @@ impl Parser {
         })
       },
 
+      TokenKind::KwSelfType => Ok(Type::SelfType),
+
       // Reject bare mut or const at the start of a type
       _ if matches!(token.kind, TokenKind::KwMut | TokenKind::KwConst) => {
         token.span.merge(self.current_token().span);
