@@ -88,7 +88,6 @@ impl Parser {
 
     // Parse the first segment
     let (first_segment, has_dollar_crate) = self.parse_path_segment(with_args, engine)?;
-    println!("debug: {:#?}", first_segment);
     let mut segments = vec![first_segment];
 
     // Parse additional `::`-separated segments
@@ -107,6 +106,7 @@ impl Parser {
           | TokenKind::Colon
           | TokenKind::KwAs
           | TokenKind::FatArrow
+          | TokenKind::Bang
       )
     {
       self.expect(TokenKind::ColonColon, engine)?; // require '::' separator

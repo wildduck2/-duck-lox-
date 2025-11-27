@@ -10,7 +10,28 @@ use crate::{
 };
 
 impl Parser {
-  pub(crate) fn parse_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
+  pub(crate) fn parse_pattern_with_or(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Pattern, ()> {
+    let mut patterns = vec![self.parse_pattern(engine)?];
+
+    while matches!(self.current_token().kind, TokenKind::Or) {
+      self.advance(engine);
+      patterns.push(self.parse_pattern(engine)?);
+    }
+
+    if patterns.len() == 1 {
+      return Ok(patterns.pop().unwrap());
+    }
+
+    Ok(Pattern::Or {
+      patterns,
+      span: self.current_token().span,
+    })
+  }
+
+  fn parse_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
     let reference = match_and_consume!(self, engine, TokenKind::KwRef)?;
     let mutability = self.parse_mutability(engine)?;
 
@@ -35,7 +56,7 @@ impl Parser {
           TokenKind::ColonColon | TokenKind::Lt
         ) | matches!(
           self.peek(1).kind,
-          TokenKind::ColonColon | TokenKind::OpenParen | TokenKind::OpenBrace
+          TokenKind::ColonColon | TokenKind::OpenParen | TokenKind::OpenBrace | TokenKind::Bang
         ) {
           let qself_header = self.parse_qself_header(engine)?;
           let mut path = self.parse_path(true, engine)?;
@@ -51,6 +72,11 @@ impl Parser {
             },
             None => (None, path),
           };
+
+          if match_and_consume!(self, engine, TokenKind::Bang)? {
+            let mac = self.parse_macro_invocation(path, qself, engine)?;
+            return Ok(Pattern::Macro { mac });
+          }
 
           // Handle tuple struct patterns like `Some(x, y, ..rest)`
           if match_and_consume!(self, engine, TokenKind::OpenParen)? {
@@ -224,8 +250,6 @@ impl Parser {
     let mut seen_middle = false;
 
     while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::CloseBracket) {
-      println!("debug: {:#?}", self.current_token().kind);
-
       if self.current_token().kind == TokenKind::DotDot {
         if seen_middle {
           println!("Unexpected token \"..\"");

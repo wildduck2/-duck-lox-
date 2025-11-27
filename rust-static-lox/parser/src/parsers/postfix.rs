@@ -39,25 +39,30 @@ impl Parser {
   ///
   /// This function chains postfix operators of equal precedence
   /// until no further valid operator is found.
-  pub(crate) fn parse_postfix(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+  pub(crate) fn parse_postfix(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Expr, ()> {
+    let _ = context;
     // Parse the base primary expression
-    let mut expr = self.parse_primary(engine)?;
+    let mut expr = self.parse_primary(context, engine)?;
 
     // Apply postfix operations repeatedly (chained)
     loop {
       match self.current_token().kind {
         TokenKind::OpenParen => {
-          expr = self.parse_call(expr, engine)?;
+          expr = self.parse_call(context, expr, engine)?;
         },
         TokenKind::Dot => {
           if self.peek(1).kind == TokenKind::KwAwait {
             expr = self.parse_await(expr, engine)?;
           } else {
-            expr = self.parse_field_or_method(expr, engine)?;
+            expr = self.parse_field_or_method(context, expr, engine)?;
           }
         },
         TokenKind::OpenBracket => {
-          expr = self.parse_index(expr, engine)?;
+          expr = self.parse_index(context, expr, engine)?;
         },
         TokenKind::Question => {
           expr = self.parse_try(expr, engine)?;
@@ -102,11 +107,7 @@ impl Parser {
   /// ```
   ///
   /// Lowers into an `Expr::Try` AST node.
-  pub(crate) fn parse_try(
-    &mut self,
-    expr: Expr,
-    engine: &mut DiagnosticEngine,
-  ) -> Result<Expr, ()> {
+  fn parse_try(&mut self, expr: Expr, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
     let mut span = expr.span();
     self.expect(TokenKind::Question, engine)?;
     span.merge(self.current_token().span);
@@ -128,14 +129,15 @@ impl Parser {
   /// ```rust
   /// arr[i + 1]
   /// ```
-  pub(crate) fn parse_index(
+  fn parse_index(
     &mut self,
+    context: ExprContext,
     object: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
     let mut span = object.span();
     self.expect(TokenKind::OpenBracket, engine)?;
-    let index = self.parse_expression(ExprContext::Default, engine)?;
+    let index = self.parse_expression(context, engine)?;
     let close = self.current_token();
     self.expect(TokenKind::CloseBracket, engine)?;
     span.merge(close.span);
@@ -162,8 +164,9 @@ impl Parser {
   /// foo.bar()
   /// tuple.0
   /// ```
-  pub(crate) fn parse_field_or_method(
+  fn parse_field_or_method(
     &mut self,
+    context: ExprContext,
     object: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
@@ -181,7 +184,7 @@ impl Parser {
         // `.method(args)`
         if self.current_token().kind == TokenKind::OpenParen {
           self.expect(TokenKind::OpenParen, engine)?;
-          let args = self.parse_call_params(engine)?;
+          let args = self.parse_call_params(context, engine)?;
           let close = self.current_token();
           self.expect(TokenKind::CloseParen, engine)?;
           span.merge(close.span);
@@ -251,14 +254,15 @@ impl Parser {
   /// ```rust
   /// add(1, 2)
   /// ```
-  pub(crate) fn parse_call(
+  fn parse_call(
     &mut self,
+    context: ExprContext,
     callee: Expr,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
     let mut span = callee.span();
     self.expect(TokenKind::OpenParen, engine)?;
-    let args = self.parse_call_params(engine)?;
+    let args = self.parse_call_params(context, engine)?;
     let close = self.current_token();
     self.expect(TokenKind::CloseParen, engine)?;
     span.merge(close.span);
@@ -283,14 +287,15 @@ impl Parser {
   /// ```
   ///
   /// This supports nested calls such as `foo(bar(1), baz(2))`.
-  pub(crate) fn parse_call_params(
+  fn parse_call_params(
     &mut self,
+    context: ExprContext,
     engine: &mut DiagnosticEngine,
   ) -> Result<Vec<Expr>, ()> {
     let mut args = vec![];
 
     while !self.is_eof() && self.current_token().kind != TokenKind::CloseParen {
-      let expr = self.parse_expression(ExprContext::Default, engine)?;
+      let expr = self.parse_expression(context, engine)?;
       args.push(expr);
 
       if matches!(self.current_token().kind, TokenKind::Comma) {

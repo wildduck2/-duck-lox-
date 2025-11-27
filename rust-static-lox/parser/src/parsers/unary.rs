@@ -13,6 +13,7 @@ use lexer::token::TokenKind;
 
 use crate::ast::UnaryOp;
 use crate::match_and_consume;
+use crate::parser_utils::ExprContext;
 use crate::{ast::Expr, Parser};
 
 impl Parser {
@@ -48,7 +49,11 @@ impl Parser {
   ///   &&y
   ///
   /// The return value is an Expr::Unary node unless no unary operator is found.
-  pub(crate) fn parse_unary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+  pub(crate) fn parse_unary(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Expr, ()> {
     let mut token = self.current_token();
 
     match token.kind {
@@ -75,7 +80,7 @@ impl Parser {
           _ => unreachable!(),
         };
 
-        let rhs = self.parse_unary(engine)?;
+        let rhs = self.parse_unary(context, engine)?;
 
         token.span.merge(self.current_token().span);
 
@@ -85,7 +90,7 @@ impl Parser {
           span: token.span,
         })
       },
-      _ => self.parse_postfix(engine),
+      _ => self.parse_postfix(context, engine),
     }
   }
 }

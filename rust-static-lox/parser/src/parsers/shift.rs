@@ -1,3 +1,5 @@
+use std::task::Context;
+
 use diagnostic::code::DiagnosticCode;
 use diagnostic::diagnostic::{Diagnostic, LabelStyle};
 use diagnostic::types::error::DiagnosticError;
@@ -5,6 +7,7 @@ use diagnostic::DiagnosticEngine;
 use lexer::token::TokenKind;
 
 use crate::ast::{BinaryOp, Expr};
+use crate::parser_utils::ExprContext;
 use crate::Parser;
 
 impl Parser {
@@ -37,8 +40,12 @@ impl Parser {
   /// Errors:
   /// - If a range operator (`..` or `..=`) appears immediately after a shift,
   ///   a diagnostic is emitted because range expressions cannot chain.
-  pub(crate) fn parse_shift(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let mut lhs = self.parse_term(engine)?;
+  pub(crate) fn parse_shift(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Expr, ()> {
+    let mut lhs = self.parse_term(context, engine)?;
 
     while !self.is_eof() {
       let token = self.current_token();
@@ -60,7 +67,7 @@ impl Parser {
       self.advance(engine);
       self.advance(engine);
 
-      let rhs = self.parse_term(engine)?;
+      let rhs = self.parse_term(context, engine)?;
 
       // Reject invalid chaining with range operators after shifting
       if matches!(

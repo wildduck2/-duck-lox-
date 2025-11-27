@@ -443,10 +443,11 @@ pub(crate) enum TraitItem {
 
 /// Captures a macro invocation expression.
 #[derive(Debug, Clone)]
-pub(crate) struct MacroInvocation {
-  pub path: Path,
-  pub delimiter: Delimiter,
-  pub tokens: Vec<TokenTree>,
+pub struct MacroInvocation {
+  pub qself: Option<Box<Type>>,
+  pub path: Path,             // foo::bar::baz
+  pub delimiter: Delimiter,   // (), {}, []
+  pub tokens: Vec<TokenTree>, // nested
   pub span: Span,
 }
 
