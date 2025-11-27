@@ -1,4 +1,4 @@
-use crate::{ast::Expr, Parser};
+use crate::{ast::Expr, parser_utils::ExprContext, Parser};
 use diagnostic::{
   code::DiagnosticCode,
   diagnostic::{Diagnostic, LabelStyle},
@@ -25,8 +25,12 @@ impl Parser {
   /// Notes:
   /// - This parses only the expression-level "|" operator.
   /// - Pattern and closure "|" are not handled here.
-  pub(crate) fn parse_bitwise_or(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let mut lhs = self.parse_bitwise_xor(engine)?;
+  pub(crate) fn parse_bitwise_or(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Expr, ()> {
+    let mut lhs = self.parse_bitwise_xor(context, engine)?;
 
     while !self.is_eof() {
       let token = self.current_token();
@@ -65,7 +69,7 @@ impl Parser {
             return Err(());
           }
 
-          let rhs = self.parse_bitwise_xor(engine)?;
+          let rhs = self.parse_bitwise_xor(context, engine)?;
 
           lhs = Expr::Binary {
             op: BinaryOp::BitOr,
@@ -97,8 +101,12 @@ impl Parser {
   ///
   /// Notes:
   /// - Only the expression-level "^" operator is handled here.
-  pub(crate) fn parse_bitwise_xor(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let mut lhs = self.parse_bitwise_and(engine)?;
+  pub(crate) fn parse_bitwise_xor(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Expr, ()> {
+    let mut lhs = self.parse_bitwise_and(context, engine)?;
 
     while !self.is_eof() {
       let token = self.current_token();
@@ -137,7 +145,7 @@ impl Parser {
             return Err(());
           }
 
-          let rhs = self.parse_bitwise_and(engine)?;
+          let rhs = self.parse_bitwise_and(context, engine)?;
 
           lhs = Expr::Binary {
             op: BinaryOp::BitXor,
@@ -169,8 +177,12 @@ impl Parser {
   /// Notes:
   /// - This function handles only the binary "&" operator.
   /// - Unary "&" (reference) is parsed in the unary expression level.
-  pub(crate) fn parse_bitwise_and(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let mut lhs = self.parse_shift(engine)?;
+  pub(crate) fn parse_bitwise_and(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Expr, ()> {
+    let mut lhs = self.parse_shift(context, engine)?;
 
     while !self.is_eof() {
       let token = self.current_token();
@@ -209,7 +221,7 @@ impl Parser {
             return Err(());
           }
 
-          let rhs = self.parse_shift(engine)?;
+          let rhs = self.parse_shift(context, engine)?;
 
           lhs = Expr::Binary {
             op: BinaryOp::BitAnd,

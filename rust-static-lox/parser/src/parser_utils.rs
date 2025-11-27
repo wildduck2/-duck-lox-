@@ -70,7 +70,7 @@ impl Parser {
 
   /// Parses a single statement node (stubbed for future grammar branches).
   /// Currently supports empty statements and expression statements.
-  fn parse_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+  pub(crate) fn parse_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
     let attributes = self.parse_attributes(engine)?;
 
     match self.current_token().kind {
@@ -99,6 +99,7 @@ impl Parser {
 
   /// Entry point for expression parsing. The supplied `context` controls
   /// future diagnostic wording once more productions are wired in.
+  /// TODO: make sure that macros are supported in this context
   pub(crate) fn parse_expression(
     &mut self,
     context: ExprContext,
@@ -108,9 +109,10 @@ impl Parser {
     let label = self.parse_label(engine)?;
 
     match self.current_token().kind {
+      TokenKind::KwIf => self.parse_if_expression(ExprContext::IfCondition, engine),
       TokenKind::KwMatch => self.parse_match_expression(ExprContext::Match, engine),
       TokenKind::OpenBrace => self.parse_block_expression(is_unsafe, label, engine),
-      _ => self.parse_assignment_expr(engine),
+      _ => self.parse_assignment_expr(context, engine),
     }
   }
 
@@ -123,40 +125,13 @@ impl Parser {
     Ok(None)
   }
 
-  fn parse_block_expression(
-    &mut self,
-    is_unsafe: bool,
-    label: Option<String>,
-    engine: &mut DiagnosticEngine,
-  ) -> Result<Expr, ()> {
-    let mut token = self.current_token();
-    if is_unsafe {
-      self.expect(TokenKind::KwUnsafe, engine)?;
-    }
-    self.advance(engine); // consume the "{"
-
-    let mut stmts = vec![];
-    while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::CloseBrace) {
-      stmts.push(self.parse_stmt(engine)?);
-      match_and_consume!(self, engine, TokenKind::Semi)?;
-    }
-    self.expect(TokenKind::CloseBrace, engine)?;
-
-    token.span.merge(self.current_token().span);
-    Ok(Expr::Block {
-      stmts,
-      label,
-      is_unsafe,
-      span: token.span,
-    })
-  }
-
   /// Parses assignment expressions (including compound assignments) with right associativity.
   pub(crate) fn parse_assignment_expr(
     &mut self,
+    context: ExprContext,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
-    let mut lhs = self.parse_range_expr(engine)?;
+    let mut lhs = self.parse_range_expr(context, engine)?;
 
     while !self.is_eof() {
       let token = self.current_token();
@@ -174,7 +149,7 @@ impl Parser {
         | TokenKind::ShiftRightEq => {
           self.advance(engine); // consume the assignment operator
 
-          let rhs = self.parse_range_expr(engine)?;
+          let rhs = self.parse_range_expr(context, engine)?;
 
           lhs = Expr::Assign {
             target: Box::new(lhs),
@@ -214,20 +189,21 @@ impl Parser {
   // *                    | macroInvocation ;
   /// Parses literals, identifiers, grouped constructs, arrays, and struct expressions.
   /// Emits a targeted diagnostic when the current token cannot start a primary expression.
-  pub(crate) fn parse_primary(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+  pub(crate) fn parse_primary(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Expr, ()> {
     let mut token = self.current_token();
 
     match token.kind {
       TokenKind::Literal { kind } => self.parser_literal(&token, kind, engine),
       TokenKind::Ident => {
         // FIX: this will use the context to determine whether to parse a struct expr or ident
-        // if matches!(
-        //   self.peek(1).kind,
-        //   TokenKind::OpenBrace | TokenKind::OpenParen | TokenKind::ColonColon
-        // ) {
-        //   println!("debug: {:?}", self.peek(1).kind);
-        //   // return self.parse_struct_expr(&mut token, engine);
-        // }
+        if matches!(context, ExprContext::Default) {
+          println!("debug: {:?}", self.peek(1).kind);
+          // return self.parse_struct_expr(&mut token, engine);
+        }
 
         self.parser_ident(&mut token, engine)
       },

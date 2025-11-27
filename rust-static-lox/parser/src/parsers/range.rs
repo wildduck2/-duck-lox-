@@ -1,5 +1,6 @@
 use crate::{
   ast::{Expr, RangeKind},
+  parser_utils::ExprContext,
   Parser,
 };
 use diagnostic::{
@@ -37,24 +38,28 @@ impl Parser {
   ///   start..
   ///   ..=len
   ///   ..          // full range
-  pub(crate) fn parse_range_expr(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+  pub(crate) fn parse_range_expr(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Expr, ()> {
     // Case 1: a range begins directly with ".." or "..="
     if matches!(
       self.current_token().kind,
       TokenKind::DotDot | TokenKind::DotDotEq
     ) {
-      return self.parse_range(None, engine);
+      return self.parse_range(context, None, engine);
     }
 
     // Case 2: range may follow a left-hand side expression
-    let lhs = self.parse_logical_or(engine)?;
+    let lhs = self.parse_logical_or(context, engine)?;
 
     // At most one range operator is allowed
     if matches!(
       self.current_token().kind,
       TokenKind::DotDot | TokenKind::DotDotEq
     ) {
-      self.parse_range(Some(lhs), engine)
+      self.parse_range(context, Some(lhs), engine)
     } else {
       Ok(lhs)
     }
@@ -80,6 +85,7 @@ impl Parser {
   ///   ..
   fn parse_range(
     &mut self,
+    context: ExprContext,
     start: Option<Expr>,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
@@ -97,7 +103,7 @@ impl Parser {
     );
 
     let end = if has_end {
-      Some(Box::new(self.parse_logical_or(engine)?))
+      Some(Box::new(self.parse_logical_or(context, engine)?))
     } else {
       None
     };

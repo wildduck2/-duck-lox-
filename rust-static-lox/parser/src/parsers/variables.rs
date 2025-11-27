@@ -17,7 +17,7 @@ impl Parser {
     let token = self.current_token();
     self.advance(engine); // consume let
 
-    let pattern = self.parse_pattern(engine)?;
+    let pattern = self.parse_pattern_with_or(engine)?;
 
     println!("debug: {:#?}", pattern);
     let ty = if match_and_consume!(self, engine, TokenKind::Colon)? {
