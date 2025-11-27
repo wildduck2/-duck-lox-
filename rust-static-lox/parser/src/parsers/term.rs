@@ -2,6 +2,7 @@ use diagnostic::DiagnosticEngine;
 use lexer::token::TokenKind;
 
 use crate::ast::BinaryOp;
+use crate::parser_utils::ExprContext;
 use crate::{ast::Expr, Parser};
 
 impl Parser {
@@ -32,8 +33,12 @@ impl Parser {
   ///
   /// Returns:
   ///   Expr representing a chain of addition or subtraction operations.
-  pub(crate) fn parse_term(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let mut lhs = self.parse_factor(engine)?;
+  pub(crate) fn parse_term(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Expr, ()> {
+    let mut lhs = self.parse_factor(context, engine)?;
 
     'term_find: while !self.is_eof() {
       let token = self.current_token();
@@ -47,7 +52,7 @@ impl Parser {
             _ => unreachable!(),
           };
 
-          let rhs = self.parse_factor(engine)?;
+          let rhs = self.parse_factor(context, engine)?;
 
           lhs = Expr::Binary {
             op,

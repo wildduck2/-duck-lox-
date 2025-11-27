@@ -1,7 +1,7 @@
 use diagnostic::DiagnosticEngine;
 use lexer::token::TokenKind;
 
-use crate::{ast::Expr, Parser};
+use crate::{ast::Expr, parser_utils::ExprContext, Parser};
 
 impl Parser {
   /// Parses cast expressions using the Rust style `as` operator.
@@ -27,9 +27,13 @@ impl Parser {
   ///   x as u32
   ///   value as i64 as f32
   ///
-  pub(crate) fn parse_cast(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+  pub(crate) fn parse_cast(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Expr, ()> {
     // First parse the next higher precedence level: unary
-    let mut lhs = self.parse_unary(engine)?;
+    let mut lhs = self.parse_unary(context, engine)?;
 
     loop {
       let mut token = self.current_token();

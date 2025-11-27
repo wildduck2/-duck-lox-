@@ -1,8 +1,10 @@
 mod array;
 mod attribute;
 mod bitwise;
+mod block;
 mod cast;
 mod comparison;
+mod control_flow;
 mod factor;
 mod r#fn;
 mod generic;
@@ -11,6 +13,7 @@ mod identifier;
 mod lifetime;
 mod literal;
 mod logical;
+mod r#macro;
 mod r#match;
 mod mutability;
 mod path;

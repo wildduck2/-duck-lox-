@@ -20,9 +20,7 @@ impl Parser {
     let mut arms = vec![];
     self.expect(TokenKind::OpenBrace, engine)?;
     while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::CloseBrace) {
-      let arm = self.parse_match_arm(engine)?;
-      println!("debug: {:#?}", arm);
-      arms.push(arm);
+      arms.push(self.parse_match_arm(engine)?);
       self.expect(TokenKind::Comma, engine)?;
     }
     self.expect(TokenKind::CloseBrace, engine)?;
@@ -43,7 +41,7 @@ impl Parser {
       vec![]
     };
 
-    let pattern = self.parse_pattern(engine)?;
+    let pattern = self.parse_pattern_with_or(engine)?;
     let guard = if matches!(self.current_token().kind, TokenKind::KwIf) {
       Some(self.parse_expression(ExprContext::Match, engine)?)
     } else {
@@ -59,6 +57,17 @@ impl Parser {
     }
 
     token.span.merge(self.current_token().span);
+    println!(
+      "debug: {:#?}",
+      MatchArm {
+        attributes: attributes.clone(),
+        pattern: pattern.clone(),
+        guard: guard.clone(),
+        body: body.clone(),
+        span: token.span,
+      }
+    );
+
     Ok(MatchArm {
       attributes,
       pattern,

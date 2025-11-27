@@ -5,6 +5,7 @@ use diagnostic::DiagnosticEngine;
 use lexer::token::TokenKind;
 
 use crate::ast::BinaryOp;
+use crate::parser_utils::ExprContext;
 use crate::{ast::Expr, Parser};
 
 impl Parser {
@@ -21,8 +22,12 @@ impl Parser {
   ///
   /// Example:
   ///   a || b || c
-  pub(crate) fn parse_logical_or(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let mut lhs = self.parse_logical_and(engine)?;
+  pub(crate) fn parse_logical_or(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Expr, ()> {
+    let mut lhs = self.parse_logical_and(context, engine)?;
 
     loop {
       let token = self.current_token();
@@ -59,7 +64,7 @@ impl Parser {
             return Err(());
           }
 
-          let rhs = self.parse_logical_and(engine)?;
+          let rhs = self.parse_logical_and(context, engine)?;
 
           lhs = Expr::Binary {
             op: BinaryOp::Or,
@@ -88,8 +93,12 @@ impl Parser {
   ///
   /// Example:
   ///   a && b && c
-  pub(crate) fn parse_logical_and(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
-    let mut lhs = self.parse_comparison(engine)?;
+  pub(crate) fn parse_logical_and(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Expr, ()> {
+    let mut lhs = self.parse_comparison(context, engine)?;
 
     loop {
       let token = self.current_token();
@@ -127,7 +136,7 @@ impl Parser {
             return Err(());
           }
 
-          let rhs = self.parse_comparison(engine)?;
+          let rhs = self.parse_comparison(context, engine)?;
 
           lhs = Expr::Binary {
             op: BinaryOp::And,

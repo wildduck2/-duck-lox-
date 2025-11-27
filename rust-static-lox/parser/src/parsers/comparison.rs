@@ -5,6 +5,7 @@ use diagnostic::DiagnosticEngine;
 use lexer::token::TokenKind;
 
 use crate::ast::BinaryOp;
+use crate::parser_utils::ExprContext;
 use crate::{ast::Expr, Parser};
 
 impl Parser {
@@ -36,9 +37,13 @@ impl Parser {
   ///   count < limit
   ///   low <= mid <= high   (parsed as left associative)
   ///
-  pub(crate) fn parse_comparison(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+  pub(crate) fn parse_comparison(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Expr, ()> {
     // first parse the next higher precedence level
-    let mut lhs = self.parse_bitwise_or(engine)?;
+    let mut lhs = self.parse_bitwise_or(context, engine)?;
 
     loop {
       let token = self.current_token();
@@ -56,7 +61,7 @@ impl Parser {
       self.advance(engine); // consume operator
 
       // parse the right side with the same precedence level beneath comparison
-      let rhs = self.parse_bitwise_or(engine)?;
+      let rhs = self.parse_bitwise_or(context, engine)?;
 
       if !self.current_token().kind.can_start_expression() {
         let bad = self.current_token();
