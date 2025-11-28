@@ -11,13 +11,14 @@ use crate::{
 impl Parser {
   pub(crate) fn parse_let_statement(
     &mut self,
+    context: ExprContext,
     attributes: Vec<Attribute>,
     engine: &mut DiagnosticEngine,
   ) -> Result<Stmt, ()> {
     let token = self.current_token();
     self.advance(engine); // consume let
 
-    let pattern = self.parse_pattern_with_or(engine)?;
+    let pattern = self.parse_pattern_with_or(context, engine)?;
 
     println!("debug: {:#?}", pattern);
     let ty = if match_and_consume!(self, engine, TokenKind::Colon)? {

@@ -591,16 +591,6 @@ ifLetExpr         -> "if" "let" pattern "=" scrutinee blockExpr ("else" (blockEx
 /* ------------------------------------------------------------------------- */
 
 matchExpr         -> "match" scrutinee "{" matchArms? "}" ;
-
-
-/*
-   For each non-final arm:
-     - if body is ExpressionWithBlock: trailing comma is optional
-     - if body is ExpressionWithoutBlock: trailing comma is required
-   For final arm:
-     - body may be ExpressionWithBlock or ExpressionWithoutBlock
-     - trailing comma is optional
-*/
 matchArms         -> (matchArm "=>" ((expressionWithBlock | expressionWithoutBlock) ",")*
 matchArm          -> outerAttr* pattern matchArmGuard? ;
 matchArmGuard     -> "if" expression ;

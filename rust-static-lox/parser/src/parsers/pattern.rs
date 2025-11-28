@@ -5,20 +5,20 @@ use crate::{
   ast::{pattern::*, QSelfHeader},
   match_and_consume,
   parser_utils::ExprContext,
-  parsers::mutability,
   Parser,
 };
 
 impl Parser {
   pub(crate) fn parse_pattern_with_or(
     &mut self,
+    context: ExprContext,
     engine: &mut DiagnosticEngine,
   ) -> Result<Pattern, ()> {
-    let mut patterns = vec![self.parse_pattern(engine)?];
+    let mut patterns = vec![self.parse_pattern(context, engine)?];
 
     while matches!(self.current_token().kind, TokenKind::Or) {
-      self.advance(engine);
-      patterns.push(self.parse_pattern(engine)?);
+      self.advance(engine); // consume the '|'
+      patterns.push(self.parse_pattern(context, engine)?);
     }
 
     if patterns.len() == 1 {
@@ -31,7 +31,11 @@ impl Parser {
     })
   }
 
-  fn parse_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
+  fn parse_pattern(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Pattern, ()> {
     let reference = match_and_consume!(self, engine, TokenKind::KwRef)?;
     let mutability = self.parse_mutability(engine)?;
 
@@ -39,15 +43,15 @@ impl Parser {
 
     // Parse Literal patterns like 42, true, false, etc.
     if token.kind.can_be_literal() {
-      return self.parse_literal_pattern(engine);
+      return self.parse_literal_pattern(context, engine);
     }
 
     match token.kind {
       // Parse Tuple patterns like (x, y, ..rest)
-      TokenKind::OpenParen => self.parse_tuple_pattern(engine),
+      TokenKind::OpenParen => self.parse_tuple_pattern(context, engine),
 
       // Parse reference patterns like &x, &mut x, &mut ref x, &&mut x, etc.
-      TokenKind::And => self.parse_reference_pattern(engine),
+      TokenKind::And => self.parse_reference_pattern(context, engine),
 
       // parse (Identifier | Path | TupleStruct | Struct) pattern
       TokenKind::Ident | TokenKind::KwCrate | TokenKind::Lt => {
@@ -82,7 +86,7 @@ impl Parser {
           if match_and_consume!(self, engine, TokenKind::OpenParen)? {
             let mut patterns = vec![];
             while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::CloseParen) {
-              patterns.push(self.parse_pattern(engine)?);
+              patterns.push(self.parse_pattern(context, engine)?);
               match_and_consume!(self, engine, TokenKind::Comma)?;
             }
             self.expect(TokenKind::CloseParen, engine)?;
@@ -102,12 +106,12 @@ impl Parser {
             while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::CloseBrace) {
               if matches!(self.current_token().kind, TokenKind::DotDot) {
                 has_rest = true;
-                fields.push(self.parse_field_pattern(engine)?);
+                fields.push(self.parse_field_pattern(context, engine)?);
                 match_and_consume!(self, engine, TokenKind::Comma)?;
                 break;
               }
 
-              fields.push(self.parse_field_pattern(engine)?);
+              fields.push(self.parse_field_pattern(context, engine)?);
               match_and_consume!(self, engine, TokenKind::Comma)?;
             }
             self.expect(TokenKind::CloseBrace, engine)?;
@@ -134,7 +138,7 @@ impl Parser {
         self.advance(engine);
 
         let subpattern = if match_and_consume!(self, engine, TokenKind::At)? {
-          Some(self.parse_pattern(engine)?)
+          Some(self.parse_pattern(context, engine)?)
         } else {
           None
         };
@@ -159,7 +163,7 @@ impl Parser {
       },
 
       // Parse a (Slice) pattern
-      TokenKind::OpenBracket => self.parse_slice_pattern(engine),
+      TokenKind::OpenBracket => self.parse_slice_pattern(context, engine),
 
       // Parse a (Rest) pattern
       TokenKind::DotDot => self.parse_rest_pattern(engine),
@@ -171,7 +175,11 @@ impl Parser {
     }
   }
 
-  fn parse_reference_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
+  fn parse_reference_pattern(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Pattern, ()> {
     let mut token = self.current_token();
     let mut depth = 0;
     while matches!(self.current_token().kind, TokenKind::And) {
@@ -180,7 +188,7 @@ impl Parser {
     }
 
     let mutability = self.parse_mutability(engine)?;
-    let pattern = self.parse_pattern(engine)?;
+    let pattern = self.parse_pattern(context, engine)?;
 
     token.span.merge(self.current_token().span);
     Ok(Pattern::Reference {
@@ -191,9 +199,14 @@ impl Parser {
     })
   }
 
-  fn parse_literal_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
+  fn parse_literal_pattern(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Pattern, ()> {
     let mut token = self.current_token();
-    let expr = self.parse_expression(ExprContext::Match, engine)?;
+
+    let expr = self.parse_expression(context, engine)?;
     token.span.merge(self.current_token().span);
     Ok(Pattern::Literal {
       expr: Box::new(expr),
@@ -201,7 +214,11 @@ impl Parser {
     })
   }
 
-  fn parse_tuple_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
+  fn parse_tuple_pattern(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Pattern, ()> {
     let mut token = self.current_token();
     self.advance(engine); // consume the token "("
 
@@ -213,7 +230,7 @@ impl Parser {
 
     let mut patterns = vec![];
     while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::CloseParen) {
-      patterns.push(self.parse_pattern(engine)?);
+      patterns.push(self.parse_pattern(context, engine)?);
       match_and_consume!(self, engine, TokenKind::Comma)?;
     }
     self.expect(TokenKind::CloseParen, engine)?;
@@ -227,7 +244,11 @@ impl Parser {
     })
   }
 
-  fn parse_slice_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<Pattern, ()> {
+  fn parse_slice_pattern(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Pattern, ()> {
     let mut token = self.current_token();
     self.advance(engine); // consume the token "["
     let mut before = vec![];
@@ -256,16 +277,16 @@ impl Parser {
           return Err(());
         }
 
-        middle = Some(Box::new(self.parse_pattern(engine)?));
+        middle = Some(Box::new(self.parse_pattern(context, engine)?));
 
         seen_middle = true;
         continue;
       }
 
       if !seen_middle {
-        before.push(self.parse_pattern(engine)?);
+        before.push(self.parse_pattern(context, engine)?);
       } else {
-        after.push(self.parse_pattern(engine)?);
+        after.push(self.parse_pattern(context, engine)?);
       }
 
       match_and_consume!(self, engine, TokenKind::Comma)?;
@@ -301,7 +322,11 @@ impl Parser {
     Ok(Pattern::Rest { name, span })
   }
 
-  fn parse_field_pattern(&mut self, engine: &mut DiagnosticEngine) -> Result<FieldPattern, ()> {
+  fn parse_field_pattern(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<FieldPattern, ()> {
     let attributes = if matches!(self.current_token().kind, TokenKind::Pound) {
       self.parse_attributes(engine)?
     } else {
@@ -326,7 +351,7 @@ impl Parser {
         pointer += 1;
       }
 
-      let pattern = Some(self.parse_pattern(engine)?);
+      let pattern = Some(self.parse_pattern(context, engine)?);
 
       return Ok(FieldPattern {
         attributes,
@@ -337,7 +362,7 @@ impl Parser {
     }
 
     if matches!(self.current_token().kind, TokenKind::DotDot) {
-      let pattern = Some(self.parse_pattern(engine)?);
+      let pattern = Some(self.parse_pattern(context, engine)?);
       return Ok(FieldPattern {
         attributes,
         name: "".to_string(),
@@ -349,7 +374,7 @@ impl Parser {
     let name = self.parse_name_identifier(engine)?;
 
     let (pattern, is_shorthand) = if match_and_consume!(self, engine, TokenKind::Colon)? {
-      (Some(self.parse_pattern(engine)?), false)
+      (Some(self.parse_pattern(context, engine)?), false)
     } else {
       (None, true)
     };
