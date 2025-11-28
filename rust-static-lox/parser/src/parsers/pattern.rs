@@ -1,8 +1,8 @@
 use diagnostic::DiagnosticEngine;
-use lexer::token::TokenKind;
+use lexer::token::{Token, TokenKind};
 
 use crate::{
-  ast::{pattern::*, QSelfHeader},
+  ast::{path::Path, pattern::*, Mutability, QSelfHeader, Type},
   match_and_consume,
   parser_utils::ExprContext,
   Parser,
@@ -14,6 +14,7 @@ impl Parser {
     context: ExprContext,
     engine: &mut DiagnosticEngine,
   ) -> Result<Pattern, ()> {
+    let mut token = self.current_token();
     let mut patterns = vec![self.parse_pattern(context, engine)?];
 
     while matches!(self.current_token().kind, TokenKind::Or) {
@@ -27,7 +28,7 @@ impl Parser {
 
     Ok(Pattern::Or {
       patterns,
-      span: self.current_token().span,
+      span: *token.span.merge(self.current_token().span),
     })
   }
 
@@ -41,138 +42,201 @@ impl Parser {
 
     let mut token = self.current_token();
 
-    // Parse Literal patterns like 42, true, false, etc.
+    // literal patterns
     if token.kind.can_be_literal() {
       return self.parse_literal_pattern(context, engine);
     }
 
     match token.kind {
-      // Parse Tuple patterns like (x, y, ..rest)
       TokenKind::OpenParen => self.parse_tuple_pattern(context, engine),
 
-      // Parse reference patterns like &x, &mut x, &mut ref x, &&mut x, etc.
       TokenKind::And => self.parse_reference_pattern(context, engine),
 
-      // parse (Identifier | Path | TupleStruct | Struct) pattern
       TokenKind::Ident | TokenKind::KwCrate | TokenKind::Lt => {
-        if matches!(
-          self.current_token().kind,
-          TokenKind::ColonColon | TokenKind::Lt
-        ) | matches!(
-          self.peek(1).kind,
-          TokenKind::ColonColon | TokenKind::OpenParen | TokenKind::OpenBrace | TokenKind::Bang
-        ) {
-          let qself_header = self.parse_qself_header(engine)?;
-          let mut path = self.parse_path(true, engine)?;
-
-          let (qself, path) = match qself_header {
-            Some(QSelfHeader { self_ty, trait_ref }) => match trait_ref {
-              Some(mut trait_ref) => {
-                trait_ref.segments.extend(path.segments);
-                path.leading_colon = trait_ref.leading_colon;
-                (Some(self_ty), trait_ref)
-              }
-              None => (Some(self_ty), path),
-            },
-            None => (None, path),
-          };
-
-          if match_and_consume!(self, engine, TokenKind::Bang)? {
-            let mac = self.parse_macro_invocation(path, qself, engine)?;
-            return Ok(Pattern::Macro { mac });
-          }
-
-          // Handle tuple struct patterns like `Some(x, y, ..rest)`
-          if match_and_consume!(self, engine, TokenKind::OpenParen)? {
-            let mut patterns = vec![];
-            while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::CloseParen) {
-              patterns.push(self.parse_pattern(context, engine)?);
-              match_and_consume!(self, engine, TokenKind::Comma)?;
-            }
-            self.expect(TokenKind::CloseParen, engine)?;
-
-            return Ok(Pattern::TupleStruct {
-              qself,
-              path,
-              patterns,
-              span: token.span,
-            });
-          }
-
-          // Handle struct patterns like `Cords { x, y, ..rest }`
-          if match_and_consume!(self, engine, TokenKind::OpenBrace)? {
-            let mut has_rest = false;
-            let mut fields = vec![];
-            while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::CloseBrace) {
-              if matches!(self.current_token().kind, TokenKind::DotDot) {
-                has_rest = true;
-                fields.push(self.parse_field_pattern(context, engine)?);
-                match_and_consume!(self, engine, TokenKind::Comma)?;
-                break;
-              }
-
-              fields.push(self.parse_field_pattern(context, engine)?);
-              match_and_consume!(self, engine, TokenKind::Comma)?;
-            }
-            self.expect(TokenKind::CloseBrace, engine)?;
-
-            return Ok(Pattern::Struct {
-              qself,
-              path,
-              fields,
-              has_rest,
-              span: token.span,
-            });
-          }
-
-          // Handle path patterns like foo::bar::Baz
-          return Ok(Pattern::Path {
-            qself: None,
-            path,
-            span: token.span,
-          });
-        }
-
-        // Handle ident patterns like x
-        let name = self.get_token_lexeme(&token);
-        self.advance(engine);
-
-        let subpattern = if match_and_consume!(self, engine, TokenKind::At)? {
-          Some(self.parse_pattern(context, engine)?)
-        } else {
-          None
-        };
-
-        token.span.merge(self.current_token().span);
-
-        if matches!(name.as_str(), "_") {
-          return Ok(Pattern::Wildcard { span: token.span });
-        }
-
-        let pattern = Pattern::Ident {
-          binding: match reference {
-            true => BindingMode::ByRef(mutability),
-            false => BindingMode::ByValue(mutability),
-          },
-          name,
-          subpattern: subpattern.map(Box::new),
-          span: token.span,
-        };
-
-        Ok(pattern)
+        self.parse_path_or_struct_or_tuple_struct_pattern(reference, mutability, context, engine)
       }
 
-      // Parse a (Slice) pattern
       TokenKind::OpenBracket => self.parse_slice_pattern(context, engine),
 
-      // Parse a (Rest) pattern
       TokenKind::DotDot => self.parse_rest_pattern(engine),
 
       _ => {
         self.advance(engine);
-        Ok(Pattern::Wildcard { span: token.span })
+        Ok(Pattern::Wildcard {
+          span: *token.span.merge(self.current_token().span),
+        })
       }
     }
+  }
+  fn parse_path_or_struct_or_tuple_struct_pattern(
+    &mut self,
+    reference: bool,
+    mutability: Mutability,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Pattern, ()> {
+    if self.looks_like_path_pattern() {
+      return self.parse_path_based_pattern(context, engine);
+    }
+
+    // fallback: identifier binding pattern
+    self.parse_identifier_binding_pattern(reference, mutability, context, engine)
+  }
+
+  fn looks_like_path_pattern(&mut self) -> bool {
+    matches!(
+      self.current_token().kind,
+      TokenKind::ColonColon | TokenKind::Lt
+    ) || matches!(
+      self.peek(1).kind,
+      TokenKind::ColonColon | TokenKind::OpenParen | TokenKind::OpenBrace | TokenKind::Bang
+    )
+  }
+
+  fn parse_path_based_pattern(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Pattern, ()> {
+    let mut start = self.current_token();
+
+    let qself_header = self.parse_qself_header(engine)?;
+    let path = self.parse_path(true, engine)?;
+
+    // merge qself with path
+    let (qself, path) = self.merge_qself_with_path(qself_header, path);
+
+    // macro pattern: foo!(...)
+    if match_and_consume!(self, engine, TokenKind::Bang)? {
+      let mac = self.parse_macro_invocation(path, qself, engine)?;
+      return Ok(Pattern::Macro { mac });
+    }
+
+    // tuple struct pattern: Foo(...)
+    if match_and_consume!(self, engine, TokenKind::OpenParen)? {
+      return self.parse_tuple_struct_pattern(qself, path, &mut start, context, engine);
+    }
+
+    // struct pattern: Foo { ... }
+    if match_and_consume!(self, engine, TokenKind::OpenBrace)? {
+      return self.parse_struct_pattern(qself, path, &mut start, context, engine);
+    }
+
+    // plain path pattern: Foo::Bar
+    Ok(Pattern::Path {
+      qself: None,
+      path,
+      span: *start.span.merge(self.current_token().span),
+    })
+  }
+
+  fn merge_qself_with_path(
+    &mut self,
+    qself_header: Option<QSelfHeader>,
+    mut path: Path,
+  ) -> (Option<Box<Type>>, Path) {
+    match qself_header {
+      None => (None, path),
+      Some(QSelfHeader { self_ty, trait_ref }) => match trait_ref {
+        Some(mut trait_path) => {
+          trait_path.segments.extend(path.segments);
+          path.leading_colon = trait_path.leading_colon;
+          (Some(self_ty), trait_path)
+        }
+        None => (Some(self_ty), path),
+      },
+    }
+  }
+
+  fn parse_tuple_struct_pattern(
+    &mut self,
+    qself: Option<Box<Type>>,
+    path: Path,
+    token: &mut Token,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Pattern, ()> {
+    let mut patterns = vec![];
+
+    while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::CloseParen) {
+      patterns.push(self.parse_pattern(context, engine)?);
+      match_and_consume!(self, engine, TokenKind::Comma)?;
+    }
+
+    self.expect(TokenKind::CloseParen, engine)?;
+    Ok(Pattern::TupleStruct {
+      qself,
+      path,
+      patterns,
+      span: *token.span.merge(self.current_token().span),
+    })
+  }
+
+  fn parse_struct_pattern(
+    &mut self,
+    qself: Option<Box<Type>>,
+    path: Path,
+    token: &mut Token,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Pattern, ()> {
+    let mut fields = vec![];
+    let mut has_rest = false;
+
+    while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::CloseBrace) {
+      if matches!(self.current_token().kind, TokenKind::DotDot) {
+        has_rest = true;
+        fields.push(self.parse_field_pattern(context, engine)?);
+        match_and_consume!(self, engine, TokenKind::Comma)?;
+        break;
+      }
+
+      fields.push(self.parse_field_pattern(context, engine)?);
+      match_and_consume!(self, engine, TokenKind::Comma)?;
+    }
+
+    self.expect(TokenKind::CloseBrace, engine)?;
+    Ok(Pattern::Struct {
+      qself,
+      path,
+      fields,
+      has_rest,
+      span: *token.span.merge(self.current_token().span),
+    })
+  }
+
+  fn parse_identifier_binding_pattern(
+    &mut self,
+    reference: bool,
+    mutability: Mutability,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Pattern, ()> {
+    let mut token = self.current_token();
+    let name = self.get_token_lexeme(&token);
+
+    self.advance(engine);
+
+    let subpattern = if match_and_consume!(self, engine, TokenKind::At)? {
+      Some(Box::new(self.parse_pattern(context, engine)?))
+    } else {
+      None
+    };
+
+    if name == "_" {
+      return Ok(Pattern::Wildcard { span: token.span });
+    };
+
+    Ok(Pattern::Ident {
+      binding: if reference {
+        BindingMode::ByRef(mutability)
+      } else {
+        BindingMode::ByValue(mutability)
+      },
+      name,
+      subpattern,
+      span: *token.span.merge(self.current_token().span),
+    })
   }
 
   fn parse_reference_pattern(
@@ -190,12 +254,11 @@ impl Parser {
     let mutability = self.parse_mutability(engine)?;
     let pattern = self.parse_pattern(context, engine)?;
 
-    token.span.merge(self.current_token().span);
     Ok(Pattern::Reference {
       depth,
       mutability,
       pattern: Box::new(pattern),
-      span: token.span,
+      span: *token.span.merge(self.current_token().span),
     })
   }
 
@@ -207,10 +270,9 @@ impl Parser {
     let mut token = self.current_token();
 
     let expr = self.parse_expression(vec![], context, engine)?;
-    token.span.merge(self.current_token().span);
     Ok(Pattern::Literal {
       expr: Box::new(expr),
-      span: token.span,
+      span: *token.span.merge(self.current_token().span),
     })
   }
 
@@ -234,13 +296,10 @@ impl Parser {
       match_and_consume!(self, engine, TokenKind::Comma)?;
     }
     self.expect(TokenKind::CloseParen, engine)?;
-
-    token.span.merge(self.current_token().span);
-
     Ok(Pattern::Tuple {
       patterns,
       attributes,
-      span: token.span,
+      span: *token.span.merge(self.current_token().span),
     })
   }
 

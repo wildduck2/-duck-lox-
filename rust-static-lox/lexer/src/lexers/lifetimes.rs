@@ -53,7 +53,7 @@ impl Lexer {
     // thus the life time without this would be like 'a only because the char only takes on char
     // and not a multi char identifier
     while let Some(c) = self.peek() {
-      if c.is_ascii_alphabetic() {
+      if c.is_ascii_alphabetic() || c == '_' {
         self.advance();
         continue;
       } else {

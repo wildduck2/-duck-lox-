@@ -643,6 +643,7 @@ impl TokenKind {
         | KwContinue
         | KwAsync
         | KwUnsafe
+        | Lifetime { .. }
     )
   }
 

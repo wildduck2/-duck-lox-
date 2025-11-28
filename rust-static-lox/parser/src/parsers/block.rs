@@ -1,5 +1,5 @@
 use crate::{
-  ast::{Attribute, BlockFlavor, Expr},
+  ast::{Attribute, BlockFlavor, Expr, Stmt},
   match_and_consume,
   parser_utils::ExprContext,
   Parser,
@@ -13,14 +13,14 @@ use diagnostic::{
 use lexer::token::TokenKind;
 
 impl Parser {
-  pub(crate) fn parse_block_expression(
+  pub(crate) fn parse_block(
     &mut self,
     label: Option<String>,
     outer_attributes: Vec<Attribute>,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
     let mut token = self.current_token();
-    let flavor = self.parse_block_flavors(ExprContext::Default, engine)?;
+    let flavor = self.parse_block_expression_flavors(ExprContext::Default, engine)?;
     self.advance(engine); // consume the "{"
 
     let inner_attributes = self.parse_inner_attributes(engine)?;
@@ -42,7 +42,7 @@ impl Parser {
     })
   }
 
-  pub(crate) fn parse_block_flavors(
+  pub(crate) fn parse_block_expression_flavors(
     &mut self,
     context: ExprContext,
     engine: &mut DiagnosticEngine,
@@ -217,7 +217,7 @@ impl Parser {
     Ok(flavor)
   }
 
-  pub(crate) fn can_start_block(&self) -> bool {
+  pub(crate) fn can_start_block_expression(&self) -> bool {
     let mut i = 0;
 
     // Case 1 async or async move

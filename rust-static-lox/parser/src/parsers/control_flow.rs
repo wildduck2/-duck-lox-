@@ -244,10 +244,11 @@ impl Parser {
     engine: &mut DiagnosticEngine,
   ) -> Result<Option<String>, ()> {
     let token = self.current_token();
-    if match_and_consume!(self, engine, TokenKind::Lifetime { .. })? {
-      self.expect(TokenKind::Colon, engine)?;
-      return Ok(Some(self.get_token_lexeme(&token)));
+    if !match_and_consume!(self, engine, TokenKind::Lifetime { .. })? {
+      return Ok(None);
     }
-    Ok(None)
+
+    self.expect(TokenKind::Colon, engine)?;
+    Ok(Some(self.get_token_lexeme(&token)))
   }
 }

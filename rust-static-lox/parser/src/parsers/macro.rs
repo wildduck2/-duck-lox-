@@ -1,5 +1,8 @@
 use crate::{
-  ast::{path::Path, Delimiter, Expr, MacroInvocation, RepeatKind, TokenTree, Type},
+  ast::{
+    path::Path, Attribute, Delimiter, Expr, MacroInvocation, QSelfHeader, RepeatKind, Stmt,
+    TokenTree, Type,
+  },
   match_and_consume,
   parser_utils::ExprContext,
   Parser,
@@ -14,6 +17,39 @@ use diagnostic::{
 use lexer::token::TokenKind;
 
 impl Parser {
+  pub(crate) fn parse_macro_invocation_statement(
+    &mut self,
+    outer_attributes: Vec<Attribute>,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Stmt, ()> {
+    {
+      let mut token = self.current_token();
+      let qself_header = self.parse_qself_header(engine)?;
+      let mut path = self.parse_path(true, engine)?;
+
+      let (qself, path) = match qself_header {
+        Some(QSelfHeader { self_ty, trait_ref }) => match trait_ref {
+          Some(mut trait_ref) => {
+            trait_ref.segments.extend(path.segments);
+            path.leading_colon = trait_ref.leading_colon;
+            (Some(self_ty), trait_ref)
+          }
+          None => (Some(self_ty), path),
+        },
+        None => (None, path),
+      };
+
+      self.expect(TokenKind::Bang, engine)?;
+      let mac = self.parse_macro_invocation(path, qself, engine)?;
+
+      token.span.merge(self.current_token().span);
+      Ok(Stmt::Macro {
+        mac,
+        span: token.span,
+      })
+    }
+  }
+
   // TODO: implement full macro expansion
   pub(crate) fn parse_macro_invocation(
     &mut self,

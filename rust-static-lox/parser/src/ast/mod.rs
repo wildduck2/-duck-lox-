@@ -597,6 +597,10 @@ pub(crate) enum Stmt {
     else_block: Option<Box<Expr>>,
     span: Span,
   },
+  Macro {
+    mac: MacroInvocation,
+    span: Span,
+  },
   Item(Box<Item>),
   Empty,
 }
@@ -766,7 +770,7 @@ pub(crate) enum Expr {
   },
 
   Loop {
-    body: Vec<Stmt>,
+    body: Box<Expr>,
     label: Option<String>,
     span: Span,
   },

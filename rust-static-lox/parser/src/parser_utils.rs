@@ -92,7 +92,7 @@ impl Parser {
   ) -> Result<Stmt, ()> {
     use TokenKind::*;
 
-    let attributes = self.parse_outer_attributes(engine)?;
+    let outer_attributes = self.parse_outer_attributes(engine)?;
     let visibility = self.parse_visibility(engine)?;
 
     match self.current_token().kind {
@@ -102,10 +102,14 @@ impl Parser {
         Ok(Stmt::Empty)
       }
       // let declaration
-      KwLet => self.parse_let_statement(context, attributes, engine),
+      KwLet => self.parse_let_statement(context, outer_attributes, engine),
+
+      Ident | KwCrate | Lt => self.parse_macro_invocation_statement(outer_attributes, engine),
 
       // expression statement
-      _ if self.current_token().kind.can_start_expr() => self.parse_expr_stmt(attributes, engine),
+      _ if self.current_token().kind.can_start_expr() => {
+        self.parse_expr_stmt(outer_attributes, engine)
+      }
 
       // item statement
       _ => {
@@ -118,10 +122,10 @@ impl Parser {
   /// Parses an expression statement, optionally consuming a trailing semicolon.
   fn parse_expr_stmt(
     &mut self,
-    attributes: Vec<Attribute>,
+    outer_attributes: Vec<Attribute>,
     engine: &mut DiagnosticEngine,
   ) -> Result<Stmt, ()> {
-    let expr = self.parse_expression(attributes, ExprContext::Default, engine)?;
+    let expr = self.parse_expression(outer_attributes, ExprContext::Default, engine)?;
 
     if self.current_token().kind == TokenKind::Semi {
       self.expect(TokenKind::Semi, engine)?; // check if followed by semicolon
@@ -136,7 +140,7 @@ impl Parser {
   /// TODO: make sure that macros are supported in this context
   pub(crate) fn parse_expression(
     &mut self,
-    attributes: Vec<Attribute>,
+    outer_attributes: Vec<Attribute>,
     context: ExprContext,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
@@ -149,48 +153,17 @@ impl Parser {
       KwMatch => self.parse_match_expression(ExprContext::Match, engine),
       Or => self.parse_closure(context, engine),
       KwMove | KwAsync if self.can_start_closure() => self.parse_closure(context, engine),
-      OpenBrace => self.parse_block_expression(label, attributes, engine),
-      KwAsync | KwUnsafe | KwTry if self.can_start_block() => {
-        self.parse_block_expression(label, attributes, engine)
+      OpenBrace => self.parse_block(label, outer_attributes, engine),
+      KwAsync | KwUnsafe | KwTry if self.can_start_block_expression() => {
+        self.parse_block(label, outer_attributes, engine)
       }
       KwContinue => self.parse_continue_expression(context, engine),
       KwBreak => self.parse_break_expression(context, engine),
       KwLet => self.parse_let_expression(context, engine),
       KwReturn => self.parse_return_expression(context, engine),
+      KwLoop => self.parse_loop_expression(label, outer_attributes, engine),
       _ => self.parse_assignment_expr(context, engine),
     }
-  }
-
-  /// Parses assignment expressions (including compound assignments) with right associativity.
-  pub(crate) fn parse_assignment_expr(
-    &mut self,
-    context: ExprContext,
-    engine: &mut DiagnosticEngine,
-  ) -> Result<Expr, ()> {
-    use TokenKind::*;
-
-    let mut lhs = self.parse_range_expr(context, engine)?;
-
-    while !self.is_eof() {
-      let token = self.current_token();
-      match self.current_token().kind {
-        Eq | PlusEq | MinusEq | StarEq | SlashEq | PercentEq | AndEq | OrEq | CaretEq
-        | ShiftLeftEq | ShiftRightEq => {
-          self.advance(engine); // consume the assignment operator
-
-          let rhs = self.parse_range_expr(context, engine)?;
-
-          lhs = Expr::Assign {
-            target: Box::new(lhs),
-            value: Box::new(rhs),
-            span: token.span,
-          };
-        }
-        _ => break,
-      }
-    }
-
-    Ok(lhs)
   }
 
   /// Parses literals, identifiers, grouped constructs, arrays, and struct expressions.

@@ -63,4 +63,35 @@ impl Parser {
       span: token.span,
     })
   }
+
+  pub(crate) fn parse_assignment_expr(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Expr, ()> {
+    use TokenKind::*;
+
+    let mut lhs = self.parse_range_expr(context, engine)?;
+
+    while !self.is_eof() {
+      let token = self.current_token();
+      match self.current_token().kind {
+        Eq | PlusEq | MinusEq | StarEq | SlashEq | PercentEq | AndEq | OrEq | CaretEq
+        | ShiftLeftEq | ShiftRightEq => {
+          self.advance(engine); // consume the assignment operator
+
+          let rhs = self.parse_range_expr(context, engine)?;
+
+          lhs = Expr::Assign {
+            target: Box::new(lhs),
+            value: Box::new(rhs),
+            span: token.span,
+          };
+        }
+        _ => break,
+      }
+    }
+
+    Ok(lhs)
+  }
 }

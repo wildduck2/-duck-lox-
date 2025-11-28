@@ -512,7 +512,7 @@ primary           -> literalExpr       [x]
                    | asyncBlockExpr    [x]
                    | unsafeBlockExpr   [x]
                    | tryBlockExpr      [x]
-                   | loopExpr
+                   | loopExpr          [-]
                    | ifExpr            [x]
                    | ifLetExpr         [x]
                    | matchExpr         [x]
@@ -575,11 +575,11 @@ loopExpr          -> infiniteLoopExpr
                    | iteratorLoopExpr
                    | labelBlockExpr ;
 
-infiniteLoopExpr  -> loopLabel? "loop" blockExpr ;
-predicateLoopExpr -> loopLabel? "while" expression blockExpr ;
-predicatePatternLoopExpr -> loopLabel? "while" "let" pattern "=" scrutinee blockExpr ;
-iteratorLoopExpr  -> loopLabel? "for" pattern "in" expression blockExpr ;
-loopLabel         -> LIFETIME ":" ;
+infiniteLoopExpr  -> loopLabel? "loop" blockExpr ;                                      [x]
+predicateLoopExpr -> loopLabel? "while" expression blockExpr ;                          [-]
+predicatePatternLoopExpr -> loopLabel? "while" "let" pattern "=" scrutinee blockExpr ;  [-]
+iteratorLoopExpr  -> loopLabel? "for" pattern "in" expression blockExpr ;               [-]
+loopLabel         -> LIFETIME ":" ;                                                     [x]
 labelBlockExpr    -> loopLabel blockExpr ;
 
 scrutinee         -> expression ;

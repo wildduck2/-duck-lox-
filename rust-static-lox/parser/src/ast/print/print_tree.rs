@@ -142,6 +142,9 @@ impl Stmt {
       Stmt::Empty => {
         println!("{}{} Stmt::Empty", prefix, connector);
       }
+      _ => {
+        println!("{}{} [Other Stmt]", prefix, connector);
+      }
     }
   }
 }
