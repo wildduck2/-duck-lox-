@@ -20,6 +20,10 @@ impl Parser {
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
     let mut token = self.current_token();
+    if !outer_attributes.is_empty() {
+      token.span.merge(outer_attributes[0].span);
+    }
+
     let flavor = self.parse_block_expression_flavors(ExprContext::Default, engine)?;
     self.advance(engine); // consume the "{"
 

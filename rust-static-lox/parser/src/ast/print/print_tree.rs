@@ -201,7 +201,7 @@ impl Expr {
       | Expr::Unit(span)
       | Expr::FormatString { span, .. } => *span,
       Expr::Path(_) => Span::default(),
-      Expr::Macro { mac } => mac.span,
+      Expr::Macro { mac, .. } => mac.span,
     }
   }
 

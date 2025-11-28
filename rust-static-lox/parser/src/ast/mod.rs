@@ -777,7 +777,7 @@ pub(crate) enum Expr {
 
   While {
     condition: Box<Expr>,
-    body: Vec<Stmt>,
+    body: Box<Expr>,
     label: Option<String>,
     span: Span,
   },
@@ -785,7 +785,7 @@ pub(crate) enum Expr {
   WhileLet {
     pattern: Pattern,
     scrutinee: Box<Expr>,
-    body: Vec<Stmt>,
+    body: Box<Expr>,
     label: Option<String>,
     span: Span,
   },
@@ -793,7 +793,7 @@ pub(crate) enum Expr {
   For {
     pattern: Pattern,
     iterator: Box<Expr>,
-    body: Vec<Stmt>,
+    body: Box<Expr>,
     label: Option<String>,
     span: Span,
   },
@@ -883,6 +883,7 @@ pub(crate) enum Expr {
 
   Macro {
     mac: MacroInvocation,
+    span: Span,
   },
 
   Paren {

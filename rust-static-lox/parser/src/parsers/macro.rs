@@ -19,35 +19,49 @@ use lexer::token::TokenKind;
 impl Parser {
   pub(crate) fn parse_macro_invocation_statement(
     &mut self,
-    outer_attributes: Vec<Attribute>,
     engine: &mut DiagnosticEngine,
   ) -> Result<Stmt, ()> {
-    {
-      let mut token = self.current_token();
-      let qself_header = self.parse_qself_header(engine)?;
-      let mut path = self.parse_path(true, engine)?;
+    let mut token = self.current_token();
+    let mac = match self.parser_macro_invocation_expression(engine)? {
+      Expr::Macro { mac, .. } => mac,
+      _ => unreachable!(),
+    };
 
-      let (qself, path) = match qself_header {
-        Some(QSelfHeader { self_ty, trait_ref }) => match trait_ref {
-          Some(mut trait_ref) => {
-            trait_ref.segments.extend(path.segments);
-            path.leading_colon = trait_ref.leading_colon;
-            (Some(self_ty), trait_ref)
-          }
-          None => (Some(self_ty), path),
-        },
-        None => (None, path),
-      };
+    Ok(Stmt::Macro {
+      mac,
+      span: *token.span.merge(self.current_token().span),
+    })
+  }
 
-      self.expect(TokenKind::Bang, engine)?;
-      let mac = self.parse_macro_invocation(path, qself, engine)?;
+  pub(crate) fn parser_macro_invocation_expression(
+    &mut self,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Expr, ()> {
+    let mut token = self.current_token();
+    let qself_header = self.parse_qself_header(engine)?;
+    let mut path = self.parse_path(true, engine)?;
 
-      token.span.merge(self.current_token().span);
-      Ok(Stmt::Macro {
-        mac,
-        span: token.span,
-      })
-    }
+    let (qself, path) = match qself_header {
+      Some(QSelfHeader { self_ty, trait_ref }) => match trait_ref {
+        Some(mut trait_ref) => {
+          trait_ref.segments.extend(path.segments);
+          path.leading_colon = trait_ref.leading_colon;
+          (Some(self_ty), trait_ref)
+        }
+        None => (Some(self_ty), path),
+      },
+      None => (None, path),
+    };
+
+    self.expect(TokenKind::Bang, engine)?;
+    let mac = self.parse_macro_invocation(path, qself, engine)?;
+
+    token.span.merge(self.current_token().span);
+
+    Ok(Expr::Macro {
+      mac,
+      span: *token.span.merge(self.current_token().span),
+    })
   }
 
   // TODO: implement full macro expansion
@@ -80,13 +94,12 @@ impl Parser {
           _ => unreachable!(),
         };
 
-        token.span.merge(self.current_token().span);
         Ok(MacroInvocation {
           qself,
           path,
           delimiter,
           tokens,
-          span: token.span,
+          span: *token.span.merge(self.current_token().span),
         })
       }
 

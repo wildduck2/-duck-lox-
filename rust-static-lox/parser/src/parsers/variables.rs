@@ -73,23 +73,29 @@ impl Parser {
 
     let mut lhs = self.parse_range_expr(context, engine)?;
 
-    while !self.is_eof() {
-      let token = self.current_token();
-      match self.current_token().kind {
-        Eq | PlusEq | MinusEq | StarEq | SlashEq | PercentEq | AndEq | OrEq | CaretEq
-        | ShiftLeftEq | ShiftRightEq => {
-          self.advance(engine); // consume the assignment operator
+    let token = self.current_token();
+    if matches!(
+      self.current_token().kind,
+      Eq | PlusEq
+        | MinusEq
+        | StarEq
+        | SlashEq
+        | PercentEq
+        | AndEq
+        | OrEq
+        | CaretEq
+        | ShiftLeftEq
+        | ShiftRightEq
+    ) {
+      self.advance(engine); // consume the assignment operator
 
-          let rhs = self.parse_range_expr(context, engine)?;
+      let rhs = self.parse_range_expr(context, engine)?;
 
-          lhs = Expr::Assign {
-            target: Box::new(lhs),
-            value: Box::new(rhs),
-            span: token.span,
-          };
-        }
-        _ => break,
-      }
+      lhs = Expr::Assign {
+        target: Box::new(lhs),
+        value: Box::new(rhs),
+        span: token.span,
+      };
     }
 
     Ok(lhs)

@@ -1,5 +1,5 @@
 use diagnostic::DiagnosticEngine;
-use lexer::token::{Token, TokenKind};
+use lexer::token::TokenKind;
 
 use crate::{ast::Expr, parser_utils::ExprContext, Parser};
 
@@ -33,17 +33,16 @@ impl Parser {
   ///
   pub(crate) fn parse_grouped_and_tuple_expr(
     &mut self,
-    token: &mut Token,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
+    let mut token = self.current_token();
     // consume "("
     self.advance(engine);
 
     // Handle the unit expression "()"
     if matches!(self.current_token().kind, TokenKind::CloseParen) {
       self.advance(engine); // consume ")"
-      token.span.merge(self.current_token().span);
-      return Ok(Expr::Unit(token.span));
+      return Ok(Expr::Unit(*token.span.merge(self.current_token().span)));
     }
 
     let mut elements = vec![];
@@ -70,7 +69,6 @@ impl Parser {
     // consume ")"
     self.expect(TokenKind::CloseParen, engine)?;
     token.span.merge(self.current_token().span);
-    // println!("debug: {:#?}", elements);
 
     // Distinguish grouped vs tuple vs unit
     match elements.len() {

@@ -104,7 +104,9 @@ impl Parser {
       // let declaration
       KwLet => self.parse_let_statement(context, outer_attributes, engine),
 
-      Ident | KwCrate | Lt => self.parse_macro_invocation_statement(outer_attributes, engine),
+      // Hnaldle macro invocation
+      Ident if matches!(self.peek(1).kind, Bang) => self.parse_macro_invocation_statement(engine),
+      KwCrate | Lt => self.parse_macro_invocation_statement(engine),
 
       // expression statement
       _ if self.current_token().kind.can_start_expr() => {
@@ -162,6 +164,8 @@ impl Parser {
       KwLet => self.parse_let_expression(context, engine),
       KwReturn => self.parse_return_expression(context, engine),
       KwLoop => self.parse_loop_expression(label, outer_attributes, engine),
+      KwWhile => self.parse_while_expression(label, outer_attributes, engine),
+      KwFor => self.parse_for_expression(label, outer_attributes, engine),
       _ => self.parse_assignment_expr(context, engine),
     }
   }
@@ -174,17 +178,16 @@ impl Parser {
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
     use TokenKind::*;
-    let mut token = self.current_token();
 
     // FIX: this will use the context to determine whether to parse a struct expr or ident
     // if matches!(context, ExprContext::Default) {
     //   println!("debug: {:?}", self.peek(1).kind);
     //   // return self.parse_struct_expr(&mut token, engine);
     // }
-    match token.kind {
+    match self.current_token().kind {
       // Literal handling expr
-      Literal { kind } => self.parser_literal(&token, kind, engine),
-      KwFalse | KwTrue => self.parser_bool(&mut token, engine),
+      Literal { kind } => self.parser_literal(kind, engine),
+      KwFalse | KwTrue => self.parser_bool(engine),
 
       // Path handling expr
       ColonColon => Ok(Expr::Path(self.parse_path(true, engine)?)),
@@ -201,16 +204,18 @@ impl Parser {
       //   self.parse_struct_expr(&mut token, engine)
       // }
       // Ident handling expr
-      Ident => self.parser_ident(&mut token, engine),
-      KwSelf | KwSuper | KwCrate | KwSelfType => self.parse_keyword_ident(&mut token, engine),
+      Ident if matches!(self.peek(1).kind, Bang) => self.parser_macro_invocation_expression(engine),
+      Ident => self.parser_ident(engine),
+      KwSelf | KwSuper | KwCrate | KwSelfType => self.parse_keyword_ident(engine),
 
       // Grouped handling expr
-      OpenParen => self.parse_grouped_and_tuple_expr(&mut token, engine),
+      OpenParen => self.parse_grouped_and_tuple_expr(engine),
 
       // Array handling expr
-      OpenBracket => self.parse_array_expr(&mut token, engine),
+      OpenBracket => self.parse_array_expr(engine),
 
       _ => {
+        let token = self.current_token();
         let lexeme = self.get_token_lexeme(&token);
 
         let diagnostic = Diagnostic::new(

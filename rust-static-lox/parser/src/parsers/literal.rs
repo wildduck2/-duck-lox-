@@ -39,10 +39,10 @@ impl Parser {
   /// - Invalid numeric values (overflow, malformed exponent, etc.) emit diagnostics here.
   pub(crate) fn parser_literal(
     &mut self,
-    token: &Token,
     kind: LiteralKind,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
+    let mut token = self.current_token();
     self.advance(engine);
 
     match kind {
@@ -50,27 +50,29 @@ impl Parser {
         suffix_start,
         base,
         empty_int,
-      } => self.parser_integer(engine, token, empty_int, suffix_start, base),
+      } => self.parser_integer(engine, &mut token, empty_int, suffix_start, base),
 
       LiteralKind::Float { suffix_start, base } => {
-        self.parser_float(engine, token, suffix_start, base)
+        self.parser_float(engine, &mut token, suffix_start, base)
       }
 
-      LiteralKind::Str => self.parser_string(engine, token),
+      LiteralKind::Str => self.parser_string(engine, &mut token),
 
-      LiteralKind::ByteStr => self.parser_byte_string(engine, token),
+      LiteralKind::ByteStr => self.parser_byte_string(engine, &mut token),
 
-      LiteralKind::CStr => self.parser_c_string(engine, token),
+      LiteralKind::CStr => self.parser_c_string(engine, &mut token),
 
-      LiteralKind::RawStr { n_hashes } => self.parser_raw_string(engine, token, n_hashes),
+      LiteralKind::RawStr { n_hashes } => self.parser_raw_string(engine, &mut token, n_hashes),
 
-      LiteralKind::RawByteStr { n_hashes } => self.parser_raw_byte_string(engine, token, n_hashes),
+      LiteralKind::RawByteStr { n_hashes } => {
+        self.parser_raw_byte_string(engine, &mut token, n_hashes)
+      }
 
-      LiteralKind::RawCStr { n_hashes } => self.parser_raw_c_string(engine, token, n_hashes),
+      LiteralKind::RawCStr { n_hashes } => self.parser_raw_c_string(engine, &mut token, n_hashes),
 
-      LiteralKind::Char => self.parser_char(engine, token),
+      LiteralKind::Char => self.parser_char(engine, &mut token),
 
-      LiteralKind::Byte => self.parser_byte(engine, token),
+      LiteralKind::Byte => self.parser_byte(engine, &mut token),
     }
   }
 
@@ -98,7 +100,7 @@ impl Parser {
   fn parser_integer(
     &mut self,
     engine: &mut DiagnosticEngine,
-    token: &Token,
+    token: &mut Token,
     empty_int: bool,
     suffix_start: usize,
     base: lexer::token::Base,
@@ -152,7 +154,7 @@ impl Parser {
     Ok(Expr::Integer {
       value,
       suffix,
-      span: token.span,
+      span: *token.span.merge(self.current_token().span),
     })
   }
 
@@ -179,7 +181,7 @@ impl Parser {
   fn parser_float(
     &mut self,
     engine: &mut DiagnosticEngine,
-    token: &Token,
+    token: &mut Token,
     suffix_start: usize,
     base: lexer::token::Base,
   ) -> Result<Expr, ()> {
@@ -213,7 +215,7 @@ impl Parser {
     Ok(Expr::Float {
       value,
       suffix,
-      span: token.span,
+      span: *token.span.merge(self.current_token().span),
     })
   }
 
@@ -226,12 +228,16 @@ impl Parser {
   /// Notes:
   /// - Escape resolution was already done by the lexer.
   /// - Here we simply store the reconstructed string.
-  fn parser_string(&mut self, _engine: &mut DiagnosticEngine, token: &Token) -> Result<Expr, ()> {
+  fn parser_string(
+    &mut self,
+    _engine: &mut DiagnosticEngine,
+    token: &mut Token,
+  ) -> Result<Expr, ()> {
     let raw = &self.source_file.src[token.span.start..token.span.end];
     Ok(Expr::String {
       kind: StrKind::Normal,
       value: raw.into(),
-      span: token.span,
+      span: *token.span.merge(self.current_token().span),
     })
   }
 
@@ -239,23 +245,27 @@ impl Parser {
   fn parser_byte_string(
     &mut self,
     _engine: &mut DiagnosticEngine,
-    token: &Token,
+    token: &mut Token,
   ) -> Result<Expr, ()> {
     let raw = &self.source_file.src[token.span.start..token.span.end];
     Ok(Expr::String {
       kind: StrKind::Byte,
       value: raw.into(),
-      span: token.span,
+      span: *token.span.merge(self.current_token().span),
     })
   }
 
   /// Parses `<C_STRING>` literal (`c"..."`).
-  fn parser_c_string(&mut self, _engine: &mut DiagnosticEngine, token: &Token) -> Result<Expr, ()> {
+  fn parser_c_string(
+    &mut self,
+    _engine: &mut DiagnosticEngine,
+    token: &mut Token,
+  ) -> Result<Expr, ()> {
     let raw = &self.source_file.src[token.span.start..token.span.end];
     Ok(Expr::String {
       kind: StrKind::C,
       value: raw.into(),
-      span: token.span,
+      span: *token.span.merge(self.current_token().span),
     })
   }
 
@@ -267,14 +277,14 @@ impl Parser {
   fn parser_raw_string(
     &mut self,
     _engine: &mut DiagnosticEngine,
-    token: &Token,
+    token: &mut Token,
     n_hashes: u16,
   ) -> Result<Expr, ()> {
     let raw = &self.source_file.src[token.span.start..token.span.end];
     Ok(Expr::String {
       kind: StrKind::Raw(n_hashes.into()),
       value: raw.into(),
-      span: token.span,
+      span: *token.span.merge(self.current_token().span),
     })
   }
 
@@ -282,14 +292,14 @@ impl Parser {
   fn parser_raw_byte_string(
     &mut self,
     _engine: &mut DiagnosticEngine,
-    token: &Token,
+    token: &mut Token,
     n_hashes: u16,
   ) -> Result<Expr, ()> {
     let raw = &self.source_file.src[token.span.start..token.span.end];
     Ok(Expr::String {
       kind: StrKind::RawByte(n_hashes.into()),
       value: raw.into(),
-      span: token.span,
+      span: *token.span.merge(self.current_token().span),
     })
   }
 
@@ -297,14 +307,14 @@ impl Parser {
   fn parser_raw_c_string(
     &mut self,
     _engine: &mut DiagnosticEngine,
-    token: &Token,
+    token: &mut Token,
     n_hashes: u16,
   ) -> Result<Expr, ()> {
     let raw = &self.source_file.src[token.span.start..token.span.end];
     Ok(Expr::String {
       kind: StrKind::RawC(n_hashes.into()),
       value: raw.into(),
-      span: token.span,
+      span: *token.span.merge(self.current_token().span),
     })
   }
 
@@ -317,7 +327,7 @@ impl Parser {
   /// Notes:
   /// - Lexer validated escape rules.
   /// - Only the inner character is extracted here.
-  fn parser_char(&mut self, _engine: &mut DiagnosticEngine, token: &Token) -> Result<Expr, ()> {
+  fn parser_char(&mut self, _engine: &mut DiagnosticEngine, token: &mut Token) -> Result<Expr, ()> {
     let ch = self.source_file.src[token.span.start + 1..token.span.end]
       .chars()
       .next()
@@ -325,7 +335,7 @@ impl Parser {
 
     Ok(Expr::Char {
       value: ch,
-      span: token.span,
+      span: *token.span.merge(self.current_token().span),
     })
   }
 
@@ -338,7 +348,7 @@ impl Parser {
   /// Notes:
   /// - Must be exactly one ASCII byte.
   /// - Non-ASCII or multi-char already errored in the lexer.
-  fn parser_byte(&mut self, engine: &mut DiagnosticEngine, token: &Token) -> Result<Expr, ()> {
+  fn parser_byte(&mut self, engine: &mut DiagnosticEngine, token: &mut Token) -> Result<Expr, ()> {
     if token.span.start == token.span.end - 1 {
       let diag = Diagnostic::new(
         DiagnosticCode::Error(DiagnosticError::EmptyChar),
@@ -363,7 +373,7 @@ impl Parser {
 
     Ok(Expr::Byte {
       value: byte,
-      span: token.span,
+      span: *token.span.merge(self.current_token().span),
     })
   }
 
@@ -372,18 +382,14 @@ impl Parser {
   /// ```bnf
   /// literalExpr ::= "true" | "false"
   /// ```
-  pub(crate) fn parser_bool(
-    &mut self,
-    token: &mut Token,
-    engine: &mut DiagnosticEngine,
-  ) -> Result<Expr, ()> {
-    let value = self.get_token_lexeme(token).parse::<bool>().unwrap();
+  pub(crate) fn parser_bool(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let mut token = self.current_token();
+    let value = self.get_token_lexeme(&token).parse::<bool>().unwrap();
     self.advance(engine);
-    token.span.merge(self.current_token().span);
 
     Ok(Expr::Bool {
       value,
-      span: token.span,
+      span: *token.span.merge(self.current_token().span),
     })
   }
 }

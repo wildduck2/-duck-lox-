@@ -557,9 +557,9 @@ structBase        -> ".." expression ;
 structExprTuple   -> pathInExpression "(" (expression ("," expression)* ","?)? ")" ;
 structExprUnit    -> pathInExpression ;
 
-closureExpr       -> "move"? "async"? ("||" | "|" closureParams? "|") (expression | "->" typeNoBounds blockExpr) ;
-closureParams     -> closureParam ("," closureParam)* ","? ;
-closureParam      -> outerAttr* patternNoTopAlt (":" type)? ;
+closureExpr       -> "move"? "async"? ("||" | "|" closureParams? "|") (expression | "->" typeNoBounds blockExpr) ; [x]
+closureParams     -> closureParam ("," closureParam)* ","? ;                                                       [x]
+closureParam      -> outerAttr* patternNoTopAlt (":" type)? ;                                                      [x]
 
 blockExpr         -> outerAttr* "{" innerAttr* statements? "}" ;   [x]
 unsafeBlockExpr   -> outerAttr* "unsafe" blockExpr ;               [x]
@@ -569,16 +569,16 @@ tryBlockExpr      -> outerAttr* "try" blockExpr ; // nightly only  [x]
 statements        -> statement+ expression?
                    | expression ;
 
-loopExpr          -> infiniteLoopExpr
-                   | predicateLoopExpr
-                   | predicatePatternLoopExpr
-                   | iteratorLoopExpr
-                   | labelBlockExpr ;
+loopExpr          -> infiniteLoopExpr                                         [x]
+                   | predicateLoopExpr                                        [x]
+                   | predicatePatternLoopExpr                                 [x]
+                   | iteratorLoopExpr                                         [x]
+                   | labelBlockExpr ;                                         [x]
 
 infiniteLoopExpr  -> loopLabel? "loop" blockExpr ;                                      [x]
-predicateLoopExpr -> loopLabel? "while" expression blockExpr ;                          [-]
-predicatePatternLoopExpr -> loopLabel? "while" "let" pattern "=" scrutinee blockExpr ;  [-]
-iteratorLoopExpr  -> loopLabel? "for" pattern "in" expression blockExpr ;               [-]
+predicateLoopExpr -> loopLabel? "while" expression blockExpr ;                          [x]
+predicatePatternLoopExpr -> loopLabel? "while" "let" pattern "=" scrutinee blockExpr ;  [x]
+iteratorLoopExpr  -> loopLabel? "for" pattern "in" expression blockExpr ;               [x]
 loopLabel         -> LIFETIME ":" ;                                                     [x]
 labelBlockExpr    -> loopLabel blockExpr ;
 

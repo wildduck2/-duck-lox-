@@ -3,7 +3,7 @@ use diagnostic::{
   diagnostic::{Diagnostic, LabelStyle},
   types::error::DiagnosticError,
 };
-use lexer::token::{Token, TokenKind};
+use lexer::token::TokenKind;
 
 use crate::{ast::Expr, parser_utils::ExprContext, DiagnosticEngine, Parser};
 
@@ -32,11 +32,8 @@ impl Parser {
   /// - The parser returns:
   ///   - `elements: Vec<Expr>` for comma arrays
   ///   - `repeat: Option<Expr>` for `[value; count]`
-  pub(crate) fn parse_array_expr(
-    &mut self,
-    token: &mut Token,
-    engine: &mut DiagnosticEngine,
-  ) -> Result<Expr, ()> {
+  pub(crate) fn parse_array_expr(&mut self, engine: &mut DiagnosticEngine) -> Result<Expr, ()> {
+    let mut token = self.current_token();
     self.advance(engine); // consume '['
 
     let (elements, repeat) = self.parse_array_elements(engine)?;
@@ -45,7 +42,7 @@ impl Parser {
     Ok(Expr::Array {
       elements,
       repeat: repeat.map(Box::new),
-      span: token.span,
+      span: *token.span.merge(self.current_token().span),
     })
   }
 
