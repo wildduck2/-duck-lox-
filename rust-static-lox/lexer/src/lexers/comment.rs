@@ -56,11 +56,11 @@ impl Lexer {
       Some('!') => {
         self.advance(); // consume '!'
         Some(DocStyle::Outer)
-      },
+      }
       Some('*') => {
         self.advance(); // consume second '*'
         Some(DocStyle::Inner)
-      },
+      }
       _ => None,
     };
 

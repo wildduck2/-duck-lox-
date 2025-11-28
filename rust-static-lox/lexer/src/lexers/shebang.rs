@@ -43,7 +43,7 @@ impl Lexer {
         }
 
         Some(TokenKind::Shebang)
-      },
+      }
 
       // Compiler attribute shebang, e.g. "#![allow(dead_code)]"
       Some('[') => None,
@@ -64,7 +64,7 @@ impl Lexer {
         engine.add(diagnostic);
 
         Some(TokenKind::Unknown)
-      },
+      }
     }
   }
 }

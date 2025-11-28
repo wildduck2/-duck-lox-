@@ -1,4 +1,5 @@
 use diagnostic::Span;
+use TokenKind::*;
 
 /// A token produced by the lexer, containing both its kind and source location
 #[derive(Debug, Clone)]
@@ -541,29 +542,32 @@ impl TokenKind {
   pub fn can_start_expression(&self) -> bool {
     matches!(
       self,
-      TokenKind::Ident
-        | TokenKind::RawIdent
-        | TokenKind::Literal { .. }
-        | TokenKind::OpenParen      // tuple, grouped expr
-        | TokenKind::OpenBracket    // array literal
-        | TokenKind::OpenBrace      // struct literal, block
-        | TokenKind::Or             // closure: |x| x + 1
-        | TokenKind::Minus          // unary negation
-        | TokenKind::Star           // dereference
-        | TokenKind::Bang           // logical not
-        | TokenKind::And            // borrow
-        | TokenKind::KwMove         // move closure
-        | TokenKind::KwIf
-        | TokenKind::KwMatch
-        | TokenKind::KwWhile
-        | TokenKind::KwLoop
-        | TokenKind::FatArrow
-        | TokenKind::KwFor
-        | TokenKind::KwReturn
-        | TokenKind::KwBreak
-        | TokenKind::KwContinue
-        | TokenKind::KwAsync
-        | TokenKind::KwUnsafe
+      Ident
+        | RawIdent
+        | Literal { .. }
+        | OpenParen
+        | CloseParen
+        | OpenBracket
+        | CloseBracket
+        | OpenBrace
+        | CloseBrace
+        | Or
+        | Minus
+        | Star
+        | Bang
+        | And
+        | KwMove
+        | KwIf
+        | KwMatch
+        | KwWhile
+        | KwLoop
+        | FatArrow
+        | KwFor
+        | KwReturn
+        | KwBreak
+        | KwContinue
+        | KwAsync
+        | KwUnsafe
     )
   }
   pub fn can_start_expression_and_not(&self, and: TokenKind) -> bool {
@@ -575,15 +579,7 @@ impl TokenKind {
   }
 
   pub fn is_binary_operator(&self) -> bool {
-    matches!(
-      self,
-      TokenKind::EqEq
-        | TokenKind::Ne
-        | TokenKind::Lt
-        | TokenKind::Le
-        | TokenKind::Gt
-        | TokenKind::Ge
-    )
+    matches!(self, EqEq | Ne | Lt | Le | Gt | Ge)
   }
 
   /// Returns true if this token is trivia (whitespace or comment)
@@ -593,15 +589,12 @@ impl TokenKind {
   ///
   /// # Examples
   /// ```rust
-  /// assert!(TokenKind::Whitespace.is_trivia());
-  /// assert!(TokenKind::LineComment { doc_style: None }.is_trivia());
-  /// assert!(!TokenKind::Ident.is_trivia());
+  /// assert!(Whitespace.is_trivia());
+  /// assert!(LineComment { doc_style: None }.is_trivia());
+  /// assert!(!Ident.is_trivia());
   /// ```
   pub fn is_trivia(&self) -> bool {
-    matches!(
-      self,
-      TokenKind::Whitespace | TokenKind::LineComment { .. } | TokenKind::BlockComment { .. }
-    )
+    matches!(self, Whitespace | LineComment { .. } | BlockComment { .. })
   }
 
   /// Returns true if this token can begin an expression
@@ -611,9 +604,9 @@ impl TokenKind {
   ///
   /// # Examples
   /// ```rust
-  /// assert!(TokenKind::Ident.can_start_expr());
+  /// assert!(Ident.can_start_expr());
   /// assert!(
-  ///   TokenKind::Literal {
+  ///   Literal {
   ///     kind: LiteralKind::Integer {
   ///       base: Base::Decimal,
   ///       empty_int: false,
@@ -622,34 +615,34 @@ impl TokenKind {
   ///   }
   ///   .can_start_expr()
   /// );
-  /// assert!(TokenKind::OpenParen.can_start_expr());  // tuple or grouping
-  /// assert!(!TokenKind::Semi.can_start_expr());
+  /// assert!(OpenParen.can_start_expr());  // tuple or grouping
+  /// assert!(!Semi.can_start_expr());
   /// ```
   pub fn can_start_expr(&self) -> bool {
     matches!(
       self,
-      TokenKind::Ident
-        | TokenKind::RawIdent
-        | TokenKind::Literal { .. }
-        | TokenKind::OpenParen      // tuple, grouped expr
-        | TokenKind::OpenBracket    // array literal
-        | TokenKind::OpenBrace      // struct literal, block
-        | TokenKind::Or             // closure: |x| x + 1
-        | TokenKind::Minus          // unary negation
-        | TokenKind::Star           // dereference
-        | TokenKind::Bang           // logical not
-        | TokenKind::And            // borrow
-        | TokenKind::KwMove         // move closure
-        | TokenKind::KwIf
-        | TokenKind::KwMatch
-        | TokenKind::KwWhile
-        | TokenKind::KwLoop
-        | TokenKind::KwFor
-        | TokenKind::KwReturn
-        | TokenKind::KwBreak
-        | TokenKind::KwContinue
-        | TokenKind::KwAsync
-        | TokenKind::KwUnsafe
+      Ident
+        | RawIdent
+        | Literal { .. }
+        | OpenParen      // tuple, grouped expr
+        | OpenBracket    // array literal
+        | OpenBrace      // struct literal, block
+        | Or             // closure: |x| x + 1
+        | Minus          // unary negation
+        | Star           // dereference
+        | Bang           // logical not
+        | And            // borrow
+        | KwMove         // move closure
+        | KwIf
+        | KwMatch
+        | KwWhile
+        | KwLoop
+        | KwFor
+        | KwReturn
+        | KwBreak
+        | KwContinue
+        | KwAsync
+        | KwUnsafe
     )
   }
 
@@ -658,7 +651,7 @@ impl TokenKind {
   /// # Examples
   /// ```rust
   /// assert!(
-  ///   TokenKind::Literal {
+  ///   Literal {
   ///     kind: LiteralKind::Integer {
   ///       base: Base::Decimal,
   ///       empty_int: false,
@@ -667,17 +660,14 @@ impl TokenKind {
   ///   }
   ///   .is_literal()
   /// );
-  /// assert!(!TokenKind::Ident.is_literal());
+  /// assert!(!Ident.is_literal());
   /// ```
   pub fn is_literal(&self) -> bool {
-    matches!(self, TokenKind::Literal { .. })
+    matches!(self, Literal { .. })
   }
 
   pub fn can_be_literal(&self) -> bool {
-    matches!(
-      self,
-      TokenKind::Literal { .. } | TokenKind::KwTrue | TokenKind::KwFalse
-    )
+    matches!(self, Literal { .. } | KwTrue | KwFalse)
   }
 
   /// Returns true if this token represents an error
@@ -686,18 +676,14 @@ impl TokenKind {
   ///
   /// # Examples
   /// ```rust
-  /// assert!(TokenKind::Unknown.is_error());
-  /// assert!(TokenKind::InvalidIdent.is_error());
-  /// assert!(!TokenKind::Ident.is_error());
+  /// assert!(Unknown.is_error());
+  /// assert!(InvalidIdent.is_error());
+  /// assert!(!Ident.is_error());
   /// ```
   pub fn is_error(&self) -> bool {
     matches!(
       self,
-      TokenKind::Unknown
-        | TokenKind::InvalidIdent
-        | TokenKind::UnknownPrefix
-        | TokenKind::UnknownPrefixLifetime
-        | TokenKind::ReservedPrefix
+      Unknown | InvalidIdent | UnknownPrefix | UnknownPrefixLifetime | ReservedPrefix
     )
   }
 
@@ -705,64 +691,64 @@ impl TokenKind {
   ///
   /// # Examples
   /// ```rust
-  /// assert!(TokenKind::KwFn.is_keyword());
-  /// assert!(TokenKind::KwLet.is_keyword());
-  /// assert!(!TokenKind::Ident.is_keyword());
+  /// assert!(KwFn.is_keyword());
+  /// assert!(KwLet.is_keyword());
+  /// assert!(!Ident.is_keyword());
   /// ```
   pub fn is_keyword(&self) -> bool {
     matches!(
       self,
-      TokenKind::KwAs
-        | TokenKind::KwBreak
-        | TokenKind::KwConst
-        | TokenKind::KwContinue
-        | TokenKind::KwCrate
-        | TokenKind::KwElse
-        | TokenKind::KwEnum
-        | TokenKind::KwExtern
-        | TokenKind::KwFalse
-        | TokenKind::KwFn
-        | TokenKind::KwFor
-        | TokenKind::KwIf
-        | TokenKind::KwImpl
-        | TokenKind::KwIn
-        | TokenKind::KwLet
-        | TokenKind::KwLoop
-        | TokenKind::KwMatch
-        | TokenKind::KwMod
-        | TokenKind::KwMove
-        | TokenKind::KwMut
-        | TokenKind::KwPub
-        | TokenKind::KwRef
-        | TokenKind::KwReturn
-        | TokenKind::KwSelf
-        | TokenKind::KwSelfType
-        | TokenKind::KwStatic
-        | TokenKind::KwStruct
-        | TokenKind::KwSuper
-        | TokenKind::KwTrait
-        | TokenKind::KwTrue
-        | TokenKind::KwType
-        | TokenKind::KwUnsafe
-        | TokenKind::KwUse
-        | TokenKind::KwWhere
-        | TokenKind::KwWhile
-        | TokenKind::KwAsync
-        | TokenKind::KwAwait
-        | TokenKind::KwDyn
-        | TokenKind::KwAbstract
-        | TokenKind::KwBecome
-        | TokenKind::KwFinal
-        | TokenKind::KwMacro
-        | TokenKind::KwOverride
-        | TokenKind::KwTry
-        | TokenKind::KwTypeof
-        | TokenKind::KwUnion
-        | TokenKind::KwUnsized
-        | TokenKind::KwYield
-        | TokenKind::KwBox
-        | TokenKind::KwDo
-        | TokenKind::KwVirtual
+      KwAs
+        | KwBreak
+        | KwConst
+        | KwContinue
+        | KwCrate
+        | KwElse
+        | KwEnum
+        | KwExtern
+        | KwFalse
+        | KwFn
+        | KwFor
+        | KwIf
+        | KwImpl
+        | KwIn
+        | KwLet
+        | KwLoop
+        | KwMatch
+        | KwMod
+        | KwMove
+        | KwMut
+        | KwPub
+        | KwRef
+        | KwReturn
+        | KwSelf
+        | KwSelfType
+        | KwStatic
+        | KwStruct
+        | KwSuper
+        | KwTrait
+        | KwTrue
+        | KwType
+        | KwUnsafe
+        | KwUse
+        | KwWhere
+        | KwWhile
+        | KwAsync
+        | KwAwait
+        | KwDyn
+        | KwAbstract
+        | KwBecome
+        | KwFinal
+        | KwMacro
+        | KwOverride
+        | KwTry
+        | KwTypeof
+        | KwUnion
+        | KwUnsized
+        | KwYield
+        | KwBox
+        | KwDo
+        | KwVirtual
     )
   }
 }

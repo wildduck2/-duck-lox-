@@ -75,7 +75,7 @@ impl Lexer {
         self.line += 1;
         self.column = 0;
         Some(TokenKind::Whitespace)
-      },
+      }
       '\r' | '\t' | ' ' => self.lex_whitespace(),
 
       // String and character literals
@@ -112,7 +112,7 @@ impl Lexer {
 
         engine.add(diagnostic);
         Some(TokenKind::Unknown)
-      },
+      }
     }
   }
 

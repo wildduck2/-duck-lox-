@@ -113,7 +113,7 @@ impl Lexer {
           // Normal identifier
           Some(TokenKind::Ident)
         }
-      },
+      }
     }
   }
 }

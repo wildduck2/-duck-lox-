@@ -218,7 +218,7 @@ mod lexer_tests {
           LiteralKind::RawCStr { .. } => saw_raw_c_str = true,
           LiteralKind::Char => saw_char = true,
           LiteralKind::Byte => saw_byte = true,
-          _ => {},
+          _ => {}
         }
       }
     }

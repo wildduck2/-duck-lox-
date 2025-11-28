@@ -165,7 +165,7 @@ impl Lexer {
           Some('_') => {
             // Allow '.' '_' digit as fractional, but only if a digit follows.
             matches!(self.peek_next(2), Some(d) if d.is_ascii_digit())
-          },
+          }
           _ => false,
         };
 
@@ -197,7 +197,7 @@ impl Lexer {
             match ec == '_' && self.peek_next(1) != Some('_') {
               true => {
                 self.advance();
-              },
+              }
               false => break,
             }
           }
@@ -294,7 +294,7 @@ impl Lexer {
       Some('8') => {
         self.advance();
         true
-      },
+      }
 
       // 16, 128
       Some('1') => {
@@ -315,7 +315,7 @@ impl Lexer {
         }
 
         false
-      },
+      }
 
       // 32
       Some('3') => {
@@ -327,7 +327,7 @@ impl Lexer {
         }
 
         false
-      },
+      }
 
       // 64
       Some('6') => {
@@ -339,7 +339,7 @@ impl Lexer {
         }
 
         false
-      },
+      }
 
       // isize / usize
       Some('s') => {
@@ -358,7 +358,7 @@ impl Lexer {
         }
 
         false
-      },
+      }
 
       _ => {
         // Only emit a diagnostic because we *know* we're in a `u`/`i` suffix;
@@ -377,7 +377,7 @@ impl Lexer {
 
         engine.add(diagnostic);
         false
-      },
+      }
     }
   }
 
