@@ -39,7 +39,7 @@ impl Type {
       // Path types
       Type::Path(path) => {
         println!("{}{} Path: {}", prefix, connector, format_path(path));
-      },
+      }
 
       // Reference types
       Type::Reference {
@@ -59,14 +59,14 @@ impl Type {
         println!("{}{} &{}{}", prefix, connector, life_str, mut_str);
         let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
         inner.print_tree(&new_prefix, true);
-      },
+      }
 
       // Slice and Array
       Type::Slice(inner) => {
         println!("{}{} [_]", prefix, connector);
         let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
         inner.print_tree(&new_prefix, true);
-      },
+      }
 
       Type::Array { element, size } => {
         println!("{}{} Array [_; _]", prefix, connector);
@@ -75,7 +75,7 @@ impl Type {
         element.print_tree(&format!("{}│  ", new_prefix), false);
         println!("{}└─> Size:", new_prefix);
         size.print_tree(&format!("{}   ", new_prefix), true);
-      },
+      }
 
       // Tuple
       Type::Tuple(types) => {
@@ -84,11 +84,11 @@ impl Type {
         for (i, ty) in types.iter().enumerate() {
           ty.print_tree(&new_prefix, i == types.len() - 1);
         }
-      },
+      }
 
       _ => {
         println!("{}{} [Other Type]", prefix, connector);
-      },
+      }
     }
   }
 }
@@ -105,17 +105,17 @@ impl Stmt {
         );
         let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
         expr.print_tree(&new_prefix, true);
-      },
+      }
       Stmt::Semi(expr) => {
         println!("{}{} Stmt::Semi", prefix, connector);
         let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
         expr.print_tree(&new_prefix, true);
-      },
+      }
       Stmt::TailExpr(expr) => {
         println!("{}{} Stmt::TailExpr", prefix, connector);
         let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
         expr.print_tree(&new_prefix, true);
-      },
+      }
       Stmt::Let {
         pattern, ty, init, ..
       } => {
@@ -133,15 +133,15 @@ impl Stmt {
           println!("{}└─> init:", new_prefix);
           init.print_tree(&format!("{}   ", new_prefix), true);
         }
-      },
+      }
       Stmt::Item(item) => {
         println!("{}{} Stmt::Item", prefix, connector);
         let new_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
         item.print_tree(&new_prefix, true);
-      },
+      }
       Stmt::Empty => {
         println!("{}{} Stmt::Empty", prefix, connector);
-      },
+      }
     }
   }
 }
@@ -168,7 +168,6 @@ impl Expr {
       | Expr::Index { span, .. }
       | Expr::Range { span, .. }
       | Expr::Array { span, .. }
-      | Expr::ArrayRepeat { span, .. }
       | Expr::Tuple { span, .. }
       | Expr::Struct { span, .. }
       | Expr::If { span, .. }
@@ -185,17 +184,11 @@ impl Expr {
       | Expr::Become { span, .. }
       | Expr::Closure { span, .. }
       | Expr::Block { span, .. }
-      | Expr::LabeledBlock { span, .. }
-      | Expr::Async { span, .. }
       | Expr::Await { span, .. }
       | Expr::Try { span, .. }
-      | Expr::TryBlock { span, .. }
       | Expr::Cast { span, .. }
       | Expr::Type { span, .. }
       | Expr::Let { span, .. }
-      | Expr::Unsafe { span, .. }
-      | Expr::Const { span, .. }
-      | Expr::InlineConst { span, .. }
       | Expr::Box { span, .. }
       | Expr::Underscore { span, .. }
       | Expr::Paren { span, .. }
@@ -324,7 +317,6 @@ impl Expr {
         ty.print_tree(&format!("{}   ", new_prefix), true);
       },
 
-      
       Expr::Array /*@_DONE_@*/ {
         elements, repeat, ..
       } => {
@@ -433,70 +425,6 @@ impl Expr {
 
         // --- RangeKind (always last) ---
         println!("{}└─> RangeKind: {:?}", range_prefix, kind);
-      },
-
-      Expr::Group {
-        expr, attributes, ..
-      } => {
-        println!("{}{} Group", prefix, connector);
-        let group_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
-
-        // --- Attributes block ---
-        if !attributes.is_empty() {
-          println!("{}├─> Attributes:", group_prefix);
-
-          for (i, attr) in attributes.iter().enumerate() {
-            let is_last_attr = i + 1 == attributes.len();
-            let attr_connector = if is_last_attr { "└─>" } else { "├─>" };
-
-            // Use a prefix that stops the bar after the last attribute
-            let attr_prefix = format!("{}{}  ", group_prefix, if is_last_attr { " " } else { "│" });
-            println!("{}{} {}", attr_prefix, attr_connector, format_attr(attr));
-          }
-        }
-
-        // --- Expression block ---
-        println!("{}└─> Expr:", group_prefix);
-        let expr_prefix = format!("{}   ", group_prefix);
-        expr.print_tree(&expr_prefix, true);
-      },
-
-      Expr::Tuple {
-        elements,
-        attributes,
-        ..
-      } => {
-        println!("{}{} Tuple", prefix, connector);
-        let tuple_prefix = format!("{}{}  ", prefix, if is_last { " " } else { "│" });
-
-        // --- Attributes block ---
-        if !attributes.is_empty() {
-          let attrs_last = elements.is_empty();
-          let attrs_connector = if attrs_last { "└─>" } else { "├─>" };
-          println!("{}{} Attributes:", tuple_prefix, attrs_connector);
-
-          let attrs_carrier = format!("{}{}  ", tuple_prefix, if attrs_last { " " } else { "│" });
-
-          for (i, attr) in attributes.iter().enumerate() {
-            let is_last_attr = i + 1 == attributes.len();
-            let attr_connector = if is_last_attr { "└─>" } else { "├─>" };
-            println!("{}{} {}", attrs_carrier, attr_connector, format_attr(attr));
-          }
-        }
-
-        // --- Elements block ---
-        if elements.is_empty() {
-          println!("{}└─> <empty>", tuple_prefix);
-        } else {
-          println!("{}└─> Elements:", tuple_prefix);
-          let elems_carrier = format!("{}   ", tuple_prefix);
-
-          for (i, expr) in elements.iter().enumerate() {
-            let last_elem = i + 1 == elements.len();
-            let elem_prefix = format!("{}{}  ", tuple_prefix, if last_elem { " " } else { "│" });
-            expr.print_tree(&elem_prefix, last_elem);
-          }
-        }
       },
 
       Expr::Struct {
@@ -627,7 +555,7 @@ pub(crate) fn format_generic_args(args: &GenericArgs) -> String {
         .collect::<Vec<_>>()
         .join(", ");
       format!("<{}>", inner)
-    },
+    }
     GenericArgs::Parenthesized { inputs, output } => {
       let ins = inputs
         .iter()
@@ -638,7 +566,7 @@ pub(crate) fn format_generic_args(args: &GenericArgs) -> String {
         Some(out) => format!("({}) -> {}", ins, format_type(out)),
         None => format!("({})", ins),
       }
-    },
+    }
   }
 }
 
@@ -655,7 +583,7 @@ pub(crate) fn format_generic_arg(arg: &GenericArg) -> String {
         .collect::<Vec<_>>()
         .join(" + ");
       format!("{}: {}", name, b)
-    },
+    }
   }
 }
 
@@ -665,7 +593,7 @@ pub(crate) fn format_type(ty: &Type) -> String {
     Type::Tuple(types) => {
       let t = types.iter().map(format_type).collect::<Vec<_>>().join(", ");
       format!("({})", t)
-    },
+    }
     Type::Reference {
       inner, mutability, ..
     } => {
@@ -674,7 +602,7 @@ pub(crate) fn format_type(ty: &Type) -> String {
         Mutability::Immutable => "",
       };
       format!("&{}{}", m, format_type(inner))
-    },
+    }
     Type::Array { element, size } => format!("[{}; {}]", format_type(element), format_expr(size)),
     Type::Slice(inner) => format!("[{}]", format_type(inner)),
     Type::BareFn {
@@ -691,7 +619,7 @@ pub(crate) fn format_type(ty: &Type) -> String {
         Some(ret) => format!("fn({}) -> {}", ps, format_type(ret)),
         None => format!("fn({})", ps),
       }
-    },
+    }
     Type::Infer => "_".into(),
     _ => format!("{:?}", ty),
   }
@@ -717,7 +645,7 @@ pub(crate) fn format_expr(expr: &Expr) -> String {
       } else {
         value.to_string()
       }
-    },
+    }
     Expr::String { value, .. } => value.clone(),
     _ => "[expr]".into(),
   }
@@ -734,7 +662,7 @@ fn format_tt(tt: &TokenTree) -> String {
       };
       let inner = tokens.iter().map(format_tt).collect::<Vec<_>>().join(" ");
       format!("{l}{inner}{r}")
-    },
+    }
     TokenTree::Repeat { .. } => "$( … )*".into(),
     TokenTree::MetaVar { name, kind } => format!("${name}:{kind}"),
   }
@@ -759,21 +687,21 @@ pub(crate) fn format_attr(attr: &Attribute) -> String {
         let joined = tokens.iter().map(format_tt).collect::<Vec<_>>().join(" ");
         format!("{prefix}[{p} {joined}]")
       }
-    },
+    }
     AttrKind::DocComment { is_inner, content } => {
       if *is_inner {
         format!("//! {content}")
       } else {
         format!("/// {content}")
       }
-    },
+    }
     AttrKind::Cfg(meta) => {
       let prefix = match attr.style {
         AttrStyle::Inner => "#!",
         AttrStyle::Outer => "#",
       };
       format!("{prefix}[cfg({meta:?})]")
-    },
+    }
     AttrKind::CfgAttr { condition, attrs } => {
       let prefix = match attr.style {
         AttrStyle::Inner => "#!",
@@ -781,6 +709,6 @@ pub(crate) fn format_attr(attr: &Attribute) -> String {
       };
       let inner = attrs.len();
       format!("{prefix}[cfg_attr({condition:?}, /* {inner} attr(s) */)]")
-    },
+    }
   }
 }

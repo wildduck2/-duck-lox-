@@ -82,7 +82,7 @@ impl Parser {
     }
 
     // First element
-    elements.push(self.parse_expression(ExprContext::Default, engine)?);
+    elements.push(self.parse_expression(vec![], ExprContext::Default, engine)?);
 
     // Case 2: Repeat array form `[value; count]`
     if matches!(self.current_token().kind, TokenKind::Semi) {
@@ -115,7 +115,7 @@ impl Parser {
         return Err(());
       }
 
-      let repeat_count = self.parse_expression(ExprContext::Default, engine)?;
+      let repeat_count = self.parse_expression(vec![], ExprContext::Default, engine)?;
       self.expect(TokenKind::CloseBracket, engine)?;
       return Ok((elements, Some(repeat_count)));
     }
@@ -130,7 +130,7 @@ impl Parser {
         break;
       }
 
-      elements.push(self.parse_expression(ExprContext::Default, engine)?);
+      elements.push(self.parse_expression(vec![], ExprContext::Default, engine)?);
     }
 
     self.expect(TokenKind::CloseBracket, engine)?;

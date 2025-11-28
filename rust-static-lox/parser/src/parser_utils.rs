@@ -32,9 +32,11 @@ impl Parser {
       match self.parse_stmt(ExprContext::Default, engine) {
         // Returns Item, not Stmt
         Ok(item) => {
-          item.print_tree("", true);
+          // println!("{:#?}", item);
+          println!("{:#?}", item);
+          // item.print_tree("", true);
           // self.ast.push(item); // ast should be Vec<Item>
-        },
+        }
         Err(_) => self.synchronize(engine),
       }
     }
@@ -42,12 +44,23 @@ impl Parser {
 
   /// Dispatches to the correct item parser after consuming attributes & visibility.
   fn parse_item(&mut self, engine: &mut DiagnosticEngine) -> Result<Item, ()> {
-    let attributes = self.parse_attributes(engine)?;
+    let attributes = self.parse_outer_attributes(engine)?;
     let visibility = self.parse_visibility(engine)?;
 
     match self.current_token().kind {
       TokenKind::KwStruct => self.parse_struct_decl(attributes, visibility, engine),
       TokenKind::KwFn => self.parse_fn_decl(attributes, visibility, engine),
+      // TokenKind::KwConst => self.parse_const_decl(attributes, visibility, engine),
+      // TokenKind::KwStatic => self.parse_static_decl(attributes, visibility, engine),
+      // TokenKind::KwType => self.parse_type_alias_decl(attributes, visibility, engine),
+      // TokenKind::KwMod => self.parse_module_decl(attributes, visibility, engine),
+      // TokenKind::KwUse => self.parse_use_decl(attributes, visibility, engine),
+      // TokenKind::KwExternCrate => self.parse_extern_crate_decl(attributes, visibility, engine),
+      // TokenKind::KwMacro => self.parse_macro_decl(attributes, visibility, engine),
+      // TokenKind::KwMacro2 => self.parse_macro2_decl(attributes, visibility, engine),
+      // TokenKind::KwExternType => self.parse_extern_type_decl(attributes, visibility, engine),
+      // TokenKind::KwUnion => self.parse_union_decl(attributes, visibility, engine),
+      // TokenKind::KwExtern => self.parse_extern_decl(attributes, visibility, engine),
       kind => {
         let lexeme = self.get_token_lexeme(&self.current_token());
         let diagnostic = Diagnostic::new(
@@ -66,7 +79,7 @@ impl Parser {
         ));
         engine.add(diagnostic);
         Err(())
-      },
+      }
     }
   }
 
@@ -77,26 +90,38 @@ impl Parser {
     context: ExprContext,
     engine: &mut DiagnosticEngine,
   ) -> Result<Stmt, ()> {
-    let attributes = self.parse_attributes(engine)?;
+    use TokenKind::*;
+
+    let attributes = self.parse_outer_attributes(engine)?;
     let visibility = self.parse_visibility(engine)?;
-    let is_unsafe = match_and_consume!(self, engine, TokenKind::KwUnsafe)?;
-    let is_async = match_and_consume!(self, engine, TokenKind::KwAsync)?;
 
     match self.current_token().kind {
-      TokenKind::KwLet => self.parse_let_statement(context, attributes, engine),
-      TokenKind::Semi => {
+      Semi => {
         // Empty statement: just a semicolon
         self.advance(engine);
         Ok(Stmt::Empty)
-      },
+      }
+      // let declaration
+      KwLet => self.parse_let_statement(context, attributes, engine),
 
-      _ => self.parse_expr_stmt(engine),
+      // expression statement
+      _ if self.current_token().kind.can_start_expr() => self.parse_expr_stmt(attributes, engine),
+
+      // item statement
+      _ => {
+        let item = self.parse_item(engine)?;
+        Ok(Stmt::Item(Box::new(item)))
+      }
     }
   }
 
   /// Parses an expression statement, optionally consuming a trailing semicolon.
-  fn parse_expr_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
-    let expr = self.parse_expression(ExprContext::Default, engine)?;
+  fn parse_expr_stmt(
+    &mut self,
+    attributes: Vec<Attribute>,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Stmt, ()> {
+    let expr = self.parse_expression(attributes, ExprContext::Default, engine)?;
 
     if self.current_token().kind == TokenKind::Semi {
       self.expect(TokenKind::Semi, engine)?; // check if followed by semicolon
@@ -111,21 +136,27 @@ impl Parser {
   /// TODO: make sure that macros are supported in this context
   pub(crate) fn parse_expression(
     &mut self,
+    attributes: Vec<Attribute>,
     context: ExprContext,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
+    use TokenKind::*;
+
     let label = self.parse_label(engine)?;
 
     match self.current_token().kind {
-      TokenKind::KwIf => self.parse_if_expression(ExprContext::IfCondition, engine),
-      TokenKind::KwMatch => self.parse_match_expression(ExprContext::Match, engine),
-      TokenKind::OpenBrace | TokenKind::KwUnsafe | TokenKind::KwAsync | TokenKind::KwTry => {
-        self.parse_block_expression(label, engine)
-      },
-      TokenKind::KwContinue => self.parse_continue_expression(context, engine),
-      TokenKind::KwBreak => self.parse_break_expression(context, engine),
-      TokenKind::KwLet => self.parse_let_expression(context, engine),
-      TokenKind::KwReturn => self.parse_return_expression(context, engine),
+      KwIf => self.parse_if_expression(ExprContext::IfCondition, engine),
+      KwMatch => self.parse_match_expression(ExprContext::Match, engine),
+      Or => self.parse_closure(context, engine),
+      KwMove | KwAsync if self.can_start_closure() => self.parse_closure(context, engine),
+      OpenBrace => self.parse_block_expression(label, attributes, engine),
+      KwAsync | KwUnsafe | KwTry if self.can_start_block() => {
+        self.parse_block_expression(label, attributes, engine)
+      }
+      KwContinue => self.parse_continue_expression(context, engine),
+      KwBreak => self.parse_break_expression(context, engine),
+      KwLet => self.parse_let_expression(context, engine),
+      KwReturn => self.parse_return_expression(context, engine),
       _ => self.parse_assignment_expr(context, engine),
     }
   }
@@ -136,22 +167,15 @@ impl Parser {
     context: ExprContext,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
+    use TokenKind::*;
+
     let mut lhs = self.parse_range_expr(context, engine)?;
 
     while !self.is_eof() {
       let token = self.current_token();
       match self.current_token().kind {
-        TokenKind::Eq
-        | TokenKind::PlusEq
-        | TokenKind::MinusEq
-        | TokenKind::StarEq
-        | TokenKind::SlashEq
-        | TokenKind::PercentEq
-        | TokenKind::AndEq
-        | TokenKind::OrEq
-        | TokenKind::CaretEq
-        | TokenKind::ShiftLeftEq
-        | TokenKind::ShiftRightEq => {
+        Eq | PlusEq | MinusEq | StarEq | SlashEq | PercentEq | AndEq | OrEq | CaretEq
+        | ShiftLeftEq | ShiftRightEq => {
           self.advance(engine); // consume the assignment operator
 
           let rhs = self.parse_range_expr(context, engine)?;
@@ -161,7 +185,7 @@ impl Parser {
             value: Box::new(rhs),
             span: token.span,
           };
-        },
+        }
         _ => break,
       }
     }
@@ -169,29 +193,6 @@ impl Parser {
     Ok(lhs)
   }
 
-  /* -------------------------------------------------------------------------------------------- */
-  /*                                     Primary Parsing                                          */
-  /* -------------------------------------------------------------------------------------------- */
-
-  // *   primary          → literalExpr [x]
-  // *                    | pathExpr
-  // *                    | groupedExpr [x]
-  // *                    | arrayExpr   [x]
-  // *                    | tupleExpr   [x]
-  // *                    | structExpr  [_]
-  // *                    | closureExpr
-  // *                    | blockExpr
-  // *                    | asyncBlockExpr
-  // *                    | unsafeBlockExpr
-  // *                    | loopExpr
-  // *                    | ifExpr
-  // *                    | ifLetExpr
-  // *                    | matchExpr
-  // *                    | continueExpr
-  // *                    | breakExpr
-  // *                    | returnExpr
-  // *                    | underscoreExpr
-  // *                    | macroInvocation ;
   /// Parses literals, identifiers, grouped constructs, arrays, and struct expressions.
   /// Emits a targeted diagnostic when the current token cannot start a primary expression.
   pub(crate) fn parse_primary(
@@ -199,25 +200,43 @@ impl Parser {
     context: ExprContext,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
+    use TokenKind::*;
     let mut token = self.current_token();
 
+    // FIX: this will use the context to determine whether to parse a struct expr or ident
+    // if matches!(context, ExprContext::Default) {
+    //   println!("debug: {:?}", self.peek(1).kind);
+    //   // return self.parse_struct_expr(&mut token, engine);
+    // }
     match token.kind {
-      TokenKind::Literal { kind } => self.parser_literal(&token, kind, engine),
-      TokenKind::Ident => {
-        // FIX: this will use the context to determine whether to parse a struct expr or ident
-        // if matches!(context, ExprContext::Default) {
-        //   println!("debug: {:?}", self.peek(1).kind);
-        //   // return self.parse_struct_expr(&mut token, engine);
-        // }
+      // Literal handling expr
+      Literal { kind } => self.parser_literal(&token, kind, engine),
+      KwFalse | KwTrue => self.parser_bool(&mut token, engine),
 
-        self.parser_ident(&mut token, engine)
-      },
-      TokenKind::KwFalse | TokenKind::KwTrue => self.parser_bool(&mut token, engine),
-      TokenKind::KwSelf | TokenKind::KwSuper | TokenKind::KwCrate | TokenKind::KwSelfType => {
-        self.parse_keyword_ident(&mut token, engine)
-      },
-      TokenKind::OpenParen => self.parse_grouped_expr(&mut token, engine),
-      TokenKind::OpenBracket => self.parse_array_expr(&mut token, engine),
+      // Path handling expr
+      ColonColon => Ok(Expr::Path(self.parse_path(true, engine)?)),
+      Ident if matches!(self.peek(1).kind, TokenKind::ColonColon) => {
+        Ok(Expr::Path(self.parse_path(true, engine)?))
+      }
+      // Handling struct expr
+      // Ident
+      //   if matches!(
+      //     self.peek(1).kind,
+      //     TokenKind::OpenBrace | TokenKind::OpenParen
+      //   ) =>
+      // {
+      //   self.parse_struct_expr(&mut token, engine)
+      // }
+      // Ident handling expr
+      Ident => self.parser_ident(&mut token, engine),
+      KwSelf | KwSuper | KwCrate | KwSelfType => self.parse_keyword_ident(&mut token, engine),
+
+      // Grouped handling expr
+      OpenParen => self.parse_grouped_and_tuple_expr(&mut token, engine),
+
+      // Array handling expr
+      OpenBracket => self.parse_array_expr(&mut token, engine),
+
       _ => {
         let lexeme = self.get_token_lexeme(&token);
 
@@ -239,7 +258,7 @@ impl Parser {
         engine.add(diagnostic);
 
         Err(())
-      },
+      }
     }
   }
 

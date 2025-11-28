@@ -15,12 +15,31 @@ impl Parser {
   ) -> Result<Expr, ()> {
     let mut token = self.current_token();
     self.advance(engine); // consume the "if"
-    let condition = self.parse_expression(context, engine)?;
-    let then_branch = self.parse_expression(context, engine)?;
+    let condition = self.parse_expression(vec![], context, engine)?;
+
+    if !self.is_valid_condition(&condition) {
+      token.span.merge(self.current_token().span);
+      let diag = Diagnostic::new(
+        DiagnosticCode::Error(DiagnosticError::InvalidCondition),
+        "invalid condition expression".to_string(),
+        self.source_file.path.clone(),
+      )
+      .with_label(
+        token.span,
+        Some("this expression cannot be used as a condition".to_string()),
+        LabelStyle::Primary,
+      )
+      .with_help("a condition must be a normal expression that evaluates to a value".to_string());
+
+      engine.add(diag);
+      return Err(());
+    }
+
+    let then_branch = self.parse_expression(vec![], context, engine)?;
 
     let mut else_branch = None;
     if match_and_consume!(self, engine, TokenKind::KwElse)? {
-      else_branch = Some(self.parse_expression(context, engine)?);
+      else_branch = Some(self.parse_expression(vec![], context, engine)?);
     }
 
     token.span.merge(self.current_token().span);
@@ -125,7 +144,7 @@ impl Parser {
     let label = self.parse_label(engine)?;
 
     let value = if !matches!(self.current_token().kind, TokenKind::Semi) {
-      Some(self.parse_expression(ExprContext::Default, engine)?)
+      Some(self.parse_expression(vec![], ExprContext::Default, engine)?)
     } else {
       None
     };
@@ -148,11 +167,7 @@ impl Parser {
 
     let allowed = matches!(
       context,
-      ExprContext::Function
-        | ExprContext::Closure
-        | ExprContext::Block
-        | ExprContext::IfCondition
-        | ExprContext::Match
+      ExprContext::Function | ExprContext::IfCondition | ExprContext::Match
     );
 
     if !allowed {
@@ -184,7 +199,7 @@ impl Parser {
     self.advance(engine);
 
     let value = if !matches!(self.current_token().kind, TokenKind::Semi) {
-      Some(self.parse_expression(ExprContext::Default, engine)?)
+      Some(self.parse_expression(vec![], ExprContext::Default, engine)?)
     } else {
       None
     };
@@ -195,6 +210,33 @@ impl Parser {
       value: value.map(Box::new),
       span: token.span,
     })
+  }
+
+  fn is_valid_condition(&self, expr: &Expr) -> bool {
+    use Expr::*;
+
+    match expr {
+      Integer { .. }
+      | Float { .. }
+      | String { .. }
+      | Char { .. }
+      | ByteString { .. }
+      | Byte { .. }
+      | Bool { .. }
+      | Ident { .. }
+      | Path(_)
+      | Binary { .. }
+      | Unary { .. }
+      | Group { .. }
+      | Tuple { .. }
+      | Field { .. }
+      | MethodCall { .. }
+      | Call { .. }
+      | Index { .. }
+      | Let { .. } => true,
+      // TODO: check these later for correctness and more cases
+      _ => false,
+    }
   }
 
   pub(crate) fn parse_label(

@@ -28,7 +28,7 @@ impl Parser {
     };
 
     let init = if match_and_consume!(self, engine, TokenKind::Eq)? {
-      Some(self.parse_expression(ExprContext::Default, engine)?)
+      Some(self.parse_expression(vec![], ExprContext::Default, engine)?)
     } else {
       None
     };
@@ -54,7 +54,7 @@ impl Parser {
 
     let pattern = self.parse_pattern(context, engine)?;
     self.expect(TokenKind::Eq, engine)?;
-    let value = self.parse_expression(context, engine)?;
+    let value = self.parse_expression(vec![], context, engine)?;
 
     token.span.merge(self.current_token().span);
     Ok(Expr::Let {

@@ -99,11 +99,11 @@ impl Parser {
           // Stop skipping once we hit a statement boundary.
           self.advance(engine);
           break;
-        },
+        }
         _ => {
           // Otherwise keep discarding tokens until we reach a safe point.
           self.advance(engine);
-        },
+        }
       }
     }
   }
@@ -184,16 +184,16 @@ impl Parser {
       (TokenKind::Semi, _) => "Statements must end with a semicolon".to_string(),
       (TokenKind::OpenParen, TokenKind::Semi) => {
         "Did you forget to close the parentheses before the semicolon?".to_string()
-      },
+      }
       (TokenKind::CloseBrace, TokenKind::Eof) => {
         "Did you forget to close a block with '}'?".to_string()
-      },
+      }
       (TokenKind::CloseParen, _) => {
         "Control flow statements require parentheses around conditions".to_string()
-      },
+      }
       (TokenKind::Colon, TokenKind::Semi) => {
         "Ternary expressions use ':' to separate the branches".to_string()
-      },
+      }
       (TokenKind::Eq, _) => "Use '=' for assignment".to_string(),
       _ => String::new(),
     }

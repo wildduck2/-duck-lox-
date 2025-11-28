@@ -1,5 +1,5 @@
 // ============================================================================
-// Complete Rust AST
+// Complete Rust AST aligned with the recursive descent grammar
 // ============================================================================
 
 pub(crate) mod generic;
@@ -7,6 +7,7 @@ pub(crate) mod path;
 pub(crate) mod pattern;
 pub(crate) mod print;
 pub(crate) mod r#struct;
+
 use diagnostic::Span;
 use generic::*;
 use path::*;
@@ -14,10 +15,9 @@ use pattern::*;
 use r#struct::*;
 
 // ----------------------------------------------------------------------------
-// Top-level Items
+// Top level Items
 // ----------------------------------------------------------------------------
 
-/// Top-level compilation unit entries produced by the parser.
 #[derive(Debug, Clone)]
 pub(crate) enum Item {
   Function(FnDecl),
@@ -39,44 +39,41 @@ pub(crate) enum Item {
 }
 
 // ----------------------------------------------------------------------------
-// Extern Type Declaration
+// Extern type
 // ----------------------------------------------------------------------------
 
-/// `extern type` declarations exposed to other crates.
 #[derive(Debug, Clone)]
 pub(crate) struct ExternTypeDecl {
   pub visibility: Visibility,
   pub name: String,
-  pub generics: Option<GenericParams>,
   pub span: Span,
 }
 
 // ----------------------------------------------------------------------------
-// Additional Item Declarations
+// Const, static, type alias, module, use, extern crate
 // ----------------------------------------------------------------------------
 
-/// `const` item declarations.
 #[derive(Debug, Clone)]
 pub(crate) struct ConstDecl {
   pub visibility: Visibility,
   pub name: String,
   pub ty: Type,
-  pub value: Option<Expr>,
+  // grammar requires a value for free const items
+  pub value: Expr,
   pub span: Span,
 }
 
-/// `static` item declarations.
 #[derive(Debug, Clone)]
 pub(crate) struct StaticDecl {
   pub visibility: Visibility,
   pub name: String,
   pub ty: Type,
   pub mutability: Mutability,
+  // grammar allows optional initializer for free static
   pub value: Option<Expr>,
   pub span: Span,
 }
 
-/// Type alias items (`type Foo = Bar`).
 #[derive(Debug, Clone)]
 pub(crate) struct TypeAliasDecl {
   pub visibility: Visibility,
@@ -84,21 +81,20 @@ pub(crate) struct TypeAliasDecl {
   pub generics: Option<GenericParams>,
   pub bounds: Option<Vec<TypeBound>>,
   pub where_clause: Option<WhereClause>,
-  pub ty: Option<Type>,
+  // grammar requires "=" type for free type alias
+  pub ty: Type,
   pub span: Span,
 }
 
-/// Module declarations (`mod foo { ... }` or `mod foo;`).
 #[derive(Debug, Clone)]
 pub(crate) struct ModuleDecl {
   pub visibility: Visibility,
   pub name: String,
+  // None for "mod foo;" and Some(items) for "mod foo { ... }"
   pub items: Option<Vec<Item>>,
-  pub is_unsafe: bool,
   pub span: Span,
 }
 
-/// Use statements describing import trees.
 #[derive(Debug, Clone)]
 pub(crate) struct UseDecl {
   pub visibility: Visibility,
@@ -106,7 +102,6 @@ pub(crate) struct UseDecl {
   pub span: Span,
 }
 
-/// Tree structure describing `use` paths, glob, list, rename, etc.
 #[derive(Debug, Clone)]
 pub(crate) enum UseTree {
   Path {
@@ -122,7 +117,6 @@ pub(crate) enum UseTree {
   List(Vec<UseTree>),
 }
 
-/// `extern crate foo as bar;` items.
 #[derive(Debug, Clone)]
 pub(crate) struct ExternCrateDecl {
   pub visibility: Visibility,
@@ -132,10 +126,9 @@ pub(crate) struct ExternCrateDecl {
 }
 
 // ----------------------------------------------------------------------------
-// Macro Declarations
+// – Macros
 // ----------------------------------------------------------------------------
 
-/// `macro_rules!` declarations.
 #[derive(Debug, Clone)]
 pub(crate) struct MacroDecl {
   pub name: String,
@@ -143,7 +136,6 @@ pub(crate) struct MacroDecl {
   pub span: Span,
 }
 
-/// `macro` (macro 2.0) declarations.
 #[derive(Debug, Clone)]
 pub(crate) struct Macro2Decl {
   pub visibility: Visibility,
@@ -153,14 +145,12 @@ pub(crate) struct Macro2Decl {
   pub span: Span,
 }
 
-/// A parameter inside a `macro` declaration.
 #[derive(Debug, Clone)]
 pub(crate) struct MacroParam {
   pub name: String,
   pub kind: MacroParamKind,
 }
 
-/// Enumerates the fragment specifiers allowed for macro parameters.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum MacroParamKind {
   Block,
@@ -179,14 +169,12 @@ pub(crate) enum MacroParamKind {
   Vis,
 }
 
-/// One `matcher => transcriber` rule inside `macro_rules!`.
 #[derive(Debug, Clone)]
 pub(crate) struct MacroRule {
   pub matcher: Vec<TokenTree>,
   pub transcriber: Vec<TokenTree>,
 }
 
-/// Recursive token-tree representation used for attributes and macros.
 #[derive(Debug, Clone)]
 pub(crate) enum TokenTree {
   Token(String),
@@ -205,7 +193,6 @@ pub(crate) enum TokenTree {
   },
 }
 
-/// Kind of delimiter that surrounds a nested token tree.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Delimiter {
   Paren,
@@ -213,7 +200,6 @@ pub(crate) enum Delimiter {
   Bracket,
 }
 
-/// Repetition options (`*`, `+`, `?`) for macro matchers.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum RepeatKind {
   ZeroOrMore,
@@ -222,10 +208,9 @@ pub(crate) enum RepeatKind {
 }
 
 // ----------------------------------------------------------------------------
-// Foreign Items
+// Foreign items and unions
 // ----------------------------------------------------------------------------
 
-/// `extern "abi" { ... }` modules.
 #[derive(Debug, Clone)]
 pub(crate) struct ForeignModDecl {
   pub is_unsafe: bool,
@@ -234,7 +219,6 @@ pub(crate) struct ForeignModDecl {
   pub span: Span,
 }
 
-/// Entries inside a foreign module.
 #[derive(Debug, Clone)]
 pub(crate) enum ForeignItem {
   Function {
@@ -253,15 +237,8 @@ pub(crate) enum ForeignItem {
     mutability: Mutability,
     span: Span,
   },
-  Type {
-    visibility: Visibility,
-    name: String,
-    generics: Option<GenericParams>,
-    span: Span,
-  },
 }
 
-/// `union` declarations.
 #[derive(Debug, Clone)]
 pub(crate) struct UnionDecl {
   pub visibility: Visibility,
@@ -273,10 +250,9 @@ pub(crate) struct UnionDecl {
 }
 
 // ----------------------------------------------------------------------------
-// Function Declaration
+// Functions
 // ----------------------------------------------------------------------------
 
-/// Function declarations (items, trait items, impl items, etc.).
 #[derive(Debug, Clone)]
 pub(crate) struct FnDecl {
   pub visibility: Visibility,
@@ -285,6 +261,7 @@ pub(crate) struct FnDecl {
   pub params: Vec<Param>,
   pub return_type: Option<Type>,
   pub where_clause: Option<WhereClause>,
+  // None for trait methods without body or extern functions
   pub body: Option<Vec<Stmt>>,
   pub is_async: bool,
   pub is_const: bool,
@@ -294,7 +271,6 @@ pub(crate) struct FnDecl {
   pub span: Span,
 }
 
-/// Function parameter (including `self`).
 #[derive(Debug, Clone)]
 pub(crate) struct Param {
   pub attributes: Vec<Attribute>,
@@ -305,10 +281,9 @@ pub(crate) struct Param {
 }
 
 // ----------------------------------------------------------------------------
-// Attributes and Derives
+// Attributes
 // ----------------------------------------------------------------------------
 
-/// Parsed attribute from either `#[]` or doc comments.
 #[derive(Debug, Clone)]
 pub(crate) struct Attribute {
   pub style: AttrStyle,
@@ -316,14 +291,12 @@ pub(crate) struct Attribute {
   pub span: Span,
 }
 
-/// Attribute placement (outer `#[]` vs inner `#![]`).
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum AttrStyle {
   Outer,
   Inner,
 }
 
-/// Different attribute syntaxes (normal, doc comment, cfg, ...).
 #[derive(Debug, Clone)]
 pub(crate) enum AttrKind {
   Normal {
@@ -342,10 +315,9 @@ pub(crate) enum AttrKind {
 }
 
 // ----------------------------------------------------------------------------
-// Meta Items
+// Meta items
 // ----------------------------------------------------------------------------
 
-/// Meta items that appear within attribute bodies.
 #[derive(Debug, Clone)]
 pub(crate) enum MetaItem {
   Word(String),
@@ -353,7 +325,6 @@ pub(crate) enum MetaItem {
   List(String, Vec<MetaItem>),
 }
 
-/// Literal values available for `MetaItem::NameValue`.
 #[derive(Debug, Clone)]
 pub(crate) enum MetaItemValue {
   Str(String),
@@ -362,14 +333,9 @@ pub(crate) enum MetaItemValue {
 }
 
 // ----------------------------------------------------------------------------
-// Struct Declaration
+// Enums
 // ----------------------------------------------------------------------------
 
-// ----------------------------------------------------------------------------
-// Enum Declaration
-// ----------------------------------------------------------------------------
-
-/// Enum declarations.
 #[derive(Debug, Clone)]
 pub(crate) struct EnumDecl {
   pub attributes: Vec<Attribute>,
@@ -381,7 +347,6 @@ pub(crate) struct EnumDecl {
   pub span: Span,
 }
 
-/// One enum variant definition.
 #[derive(Debug, Clone)]
 pub(crate) struct EnumVariant {
   pub attributes: Vec<Attribute>,
@@ -392,7 +357,6 @@ pub(crate) struct EnumVariant {
   pub span: Span,
 }
 
-/// Variant shapes (unit, tuple, or struct-like).
 #[derive(Debug, Clone)]
 pub(crate) enum EnumVariantKind {
   Unit,
@@ -401,10 +365,9 @@ pub(crate) enum EnumVariantKind {
 }
 
 // ----------------------------------------------------------------------------
-// Trait Declaration
+// Traits
 // ----------------------------------------------------------------------------
 
-/// Trait declarations (including auto/unsafe options).
 #[derive(Debug, Clone)]
 pub(crate) struct TraitDecl {
   pub attributes: Vec<Attribute>,
@@ -419,7 +382,6 @@ pub(crate) struct TraitDecl {
   pub span: Span,
 }
 
-/// Items that may appear inside a trait definition.
 #[derive(Debug, Clone)]
 pub(crate) enum TraitItem {
   Method(FnDecl),
@@ -441,21 +403,23 @@ pub(crate) enum TraitItem {
   },
 }
 
-/// Captures a macro invocation expression.
+// ----------------------------------------------------------------------------
+// Macro invocation as expression
+// ----------------------------------------------------------------------------
+
 #[derive(Debug, Clone)]
 pub struct MacroInvocation {
   pub qself: Option<Box<Type>>,
-  pub path: Path,             // foo::bar::baz
-  pub delimiter: Delimiter,   // (), {}, []
-  pub tokens: Vec<TokenTree>, // nested
+  pub path: Path,
+  pub delimiter: Delimiter,
+  pub tokens: Vec<TokenTree>,
   pub span: Span,
 }
 
 // ----------------------------------------------------------------------------
-// Impl Block
+// Impl blocks
 // ----------------------------------------------------------------------------
 
-/// `impl` blocks, either inherent or trait-based.
 #[derive(Debug, Clone)]
 pub(crate) struct ImplBlock {
   pub attributes: Vec<Attribute>,
@@ -470,14 +434,12 @@ pub(crate) struct ImplBlock {
   pub span: Span,
 }
 
-/// Whether an `impl` is positive (`impl Trait for T`) or negative (`impl !Trait for T`).
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum ImplPolarity {
   Positive,
   Negative,
 }
 
-/// Items that can appear within an `impl` block.
 #[derive(Debug, Clone)]
 pub(crate) enum ImplItem {
   Method(FnDecl),
@@ -504,7 +466,6 @@ pub(crate) enum ImplItem {
 // Visibility
 // ----------------------------------------------------------------------------
 
-/// Visibility qualifiers used across item kinds.
 #[derive(Debug, Clone)]
 pub enum Visibility {
   Lic,
@@ -516,20 +477,17 @@ pub enum Visibility {
 }
 
 // ----------------------------------------------------------------------------
-// Type System
+// Types
 // ----------------------------------------------------------------------------
 
-/// Represents the `<Self>` or `<Self as Trait>` syntax in a type path.
 #[derive(Debug, Clone)]
 pub(crate) struct QSelfHeader {
   pub self_ty: Box<Type>,
   pub trait_ref: Option<Path>,
 }
 
-/// Master enum representing every syntactic type form the parser supports.
 #[derive(Debug, Clone)]
 pub(crate) enum Type {
-  // Primitive types
   I8,
   I16,
   I32,
@@ -554,7 +512,6 @@ pub(crate) enum Type {
   SelfType,
   Unit,
 
-  // Composite types
   Array {
     element: Box<Type>,
     size: Box<Expr>,
@@ -582,6 +539,7 @@ pub(crate) enum Type {
   },
 
   Path(Path),
+
   QPath {
     self_ty: Box<Type>,
     trait_ref: Option<Path>,
@@ -594,6 +552,7 @@ pub(crate) enum Type {
     lifetime: Option<String>,
     is_dyn: bool,
   },
+
   ImplTrait(Vec<TypeBound>),
 
   Infer,
@@ -602,7 +561,6 @@ pub(crate) enum Type {
   Typeof(Box<Expr>),
 }
 
-/// Parameter entry inside a bare function pointer signature.
 #[derive(Debug, Clone)]
 pub(crate) struct BareFnParam {
   pub attributes: Vec<Attribute>,
@@ -610,29 +568,15 @@ pub(crate) struct BareFnParam {
   pub ty: Type,
 }
 
-/// Marker for whether a function or block is safe / unsafe.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Safety {
   Safe,
   Unsafe,
 }
 
-/// Mutability flag for references, pointers, bindings, etc.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Mutability {
-  /// Mutable binding
-  ///
-  /// for example:
-  /// ```rust
-  /// let mut x = 1;
-  /// ```
   Mutable,
-  /// Immutable binding
-  ///
-  /// for example:
-  /// ```rust
-  /// let x = 1;
-  /// ```
   Immutable,
 }
 
@@ -640,12 +584,11 @@ pub(crate) enum Mutability {
 // Statements
 // ----------------------------------------------------------------------------
 
-/// Statements that make up the body of items and blocks.
 #[derive(Debug, Clone)]
 pub(crate) enum Stmt {
-  Expr(Expr),
-  Semi(Expr),
-  TailExpr(Expr),
+  Expr(Expr),     // used if you want to keep non tail exprs distinct
+  Semi(Expr),     // expression followed by semicolon
+  TailExpr(Expr), // last expression in a block without semicolon
   Let {
     attributes: Vec<Attribute>,
     pattern: Pattern,
@@ -659,10 +602,9 @@ pub(crate) enum Stmt {
 }
 
 // ----------------------------------------------------------------------------
-// Match Arms
+// Match arms
 // ----------------------------------------------------------------------------
 
-/// One arm in a `match` expression, including guard and body.
 #[derive(Debug, Clone)]
 pub(crate) struct MatchArm {
   pub attributes: Vec<Attribute>,
@@ -676,7 +618,6 @@ pub(crate) struct MatchArm {
 // Expressions
 // ----------------------------------------------------------------------------
 
-/// Comprehensive expression enum emitted by the parser.
 #[derive(Debug, Clone)]
 pub(crate) enum Expr {
   Integer {
@@ -725,6 +666,7 @@ pub(crate) enum Expr {
     right: Box<Expr>,
     span: Span,
   },
+
   Unary {
     op: UnaryOp,
     expr: Box<Expr>,
@@ -732,13 +674,11 @@ pub(crate) enum Expr {
   },
 
   Group {
-    attributes: Vec<Attribute>,
     expr: Box<Expr>,
     span: Span,
   },
 
   Tuple {
-    attributes: Vec<Attribute>,
     elements: Vec<Expr>,
     span: Span,
   },
@@ -748,6 +688,7 @@ pub(crate) enum Expr {
     value: Box<Expr>,
     span: Span,
   },
+
   AssignOp {
     target: Box<Expr>,
     op: BinaryOp,
@@ -795,11 +736,6 @@ pub(crate) enum Expr {
     repeat: Option<Box<Expr>>,
     span: Span,
   },
-  ArrayRepeat {
-    element: Box<Expr>,
-    count: Box<Expr>,
-    span: Span,
-  },
 
   Struct {
     path: Path,
@@ -834,12 +770,14 @@ pub(crate) enum Expr {
     label: Option<String>,
     span: Span,
   },
+
   While {
     condition: Box<Expr>,
     body: Vec<Stmt>,
     label: Option<String>,
     span: Span,
   },
+
   WhileLet {
     pattern: Pattern,
     scrutinee: Box<Expr>,
@@ -847,6 +785,7 @@ pub(crate) enum Expr {
     label: Option<String>,
     span: Span,
   },
+
   For {
     pattern: Pattern,
     iterator: Box<Expr>,
@@ -859,15 +798,18 @@ pub(crate) enum Expr {
     value: Option<Box<Expr>>,
     span: Span,
   },
+
   Break {
     label: Option<String>,
     value: Option<Box<Expr>>,
     span: Span,
   },
+
   Continue {
     label: Option<String>,
     span: Span,
   },
+
   Yield {
     value: Option<Box<Expr>>,
     span: Span,
@@ -888,27 +830,16 @@ pub(crate) enum Expr {
     span: Span,
   },
 
+  // Unified flavored block, matches blockExpr / asyncBlockExpr / unsafeBlockExpr / tryBlockExpr
   Block {
+    outer_attributes: Vec<Attribute>,
+    inner_attributes: Vec<Attribute>,
     stmts: Vec<Stmt>,
     label: Option<String>,
-    is_async: bool,
-    is_unsafe: bool,
-    is_try: bool,
+    flavor: BlockFlavor,
     span: Span,
   },
 
-  LabeledBlock {
-    label: String,
-    block: Vec<Stmt>,
-    span: Span,
-  },
-
-  Async {
-    attributes: Vec<Attribute>,
-    capture: CaptureKind,
-    block: Vec<Stmt>,
-    span: Span,
-  },
   Await {
     expr: Box<Expr>,
     span: Span,
@@ -919,17 +850,12 @@ pub(crate) enum Expr {
     span: Span,
   },
 
-  TryBlock {
-    attributes: Vec<Attribute>,
-    block: Vec<Stmt>,
-    span: Span,
-  },
-
   Cast {
     expr: Box<Expr>,
     ty: Type,
     span: Span,
   },
+
   Type {
     expr: Box<Expr>,
     ty: Type,
@@ -939,22 +865,6 @@ pub(crate) enum Expr {
   Let {
     pattern: Pattern,
     expr: Box<Expr>,
-    span: Span,
-  },
-
-  Unsafe {
-    block: Vec<Stmt>,
-    span: Span,
-  },
-
-  Const {
-    block: Vec<Stmt>,
-    span: Span,
-  },
-
-  InlineConst {
-    generics: Option<GenericParams>,
-    block: Vec<Stmt>,
     span: Span,
   },
 
@@ -990,11 +900,20 @@ pub(crate) enum Expr {
   },
 }
 
+// Flavor for blockExpr / asyncBlockExpr / unsafeBlockExpr / tryBlockExpr
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum BlockFlavor {
+  Normal,    // "{ ... }"
+  Async,     // "async { ... }"
+  AsyncMove, // "async move { ... }"
+  Unsafe,    // "unsafe { ... }"
+  Try,       // "try { ... }" (nightly)
+}
+
 // ----------------------------------------------------------------------------
-// Expression Supporting Types
+// Expression support types
 // ----------------------------------------------------------------------------
 
-/// Single positional or named argument inside a format string.
 #[derive(Debug, Clone)]
 pub(crate) struct FormatArg {
   pub name: Option<String>,
@@ -1002,7 +921,6 @@ pub(crate) struct FormatArg {
   pub format_spec: Option<FormatSpec>,
 }
 
-/// `format_args!` specifier metadata.
 #[derive(Debug, Clone)]
 pub(crate) struct FormatSpec {
   pub fill: Option<char>,
@@ -1015,7 +933,6 @@ pub(crate) struct FormatSpec {
   pub ty: Option<String>,
 }
 
-/// Alignment option for formatting.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum FormatAlign {
   Left,
@@ -1023,14 +940,12 @@ pub(crate) enum FormatAlign {
   Right,
 }
 
-/// Signedness hints for formatting (`+`/`-` flags).
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum FormatSign {
   Plus,
   Minus,
 }
 
-/// Either a literal width/precision or an argument reference.
 #[derive(Debug, Clone)]
 pub(crate) enum FormatCount {
   Integer(usize),
@@ -1038,7 +953,6 @@ pub(crate) enum FormatCount {
   Asterisk,
 }
 
-/// Different flavors of `str` literals.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum StrKind {
   Normal,
@@ -1049,21 +963,18 @@ pub(crate) enum StrKind {
   RawByte(usize),
 }
 
-/// Different flavors of byte string literals.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum ByteStrKind {
   Normal,
   Raw(usize),
 }
 
-/// Represents either `.field` or `.0` accesses.
 #[derive(Debug, Clone)]
 pub(crate) enum FieldAccess {
   Named(String),
   Unnamed(usize),
 }
 
-/// Inline assembly operand in `asm!`.
 #[derive(Debug, Clone)]
 pub(crate) struct AsmOperand {
   pub kind: AsmOperandKind,
@@ -1071,7 +982,6 @@ pub(crate) struct AsmOperand {
   pub expr: Expr,
 }
 
-/// Kinds of inline assembly operands.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum AsmOperandKind {
   In,
@@ -1082,7 +992,6 @@ pub(crate) enum AsmOperandKind {
   Sym,
 }
 
-/// Field initializer entry used by struct expressions.
 #[derive(Debug, Clone)]
 pub(crate) struct FieldInit {
   pub attributes: Vec<Attribute>,
@@ -1090,34 +999,23 @@ pub(crate) struct FieldInit {
   pub value: Option<Expr>,
 }
 
-/// Represents all possible range kinds in Rust.
-/// Mirrors Rust’s real range syntax, plus a few extensions for completeness.
 #[derive(Debug, Clone)]
 pub(crate) enum RangeKind {
-  /// `..` - fully open range
   Full,
-  /// `a..` - range starting at a value, exclusive end
   From,
-  /// `a..=` - range starting at a value, inclusive end (rare but possible in macros)
   FromInclusive,
-  /// `..b` - range ending at a value, exclusive end
   To,
-  /// `..=b` - range ending at a value, inclusive end
   ToInclusive,
-  /// Legacy/ambiguous: raw `..` treated as exclusive
   Exclusive,
-  /// Legacy/ambiguous: raw `..=` treated as inclusive
   Inclusive,
 }
 
-/// Determines whether closures capture by move or by reference.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum CaptureKind {
   Default,
   Move,
 }
 
-/// Parameter of a closure literal.
 #[derive(Debug, Clone)]
 pub(crate) struct ClosureParam {
   pub attributes: Vec<Attribute>,
@@ -1126,10 +1024,9 @@ pub(crate) struct ClosureParam {
 }
 
 // ----------------------------------------------------------------------------
-// Binary Operators
+// Binary and unary operators
 // ----------------------------------------------------------------------------
 
-/// Binary operators supported in expressions.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum BinaryOp {
   Add,
@@ -1152,11 +1049,6 @@ pub(crate) enum BinaryOp {
   Or,
 }
 
-// ----------------------------------------------------------------------------
-// Unary Operators
-// ----------------------------------------------------------------------------
-
-/// Prefix unary operators supported in expressions.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum UnaryOp {
   Neg,

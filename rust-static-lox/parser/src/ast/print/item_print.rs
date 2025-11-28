@@ -36,7 +36,7 @@ impl Item {
         match &struct_decl.kind {
           StructKind::Unit => {
             println!("{}├─> Kind: Unit", base);
-          },
+          }
           StructKind::Tuple(tfields) => {
             println!("{}├─> Kind: Tuple", base);
             let kbase = format!("{base}│  ");
@@ -52,7 +52,7 @@ impl Item {
                 println!("{fb}└─> Type: {}", format_type(&f.ty));
               }
             }
-          },
+          }
           StructKind::Named { fields } => {
             println!("{}├─> Kind: Named", base);
             let kbase = format!("{base}│  ");
@@ -74,15 +74,15 @@ impl Item {
                 println!("{fb}└─> Type: {}", format_type(&f.ty));
               }
             }
-          },
+          }
         }
 
         // where clause
         print_where_clause(&base, true, &struct_decl.where_clause);
-      },
+      }
       _ => {
         println!("{}{} [Other Item]", prefix, connector);
-      },
+      }
     }
   }
 }
@@ -113,7 +113,7 @@ fn print_type_bounds(prefix: &str, is_last: bool, bounds_opt: &Option<Vec<TypeBo
     None => println!("{prefix}{connector} Bounds: <none>"),
     Some(v) if v.is_empty() => {
       println!("{prefix}{connector} Bounds: <none>");
-    },
+    }
     Some(v) => {
       println!("{prefix}{connector} Bounds:");
       let inner_prefix = format!("{prefix}{}  ", if is_last { " " } else { "│" });
@@ -141,7 +141,7 @@ fn print_type_bounds(prefix: &str, is_last: bool, bounds_opt: &Option<Vec<TypeBo
           );
         }
       }
-    },
+    }
   }
 }
 
@@ -185,7 +185,7 @@ fn print_generic_param(prefix: &str, is_last: bool, gp: &GenericParam) {
       } else {
         println!("{inner}└─> Default: <none>");
       }
-    },
+    }
 
     GenericParam::Lifetime {
       attributes,
@@ -207,9 +207,9 @@ fn print_generic_param(prefix: &str, is_last: bool, gp: &GenericParam) {
             .collect::<Vec<_>>()
             .join(" + ");
           println!("{inner}└─> Outlives: {}", joined);
-        },
+        }
       }
-    },
+    }
 
     GenericParam::Const {
       attributes,
@@ -226,7 +226,7 @@ fn print_generic_param(prefix: &str, is_last: bool, gp: &GenericParam) {
       } else {
         println!("{inner}└─> Default: <none>");
       }
-    },
+    }
   }
 }
 
@@ -261,7 +261,7 @@ fn print_where_clause(prefix: &str, is_last: bool, wc: &Option<WhereClause>) {
               println!("{inner2}├─> for: <none>");
             }
             print_type_bounds(&inner2, true, bounds);
-          },
+          }
           WherePredicate::Lifetime { lifetime, bounds } => {
             println!(
               "{inner}{} Lifetime: '{}",
@@ -274,15 +274,15 @@ fn print_where_clause(prefix: &str, is_last: bool, wc: &Option<WhereClause>) {
             } else {
               println!("{inner2}└─> Outlives: {}", bounds.join(" + "));
             }
-          },
+          }
           WherePredicate::Equality { ty, equals } => {
             println!("{inner}{} Equality:", if last { "└─>" } else { "├─>" });
             let inner2 = format!("{inner}{}  ", if last { " " } else { "│" });
             println!("{inner2}├─> Left: {}", format_type(ty));
             println!("{inner2}└─> Right: {}", format_type(equals));
-          },
+          }
         }
       }
-    },
+    }
   }
 }

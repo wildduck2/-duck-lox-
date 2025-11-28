@@ -1,4 +1,9 @@
-use crate::{ast::Expr, match_and_consume, parser_utils::ExprContext, Parser};
+use crate::{
+  ast::{Attribute, BlockFlavor, Expr},
+  match_and_consume,
+  parser_utils::ExprContext,
+  Parser,
+};
 use diagnostic::{
   code::DiagnosticCode,
   diagnostic::{Diagnostic, LabelStyle},
@@ -11,12 +16,14 @@ impl Parser {
   pub(crate) fn parse_block_expression(
     &mut self,
     label: Option<String>,
+    outer_attributes: Vec<Attribute>,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
     let mut token = self.current_token();
-    let (is_unsafe, is_async, is_try) = self.parse_block_flavors(ExprContext::Default, engine)?;
+    let flavor = self.parse_block_flavors(ExprContext::Default, engine)?;
     self.advance(engine); // consume the "{"
 
+    let inner_attributes = self.parse_inner_attributes(engine)?;
     let mut stmts = vec![];
     while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::CloseBrace) {
       stmts.push(self.parse_stmt(ExprContext::Default, engine)?);
@@ -26,11 +33,11 @@ impl Parser {
 
     token.span.merge(self.current_token().span);
     Ok(Expr::Block {
+      inner_attributes,
+      outer_attributes,
       stmts,
       label,
-      is_unsafe,
-      is_async,
-      is_try,
+      flavor,
       span: token.span,
     })
   }
@@ -39,79 +46,205 @@ impl Parser {
     &mut self,
     context: ExprContext,
     engine: &mut DiagnosticEngine,
-  ) -> Result<(bool, bool, bool), ()> {
-    // A block flavor can only appear in normal expression positions
+  ) -> Result<BlockFlavor, ()> {
     if !matches!(context, ExprContext::Default) {
       let token = self.current_token();
-
       let diagnostic = Diagnostic::new(
         DiagnosticCode::Error(DiagnosticError::InvalidBlockFlavorContext),
-        "invalid block flavor here".to_string(),
+        "block flavor not allowed here".to_string(),
         self.source_file.path.clone(),
       )
       .with_label(
         token.span,
-        Some("this token cannot start a block flavor in this position".to_string()),
+        Some("cannot start a flavored block in this position".to_string()),
         LabelStyle::Primary,
       )
-      .with_help(
-        "block flavors (unsafe, async, try) are only allowed before a block expression. \
-             Example: unsafe { ... } or async { ... }"
-          .to_string(),
-      );
-
+      .with_help("allowed examples: unsafe { } or async { }".to_string());
       engine.add(diagnostic);
       return Err(());
     }
 
-    let token_before = self.current_token();
+    let start_span = self.current_token().span;
 
-    let is_unsafe = if matches!(self.current_token().kind, TokenKind::KwUnsafe) {
-      self.advance(engine);
-      true
-    } else {
-      false
-    };
+    let mut is_async = false;
+    let mut is_move = false;
+    let mut is_unsafe = false;
+    let mut is_try = false;
 
-    let is_async = if matches!(self.current_token().kind, TokenKind::KwAsync) {
-      self.advance(engine);
-      true
-    } else {
-      false
-    };
+    // First keyword
+    match self.current_token().kind {
+      TokenKind::KwAsync => {
+        is_async = true;
+        self.advance(engine);
 
-    let is_try = if matches!(self.current_token().kind, TokenKind::KwTry) {
-      self.advance(engine);
-      true
-    } else {
-      false
-    };
+        // optional move
+        if matches!(self.current_token().kind, TokenKind::KwMove) {
+          is_move = true;
+          self.advance(engine);
+        }
 
-    // Additional error: if user wrote a flavor but forgot to follow with a block
-    if (is_unsafe || is_async || is_try)
+        // forbid any other keyword after async or async move
+        match self.current_token().kind {
+          TokenKind::KwAsync | TokenKind::KwUnsafe | TokenKind::KwTry | TokenKind::KwMove => {
+            let diagnostic = Diagnostic::new(
+              DiagnosticCode::Error(DiagnosticError::InvalidFlavorOrder),
+              "invalid block flavor order".to_string(),
+              self.source_file.path.clone(),
+            )
+            .with_label(
+              start_span,
+              Some("async blocks may only be followed by optional move".to_string()),
+              LabelStyle::Primary,
+            )
+            .with_help("valid examples: async { } or async move { }".to_string());
+            engine.add(diagnostic);
+            return Err(());
+          }
+          _ => {}
+        }
+      }
+
+      TokenKind::KwUnsafe => {
+        is_unsafe = true;
+        self.advance(engine);
+
+        // unsafe cannot be followed by any other flavor
+        match self.current_token().kind {
+          TokenKind::KwAsync | TokenKind::KwMove | TokenKind::KwTry | TokenKind::KwUnsafe => {
+            let diagnostic = Diagnostic::new(
+              DiagnosticCode::Error(DiagnosticError::InvalidFlavorOrder),
+              "invalid block flavor order".to_string(),
+              self.source_file.path.clone(),
+            )
+            .with_label(
+              start_span,
+              Some("unsafe cannot be mixed with other block flavors".to_string()),
+              LabelStyle::Primary,
+            )
+            .with_help("valid example: unsafe { }".to_string());
+            engine.add(diagnostic);
+            return Err(());
+          }
+          _ => {}
+        }
+      }
+
+      TokenKind::KwTry => {
+        is_try = true;
+        self.advance(engine);
+
+        // try cannot be followed by anything
+        match self.current_token().kind {
+          TokenKind::KwAsync | TokenKind::KwMove | TokenKind::KwUnsafe | TokenKind::KwTry => {
+            let diagnostic = Diagnostic::new(
+              DiagnosticCode::Error(DiagnosticError::InvalidFlavorOrder),
+              "invalid block flavor order".to_string(),
+              self.source_file.path.clone(),
+            )
+            .with_label(
+              start_span,
+              Some("try must appear alone before a block".to_string()),
+              LabelStyle::Primary,
+            )
+            .with_help("valid example: try { }".to_string());
+            engine.add(diagnostic);
+            return Err(());
+          }
+          _ => {}
+        }
+      }
+
+      TokenKind::KwMove => {
+        // move alone is not allowed for block
+        let diagnostic = Diagnostic::new(
+          DiagnosticCode::Error(DiagnosticError::InvalidFlavorOrder),
+          "invalid block flavor".to_string(),
+          self.source_file.path.clone(),
+        )
+        .with_label(
+          start_span,
+          Some("move cannot introduce a block".to_string()),
+          LabelStyle::Primary,
+        )
+        .with_help("use async move { } instead".to_string());
+        engine.add(diagnostic);
+        return Err(());
+      }
+
+      _ => {}
+    }
+
+    // Check next token is a brace if any flavor was used
+    if (is_async || is_move || is_unsafe || is_try)
       && !matches!(self.current_token().kind, TokenKind::OpenBrace)
     {
       let diagnostic = Diagnostic::new(
         DiagnosticCode::Error(DiagnosticError::ExpectedBlockAfterFlavor),
-        "expected a block after flavor keyword".to_string(),
+        "expected block after flavor keyword".to_string(),
         self.source_file.path.clone(),
       )
       .with_label(
-        token_before.span,
-        Some("a block must follow here".to_string()),
+        start_span,
+        Some("a flavored block must be followed by a left brace".to_string()),
         LabelStyle::Primary,
       )
       .with_label(
         self.current_token().span,
-        Some("this token is not a valid block start".to_string()),
+        Some("this token does not start a block".to_string()),
         LabelStyle::Secondary,
       )
-      .with_help("write it as for example: unsafe { ... } or async { ... }".to_string());
-
+      .with_help(
+        "valid examples: async { } or async move { } or unsafe { } or try { }".to_string(),
+      );
       engine.add(diagnostic);
       return Err(());
     }
 
-    Ok((is_unsafe, is_async, is_try))
+    let flavor = if is_async {
+      if is_move {
+        BlockFlavor::AsyncMove
+      } else {
+        BlockFlavor::Async
+      }
+    } else if is_unsafe {
+      BlockFlavor::Unsafe
+    } else if is_try {
+      BlockFlavor::Try
+    } else {
+      BlockFlavor::Normal
+    };
+
+    Ok(flavor)
+  }
+
+  pub(crate) fn can_start_block(&self) -> bool {
+    let mut i = 0;
+
+    // Case 1 async or async move
+    if matches!(self.peek(i).kind, TokenKind::KwAsync) {
+      i += 1;
+
+      // optional move
+      if matches!(self.peek(i).kind, TokenKind::KwMove) {
+        i += 1;
+      }
+
+      return matches!(self.peek(i).kind, TokenKind::OpenBrace);
+    }
+
+    // Case 2 unsafe
+    if matches!(self.peek(i).kind, TokenKind::KwUnsafe) {
+      i += 1;
+      return matches!(self.peek(i).kind, TokenKind::OpenBrace);
+    }
+
+    // Case 3 try (nightly only)
+    if matches!(self.peek(i).kind, TokenKind::KwTry) {
+      i += 1;
+      return matches!(self.peek(i).kind, TokenKind::OpenBrace);
+    }
+
+    // Case 4 plain block
+    matches!(self.peek(i).kind, TokenKind::OpenBrace)
   }
 }
