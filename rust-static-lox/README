@@ -3,6 +3,68 @@
 
 Change Log
 ----------
+2025-11-28
+- Statement parsing now collects outer attributes/visibility for every stmt or expr and threads a
+  strict `ExprContext` through expression + pattern parsing, so control-flow keywords trigger the
+  right diagnostics and match arms inherit the correct scope metadata.
+- Closures finally look like Rust: async/move flavors, attribute-decorated parameter lists, optional
+  return types, and proper body expressions all emit `Expr::Closure` nodes wired into the AST.
+- Block parsing picked up async/move/unsafe/try flavor validation, block labels, and FatArrow-driven
+  match arm handling, letting attribute-decorated arms fall through to block vs expr bodies safely.
+- Diagnostics/lexer polish: deduplicated formatting output, added targeted errors for invalid block
+  flavors or conditions, and extended the lexer/token kinds with the `=>` arm plus consistent comma
+  handling to keep match parsing stable.
+
+2025-11-27
+- Dropped in the block/control-flow machinery: block expressions now capture labels, outer/inner
+  attributes, and async/move/unsafe/try flavors, while `if`/`break`/`continue`/`return` create their
+  own AST nodes for future semantic work.
+- Built the macro-invocation pipeline with token-tree capture, delimiter tracking, and repeat kinds,
+  enabling `path! { ... }` invocations to appear in expressions and patterns even before expansion.
+- Reworked the expression dispatcher so statements parse attributes + visibility before deciding
+  between items, lets, or expression statements, giving the parser enough structure to grow.
+
+2025-11-26
+- Introduced a full match-expression parser with attribute-aware arms, optional `if` guards, and
+  proper AST nodes for scrutinee + bodies, backed by fresh diagnostics and sample programs.
+- Extended the pattern/type/path stack with slices, tuple structs, macro patterns, QSelf headers,
+  and better mutability parsing so destructuring and generics keep pace with Rust's grammar.
+- Tightened parser utilities plus lexer + diagnostic support around the new syntax, including
+  bitwise/logical lexer fixes and richer error codes to keep recovery predictable.
+
+2025-11-16
+- Assembled the pattern-matching core: bindings, tuple/struct/slice/rest patterns, reference depth,
+  macro patterns, and binding modes now live under `ast/pattern` with shared helpers.
+- Plugged the new patterns into `let` statements/expressions (with optional types and initializers),
+  priming declaration parsing even while the statement emitter remains WIP.
+- Filled in missing literal/identifier expression layers and parser utilities so unary/postfix flows
+  produce consistent trees for the rest of the grammar.
+- Cleaned up lifetime lexing/handling so `'static`, `'_`, and named lifetimes survive generics,
+  where clauses, and pattern annotations without mis-tokenizing.
+
+2025-11-15
+- Rebuilt the literal lexers end-to-end: byte/raw/C/string scanners now share prefix validation,
+  escape checking, and unterminated span reporting identical to Rust's rules.
+- Revamped numeric parsing to enforce decimal/fraction/exponent ordering, base-specific separators,
+  and suffix detection, emitting targeted diagnostics when underscores or suffixes misbehave.
+
+2025-11-14
+- Finished the array expression parser plus AST printer plumbing (repeat `[v; n]`, trailing commas,
+  empty arrays) so tree dumps mirror the Rust grammar when debugging.
+- Overhauled struct and generic path parsing: `struct` declarations now accept record/tuple/unit
+  forms with visibility, attributes, generics, and `where` clauses, and the path parser learned
+  about `$crate`, `pub(in ..)`, and other visibility fixes.
+- Documented the grammar cleanup (new TODO sections per parser module) and fixed the lingering
+  import/path resolution issues exposed by the refactor.
+
+2025-11-13
+- Added lifetime, mutability, and `where` clause parsers (plus supporting diagnostics) and wired
+  them into struct/type/generic parsing so trait/lifetime bounds read like real Rust.
+- Extended visibility + path parsing to cover `pub`, `pub(crate)`, `pub(in module)`, and multi-segment
+  forms, unblocking type + struct definitions with richer access modifiers.
+- Hardened the lexer/parser hand-off for contextual keywords and shift operators, teaching the lexer
+  to split `<<`/`>>` tokens properly and feeding a dedicated shift-expression parser.
+
 2025-11-12
 - Completed the generics/struct push by refactoring the AST (new `ast/mod.rs`, dedicated print
   modules, and split-out path definitions) so expanded tree output stays maintainable.

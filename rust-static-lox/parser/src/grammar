@@ -508,7 +508,7 @@ primary           -> literalExpr       [x]
                    | tupleExpr         [x]
                    | structExpr 
                    | closureExpr       [x]
-                   | blockExpr         [-]
+                   | blockExpr         [x]
                    | asyncBlockExpr    [x]
                    | unsafeBlockExpr   [x]
                    | tryBlockExpr      [x]
