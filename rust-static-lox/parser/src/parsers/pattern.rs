@@ -71,7 +71,7 @@ impl Parser {
                 trait_ref.segments.extend(path.segments);
                 path.leading_colon = trait_ref.leading_colon;
                 (Some(self_ty), trait_ref)
-              },
+              }
               None => (Some(self_ty), path),
             },
             None => (None, path),
@@ -160,7 +160,7 @@ impl Parser {
         };
 
         Ok(pattern)
-      },
+      }
 
       // Parse a (Slice) pattern
       TokenKind::OpenBracket => self.parse_slice_pattern(context, engine),
@@ -171,7 +171,7 @@ impl Parser {
       _ => {
         self.advance(engine);
         Ok(Pattern::Wildcard { span: token.span })
-      },
+      }
     }
   }
 
@@ -206,7 +206,7 @@ impl Parser {
   ) -> Result<Pattern, ()> {
     let mut token = self.current_token();
 
-    let expr = self.parse_expression(context, engine)?;
+    let expr = self.parse_expression(vec![], context, engine)?;
     token.span.merge(self.current_token().span);
     Ok(Pattern::Literal {
       expr: Box::new(expr),

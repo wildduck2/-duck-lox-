@@ -54,7 +54,7 @@ impl Parser {
 
       LiteralKind::Float { suffix_start, base } => {
         self.parser_float(engine, token, suffix_start, base)
-      },
+      }
 
       LiteralKind::Str => self.parser_string(engine, token),
 
@@ -146,7 +146,7 @@ impl Parser {
         );
         engine.add(diagnostic);
         return Err(());
-      },
+      }
     };
 
     Ok(Expr::Integer {
@@ -207,7 +207,7 @@ impl Parser {
         );
         engine.add(diagnostic);
         return Err(());
-      },
+      }
     };
 
     Ok(Expr::Float {

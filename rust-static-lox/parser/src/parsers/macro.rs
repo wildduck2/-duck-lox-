@@ -32,15 +32,15 @@ impl Parser {
           TokenKind::OpenParen => {
             self.expect(TokenKind::CloseParen, engine)?;
             Delimiter::Paren
-          },
+          }
           TokenKind::OpenBracket => {
             self.expect(TokenKind::CloseBracket, engine)?;
             Delimiter::Bracket
-          },
+          }
           TokenKind::OpenBrace => {
             self.expect(TokenKind::CloseBrace, engine)?;
             Delimiter::Brace
-          },
+          }
           _ => unreachable!(),
         };
 
@@ -52,7 +52,7 @@ impl Parser {
           tokens,
           span: token.span,
         })
-      },
+      }
 
       _ => {
         let lexeme = self.get_token_lexeme(&token);
@@ -69,7 +69,7 @@ impl Parser {
         .with_help("Macro invocations must be surrounded by parentheses or braces.".to_string());
         engine.add(diagnostic);
         Err(())
-      },
+      }
     }
   }
 
@@ -95,7 +95,7 @@ impl Parser {
       TokenKind::Ident | TokenKind::Literal { .. } | TokenKind::KwTrue | TokenKind::KwFalse => {
         self.advance(engine);
         Ok(TokenTree::Token(self.get_token_lexeme(&token)))
-      },
+      }
 
       // FIX: this swhen you get to the macro full parsing
       TokenKind::OpenParen | TokenKind::OpenBracket | TokenKind::OpenBrace => {
@@ -110,7 +110,7 @@ impl Parser {
           },
           tokens,
         })
-      },
+      }
 
       // FIX: this swhen you get to the macro full parsing
       TokenKind::DotDot => {
@@ -128,7 +128,7 @@ impl Parser {
           separator: None,
           kind,
         })
-      },
+      }
 
       // FIX: this swhen you get to the macro full parsing
       TokenKind::OpenBrace => {
@@ -137,7 +137,7 @@ impl Parser {
           name: self.get_token_lexeme(&token),
           kind: self.get_token_lexeme(&token),
         })
-      },
+      }
 
       _ => {
         let lexeme = self.get_token_lexeme(&token);
@@ -154,7 +154,7 @@ impl Parser {
         .with_help("Macro invocations must be surrounded by parentheses or braces.".to_string());
         engine.add(diagnostic);
         Err(())
-      },
+      }
     }
   }
 }

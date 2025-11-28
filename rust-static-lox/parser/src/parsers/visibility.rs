@@ -79,7 +79,7 @@ impl Parser {
 
           // Otherwise: pub(in path)
           Ok(Visibility::LicIn(self.parse_path(false, engine)?))
-        },
+        }
 
         _ => {
           let lexeme = self.get_token_lexeme(&restriction);
@@ -103,7 +103,7 @@ impl Parser {
 
           engine.add(diagnostic);
           Err(())
-        },
+        }
       };
 
       self.expect(TokenKind::CloseParen, engine)?; // consume ")"

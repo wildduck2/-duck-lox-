@@ -53,20 +53,20 @@ impl Parser {
       match self.current_token().kind {
         TokenKind::OpenParen => {
           expr = self.parse_call(context, expr, engine)?;
-        },
+        }
         TokenKind::Dot => {
           if self.peek(1).kind == TokenKind::KwAwait {
             expr = self.parse_await(expr, engine)?;
           } else {
             expr = self.parse_field_or_method(context, expr, engine)?;
           }
-        },
+        }
         TokenKind::OpenBracket => {
           expr = self.parse_index(context, expr, engine)?;
-        },
+        }
         TokenKind::Question => {
           expr = self.parse_try(expr, engine)?;
-        },
+        }
         _ => break,
       }
     }
@@ -137,7 +137,7 @@ impl Parser {
   ) -> Result<Expr, ()> {
     let mut span = object.span();
     self.expect(TokenKind::OpenBracket, engine)?;
-    let index = self.parse_expression(context, engine)?;
+    let index = self.parse_expression(vec![], context, engine)?;
     let close = self.current_token();
     self.expect(TokenKind::CloseBracket, engine)?;
     span.merge(close.span);
@@ -205,7 +205,7 @@ impl Parser {
           field: FieldAccess::Named(name),
           span,
         })
-      },
+      }
 
       // Tuple field access: `.0`, `.1`, etc.
       TokenKind::Literal {
@@ -221,7 +221,7 @@ impl Parser {
           field: FieldAccess::Unnamed(index),
           span,
         })
-      },
+      }
 
       // Invalid token after `.`
       _ => {
@@ -239,7 +239,7 @@ impl Parser {
         .with_help("Examples: `.foo`, `.0`, `.await`, or `.method(args)`.".to_string());
         engine.add(diagnostic);
         Err(())
-      },
+      }
     }
   }
 
@@ -295,7 +295,7 @@ impl Parser {
     let mut args = vec![];
 
     while !self.is_eof() && self.current_token().kind != TokenKind::CloseParen {
-      let expr = self.parse_expression(context, engine)?;
+      let expr = self.parse_expression(vec![], context, engine)?;
       args.push(expr);
 
       if matches!(self.current_token().kind, TokenKind::Comma) {

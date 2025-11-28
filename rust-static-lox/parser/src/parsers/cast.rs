@@ -49,7 +49,7 @@ impl Parser {
             ty,
             span: token.span,
           };
-        },
+        }
 
         _ => break,
       }

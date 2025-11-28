@@ -72,7 +72,7 @@ impl Parser {
             right: Box::new(rhs),
             span: token.span,
           };
-        },
+        }
         _ => break,
       }
     }
@@ -144,7 +144,7 @@ impl Parser {
             right: Box::new(rhs),
             span: token.span,
           };
-        },
+        }
         _ => break,
       }
     }

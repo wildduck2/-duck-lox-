@@ -31,7 +31,7 @@ impl Parser {
   ///   implementation and are not in standard Rust.
   /// - Unit expressions are recognized early: the parser checks for ")" after "(".
   ///
-  pub(crate) fn parse_grouped_expr(
+  pub(crate) fn parse_grouped_and_tuple_expr(
     &mut self,
     token: &mut Token,
     engine: &mut DiagnosticEngine,
@@ -46,20 +46,8 @@ impl Parser {
       return Ok(Expr::Unit(token.span));
     }
 
-    // Collect elements inside the parenthesis
     let mut elements = vec![];
-
-    // Parse optional inside-attributes (#[] ...)
-    let attributes = if matches!(self.current_token().kind, TokenKind::Pound) {
-      self.parse_attributes(engine)?
-    } else {
-      vec![]
-    };
-
-    // Track whether a trailing comma appears
     let mut trailing_comma = false;
-
-    // Parse expressions until ")"
     while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::CloseParen) {
       // Skip stray leading commas
       if matches!(self.current_token().kind, TokenKind::Comma) {
@@ -68,7 +56,7 @@ impl Parser {
         continue;
       }
 
-      elements.push(self.parse_expression(ExprContext::Default, engine)?);
+      elements.push(self.parse_expression(vec![], ExprContext::Default, engine)?);
 
       if matches!(self.current_token().kind, TokenKind::Comma) {
         trailing_comma = true;
@@ -82,37 +70,33 @@ impl Parser {
     // consume ")"
     self.expect(TokenKind::CloseParen, engine)?;
     token.span.merge(self.current_token().span);
+    // println!("debug: {:#?}", elements);
 
     // Distinguish grouped vs tuple vs unit
     match elements.len() {
-      0 => unreachable!("zero elements already handled as unit"),
-
       1 => {
         if trailing_comma {
           // (x,) is a tuple
           Ok(Expr::Tuple {
-            attributes,
             elements,
             span: token.span,
           })
         } else {
           // (x) is a grouping expression
           Ok(Expr::Group {
-            attributes,
             expr: Box::new(elements[0].clone()),
             span: token.span,
           })
         }
-      },
+      }
 
       _ => {
         // Multiple elements always form a tuple
         Ok(Expr::Tuple {
-          attributes,
           elements,
           span: token.span,
         })
-      },
+      }
     }
   }
 }

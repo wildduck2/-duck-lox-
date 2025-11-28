@@ -1,10 +1,5 @@
-use crate::{ast::*, match_and_consume, parser_utils::ExprContext, Parser};
-use diagnostic::{
-  code::DiagnosticCode,
-  diagnostic::{Diagnostic, LabelStyle},
-  types::error::DiagnosticError,
-  DiagnosticEngine,
-};
+use crate::{ast::*, parser_utils::ExprContext, Parser};
+use diagnostic::DiagnosticEngine;
 use lexer::token::TokenKind;
 
 impl Parser {
@@ -15,7 +10,7 @@ impl Parser {
   ) -> Result<Expr, ()> {
     let mut token = self.current_token();
     self.advance(engine); // consume the "match"
-    let scrutinee = self.parse_expression(context, engine)?;
+    let scrutinee = self.parse_expression(vec![], context, engine)?;
 
     let mut arms = vec![];
     self.expect(TokenKind::OpenBrace, engine)?;
@@ -54,7 +49,7 @@ impl Parser {
 
     self.expect(TokenKind::FatArrow, engine)?;
     let is_block = matches!(self.current_token().kind, TokenKind::OpenBrace);
-    let body = self.parse_expression(ExprContext::Default, engine)?;
+    let body = self.parse_expression(vec![], ExprContext::Default, engine)?;
 
     if is_block {
       self.expect(TokenKind::Comma, engine)?;
@@ -88,17 +83,17 @@ impl Parser {
   ) -> Result<Expr, ()> {
     let mut token = self.current_token();
     self.advance(engine); // consume the "if"
-    let condition = self.parse_expression(context, engine)?;
+    let condition = self.parse_expression(vec![], context, engine)?;
 
     token.span.merge(self.current_token().span);
     Ok(Expr::If {
       condition: Box::new(condition),
       then_branch: Box::new(Expr::Block {
+        inner_attributes: vec![],
+        outer_attributes: vec![],
         stmts: vec![],
         label: None,
-        is_unsafe: false,
-        is_async: false,
-        is_try: false,
+        flavor: BlockFlavor::Normal,
         span: token.span,
       }),
       else_branch: None,
