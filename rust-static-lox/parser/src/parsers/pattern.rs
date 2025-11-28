@@ -31,7 +31,7 @@ impl Parser {
     })
   }
 
-  fn parse_pattern(
+  pub(crate) fn parse_pattern(
     &mut self,
     context: ExprContext,
     engine: &mut DiagnosticEngine,

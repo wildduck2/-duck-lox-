@@ -2,7 +2,7 @@ use diagnostic::DiagnosticEngine;
 use lexer::token::TokenKind;
 
 use crate::{
-  ast::{Attribute, Stmt},
+  ast::{Attribute, Expr, Stmt},
   match_and_consume,
   parser_utils::ExprContext,
   Parser,
@@ -42,5 +42,25 @@ impl Parser {
     //   else_block: None,
     //   span: token.span,
     // })
+  }
+
+  pub(crate) fn parse_let_expression(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Expr, ()> {
+    let mut token = self.current_token();
+    self.advance(engine); // consume the "let"
+
+    let pattern = self.parse_pattern(context, engine)?;
+    self.expect(TokenKind::Eq, engine)?;
+    let value = self.parse_expression(context, engine)?;
+
+    token.span.merge(self.current_token().span);
+    Ok(Expr::Let {
+      expr: Box::new(value),
+      pattern,
+      span: token.span,
+    })
   }
 }

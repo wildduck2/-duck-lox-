@@ -11,14 +11,15 @@ use crate::{ast::*, match_and_consume, Parser};
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum ExprContext {
-  /// Normal expression parsing with no contextual restrictions.
   Default,
-  /// Parsing the condition of an `if` or `if let`.
   IfCondition,
-  /// Parsing the scrutinee of a `match`.
   Match,
-  /// Parsing the predicate portion of a `while`.
+  Block,
   WhileCondition,
+  ForCondition,
+  Function,
+  Closure,
+  Macro,
 }
 
 impl Parser {
@@ -77,6 +78,9 @@ impl Parser {
     engine: &mut DiagnosticEngine,
   ) -> Result<Stmt, ()> {
     let attributes = self.parse_attributes(engine)?;
+    let visibility = self.parse_visibility(engine)?;
+    let is_unsafe = match_and_consume!(self, engine, TokenKind::KwUnsafe)?;
+    let is_async = match_and_consume!(self, engine, TokenKind::KwAsync)?;
 
     match self.current_token().kind {
       TokenKind::KwLet => self.parse_let_statement(context, attributes, engine),
@@ -110,24 +114,20 @@ impl Parser {
     context: ExprContext,
     engine: &mut DiagnosticEngine,
   ) -> Result<Expr, ()> {
-    let is_unsafe = match_and_consume!(self, engine, TokenKind::KwUnsafe)?;
     let label = self.parse_label(engine)?;
 
     match self.current_token().kind {
       TokenKind::KwIf => self.parse_if_expression(ExprContext::IfCondition, engine),
       TokenKind::KwMatch => self.parse_match_expression(ExprContext::Match, engine),
-      TokenKind::OpenBrace => self.parse_block_expression(is_unsafe, label, engine),
+      TokenKind::OpenBrace | TokenKind::KwUnsafe | TokenKind::KwAsync | TokenKind::KwTry => {
+        self.parse_block_expression(label, engine)
+      },
+      TokenKind::KwContinue => self.parse_continue_expression(context, engine),
+      TokenKind::KwBreak => self.parse_break_expression(context, engine),
+      TokenKind::KwLet => self.parse_let_expression(context, engine),
+      TokenKind::KwReturn => self.parse_return_expression(context, engine),
       _ => self.parse_assignment_expr(context, engine),
     }
-  }
-
-  fn parse_label(&mut self, engine: &mut DiagnosticEngine) -> Result<Option<String>, ()> {
-    let token = self.current_token();
-    if match_and_consume!(self, engine, TokenKind::Lifetime { .. })? {
-      self.expect(TokenKind::Colon, engine)?;
-      return Ok(Some(self.get_token_lexeme(&token)));
-    }
-    Ok(None)
   }
 
   /// Parses assignment expressions (including compound assignments) with right associativity.

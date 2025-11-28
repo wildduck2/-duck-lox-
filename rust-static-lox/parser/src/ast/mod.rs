@@ -891,7 +891,9 @@ pub(crate) enum Expr {
   Block {
     stmts: Vec<Stmt>,
     label: Option<String>,
+    is_async: bool,
     is_unsafe: bool,
+    is_try: bool,
     span: Span,
   },
 

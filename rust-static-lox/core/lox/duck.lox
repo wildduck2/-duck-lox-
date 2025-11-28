@@ -525,3 +525,15 @@
 //}
 
 
+if let Some(x) = some {
+  
+}
+
+//if some { 
+//
+//} else if other {
+//  
+//} else {
+//  
+//}
+

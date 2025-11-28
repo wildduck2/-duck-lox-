@@ -91,16 +91,18 @@ impl Parser {
     let condition = self.parse_expression(context, engine)?;
 
     token.span.merge(self.current_token().span);
-    return Ok(Expr::If {
+    Ok(Expr::If {
       condition: Box::new(condition),
       then_branch: Box::new(Expr::Block {
         stmts: vec![],
         label: None,
         is_unsafe: false,
+        is_async: false,
+        is_try: false,
         span: token.span,
       }),
       else_branch: None,
       span: token.span,
-    });
+    })
   }
 }

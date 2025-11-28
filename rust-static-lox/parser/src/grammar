@@ -518,7 +518,6 @@ primary           -> literalExpr
                    | continueExpr
                    | breakExpr
                    | returnExpr
-                   | underscoreExpr
                    | macroInvocation ;
 
 literalExpr       -> CHAR
@@ -598,7 +597,6 @@ matchArmGuard     -> "if" expression ;
 continueExpr      -> "continue" LIFETIME? ;
 breakExpr         -> "break" LIFETIME? expression? ;
 returnExpr        -> "return" expression? ;
-underscoreExpr    -> "_" ;
 
 /* ------------------------------------------------------------------------- */
 /* ExpressionWithoutBlock / ExpressionWithBlock                              */
@@ -663,7 +661,6 @@ primaryWithoutBlock
                    | continueExpr
                    | breakExpr
                    | returnExpr
-                   | underscoreExpr
                    | macroInvocation ;
 
 /* With-block expressions at the outermost level */
