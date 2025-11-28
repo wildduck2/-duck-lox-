@@ -76,7 +76,7 @@ impl Parser {
                 depth: 1,
               }
             }
-          },
+          }
           _ => unreachable!(),
         };
 
@@ -89,7 +89,7 @@ impl Parser {
           op,
           span: token.span,
         })
-      },
+      }
       _ => self.parse_postfix(context, engine),
     }
   }

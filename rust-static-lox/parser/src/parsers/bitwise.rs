@@ -37,7 +37,10 @@ impl Parser {
     //   return Ok(lhs);
     // }
 
-    while !self.is_eof() && !matches!(context, ExprContext::Match) {
+    while !self.is_eof()
+      && !matches!(context, ExprContext::Match)
+      && !matches!(self.peek(1).kind, TokenKind::Or)
+    {
       let token = self.current_token();
 
       match token.kind {
@@ -82,7 +85,7 @@ impl Parser {
             right: Box::new(rhs),
             span: token.span,
           };
-        },
+        }
 
         _ => break,
       }
@@ -113,7 +116,7 @@ impl Parser {
   ) -> Result<Expr, ()> {
     let mut lhs = self.parse_bitwise_and(context, engine)?;
 
-    while !self.is_eof() {
+    while !self.is_eof() && !matches!(self.peek(1).kind, TokenKind::Caret) {
       let token = self.current_token();
 
       match token.kind {
@@ -158,7 +161,7 @@ impl Parser {
             right: Box::new(rhs),
             span: token.span,
           };
-        },
+        }
 
         _ => break,
       }
@@ -189,7 +192,7 @@ impl Parser {
   ) -> Result<Expr, ()> {
     let mut lhs = self.parse_shift(context, engine)?;
 
-    while !self.is_eof() {
+    while !self.is_eof() && !matches!(self.peek(1).kind, TokenKind::And) {
       let token = self.current_token();
 
       match token.kind {
@@ -234,7 +237,7 @@ impl Parser {
             right: Box::new(rhs),
             span: token.span,
           };
-        },
+        }
 
         _ => break,
       }

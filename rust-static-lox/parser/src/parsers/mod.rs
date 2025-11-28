@@ -3,6 +3,7 @@ mod attribute;
 mod bitwise;
 mod block;
 mod cast;
+mod clousure;
 mod comparison;
 mod control_flow;
 mod factor;

@@ -60,6 +60,7 @@ impl Parser {
 
       // parse the right side with the same precedence level beneath comparison
       let rhs = self.parse_bitwise_or(context, engine)?;
+      println!("debug: {:#?}", rhs);
 
       if !self.current_token().kind.can_start_expression() {
         let bad = self.current_token();
