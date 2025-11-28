@@ -27,7 +27,8 @@ impl Parser {
   /// `parse_item` to decide which constructs are supported.
   pub fn parse_program(&mut self, engine: &mut DiagnosticEngine) {
     while !self.is_eof() {
-      match self.parse_stmt(engine) {
+      // TODO: check this context
+      match self.parse_stmt(ExprContext::Default, engine) {
         // Returns Item, not Stmt
         Ok(item) => {
           item.print_tree("", true);
@@ -70,11 +71,15 @@ impl Parser {
 
   /// Parses a single statement node (stubbed for future grammar branches).
   /// Currently supports empty statements and expression statements.
-  pub(crate) fn parse_stmt(&mut self, engine: &mut DiagnosticEngine) -> Result<Stmt, ()> {
+  pub(crate) fn parse_stmt(
+    &mut self,
+    context: ExprContext,
+    engine: &mut DiagnosticEngine,
+  ) -> Result<Stmt, ()> {
     let attributes = self.parse_attributes(engine)?;
 
     match self.current_token().kind {
-      TokenKind::KwLet => self.parse_let_statement(attributes, engine),
+      TokenKind::KwLet => self.parse_let_statement(context, attributes, engine),
       TokenKind::Semi => {
         // Empty statement: just a semicolon
         self.advance(engine);
@@ -200,10 +205,10 @@ impl Parser {
       TokenKind::Literal { kind } => self.parser_literal(&token, kind, engine),
       TokenKind::Ident => {
         // FIX: this will use the context to determine whether to parse a struct expr or ident
-        if matches!(context, ExprContext::Default) {
-          println!("debug: {:?}", self.peek(1).kind);
-          // return self.parse_struct_expr(&mut token, engine);
-        }
+        // if matches!(context, ExprContext::Default) {
+        //   println!("debug: {:?}", self.peek(1).kind);
+        //   // return self.parse_struct_expr(&mut token, engine);
+        // }
 
         self.parser_ident(&mut token, engine)
       },

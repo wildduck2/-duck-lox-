@@ -12,14 +12,15 @@ impl Parser {
     self.advance(engine); // consume the "if"
     let condition = self.parse_expression(context, engine)?;
 
+    // TODO: complete this later
     self.expect(TokenKind::OpenBrace, engine)?;
-    let then_branch = self.parse_expression(context, engine)?;
+    let then_branch = self.parse_if_expression(context, engine)?;
     self.expect(TokenKind::CloseBrace, engine)?;
 
     let mut else_branch = None;
-    if match_and_consume!(self, engine, TokenKind::KwElse)? {
-      else_branch = Some(self.parse_expression(context, engine)?);
-    }
+    // if match_and_consume!(self, engine, TokenKind::KwElse)? {
+    //   else_branch = Some(self.parse_if_expression(context, engine)?);
+    // }
 
     token.span.merge(self.current_token().span);
     Ok(Expr::If {

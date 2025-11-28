@@ -32,7 +32,12 @@ impl Parser {
   ) -> Result<Expr, ()> {
     let mut lhs = self.parse_bitwise_xor(context, engine)?;
 
-    while !self.is_eof() {
+    // println!("debug: parse_bitwise_or {:?}", context);
+    // if matches!(context, ExprContext::Match | ExprContext::IfCondition) {
+    //   return Ok(lhs);
+    // }
+
+    while !self.is_eof() && !matches!(context, ExprContext::Match) {
       let token = self.current_token();
 
       match token.kind {

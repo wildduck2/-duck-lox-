@@ -557,6 +557,7 @@ impl TokenKind {
         | TokenKind::KwMatch
         | TokenKind::KwWhile
         | TokenKind::KwLoop
+        | TokenKind::FatArrow
         | TokenKind::KwFor
         | TokenKind::KwReturn
         | TokenKind::KwBreak

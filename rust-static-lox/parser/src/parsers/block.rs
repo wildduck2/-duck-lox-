@@ -1,4 +1,4 @@
-use crate::{ast::Expr, match_and_consume, Parser};
+use crate::{ast::Expr, match_and_consume, parser_utils::ExprContext, Parser};
 use diagnostic::DiagnosticEngine;
 use lexer::token::TokenKind;
 
@@ -17,7 +17,7 @@ impl Parser {
 
     let mut stmts = vec![];
     while !self.is_eof() && !matches!(self.current_token().kind, TokenKind::CloseBrace) {
-      stmts.push(self.parse_stmt(engine)?);
+      stmts.push(self.parse_stmt(ExprContext::Default, engine)?);
       match_and_consume!(self, engine, TokenKind::Semi)?;
     }
     self.expect(TokenKind::CloseBrace, engine)?;

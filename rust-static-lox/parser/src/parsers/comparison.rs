@@ -47,7 +47,6 @@ impl Parser {
 
     loop {
       let token = self.current_token();
-
       let op = match token.kind {
         TokenKind::EqEq => BinaryOp::Eq,
         TokenKind::Ne => BinaryOp::NotEq,
@@ -57,7 +56,6 @@ impl Parser {
         TokenKind::Ge => BinaryOp::GreaterEq,
         _ => break, // no more comparison operators
       };
-
       self.advance(engine); // consume operator
 
       // parse the right side with the same precedence level beneath comparison
