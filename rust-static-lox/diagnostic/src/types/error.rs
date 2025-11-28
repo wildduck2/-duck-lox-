@@ -41,6 +41,8 @@ pub enum DiagnosticError {
   ContinueOutsideLoop,
   BreakOutsideLoop,
   InvalidBlockFlavorContext,
+  InvalidFlavorOrder,
+  InvalidCondition,
 }
 
 impl DiagnosticError {
@@ -77,6 +79,8 @@ impl DiagnosticError {
       Self::ContinueOutsideLoop => "E0029",
       Self::BreakOutsideLoop => "E0029",
       Self::InvalidBlockFlavorContext => "E0029",
+      Self::InvalidFlavorOrder => "E0029",
+      Self::InvalidCondition => "E0029",
 
       Self::UndefinedVariable => "E0025",
       Self::MismatchedTypes => "E0026",
